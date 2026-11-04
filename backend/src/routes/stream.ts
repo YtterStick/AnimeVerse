@@ -541,7 +541,7 @@ router.get("/:animeId/:episode", async (req: Request, res: Response, _next: Next
     res.json(result);
   } catch (error: any) {
     console.error("Stream resolution error:", error.message);
-    res.status(502).json({
+    res.json({
       message: error.message || "Failed to resolve streaming sources.",
       servers: [],
       default: -1,

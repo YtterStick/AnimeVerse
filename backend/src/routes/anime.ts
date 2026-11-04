@@ -32,57 +32,77 @@ router.get("/search", async (req: Request, res: Response, _next: NextFunction) =
 });
 
 // GET /api/anime/top-rated
-router.get("/top-rated", async (req: Request, res: Response, next: NextFunction) => {
+router.get("/top-rated", async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string, 10) || 1;
     const data = await jikanService.getTopRated(page);
     res.json(data);
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.warn("[AnimeRoute] Top-rated failed:", error.message);
+    res.json({
+      data: [],
+      pagination: { last_visible_page: 1, has_next_page: false, current_page: 1 },
+    });
   }
 });
 
 // GET /api/anime/trending
-router.get("/trending", async (req: Request, res: Response, next: NextFunction) => {
+router.get("/trending", async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string, 10) || 1;
     const data = await jikanService.getTrending(page);
     res.json(data);
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.warn("[AnimeRoute] Trending failed:", error.message);
+    res.json({
+      data: [],
+      pagination: { last_visible_page: 1, has_next_page: false, current_page: 1 },
+    });
   }
 });
 
 // GET /api/anime/top-airing
-router.get("/top-airing", async (req: Request, res: Response, next: NextFunction) => {
+router.get("/top-airing", async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string, 10) || 1;
     const data = await jikanService.getTopAiring(page);
     res.json(data);
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.warn("[AnimeRoute] Top-airing failed:", error.message);
+    res.json({
+      data: [],
+      pagination: { last_visible_page: 1, has_next_page: false, current_page: 1 },
+    });
   }
 });
 
 // GET /api/anime/popular
-router.get("/popular", async (req: Request, res: Response, next: NextFunction) => {
+router.get("/popular", async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string, 10) || 1;
     const data = await jikanService.getPopular(page);
     res.json(data);
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.warn("[AnimeRoute] Popular failed:", error.message);
+    res.json({
+      data: [],
+      pagination: { last_visible_page: 1, has_next_page: false, current_page: 1 },
+    });
   }
 });
 
 // GET /api/anime/schedule?day=monday
-router.get("/schedule", async (req: Request, res: Response, next: NextFunction) => {
+router.get("/schedule", async (req: Request, res: Response) => {
   try {
     const day = (req.query.day as string) || "monday";
     const data = await jikanService.getSchedule(day);
     res.json(data);
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.warn("[AnimeRoute] Schedule failed:", error.message);
+    res.json({
+      data: [],
+      pagination: { last_visible_page: 1, has_next_page: false, current_page: 1 },
+    });
   }
 });
 
@@ -101,7 +121,7 @@ router.get("/:id", async (req: Request, res: Response, next: NextFunction) => {
 });
 
 // GET /api/anime/:id/episodes
-router.get("/:id/episodes", async (req: Request, res: Response, next: NextFunction) => {
+router.get("/:id/episodes", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const page = parseInt(req.query.page as string, 10) || 1;
@@ -110,13 +130,17 @@ router.get("/:id/episodes", async (req: Request, res: Response, next: NextFuncti
     }
     const data = await jikanService.getAnimeEpisodes(id, page);
     res.json(data);
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.warn(`[AnimeRoute] Episodes for ${req.params.id} failed:`, error.message);
+    res.json({
+      data: [],
+      pagination: { last_visible_page: 1, has_next_page: false, current_page: 1 },
+    });
   }
 });
 
 // GET /api/anime/:id/recommendations
-router.get("/:id/recommendations", async (req: Request, res: Response, next: NextFunction) => {
+router.get("/:id/recommendations", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
@@ -124,8 +148,9 @@ router.get("/:id/recommendations", async (req: Request, res: Response, next: Nex
     }
     const data = await jikanService.getAnimeRecommendations(id);
     res.json(data);
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.warn(`[AnimeRoute] Recommendations for ${req.params.id} failed:`, error.message);
+    res.json({ data: [] });
   }
 });
 

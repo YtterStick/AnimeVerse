@@ -252,11 +252,15 @@ async function executeJikanRequest<T>(
     return cachedData;
   }
 
-  // If Jikan recently timed out, go straight to fallback to keep UI instant
+  // If Jikan recently timed out or was rate limited, go straight to fallback to keep UI instant
   if (Date.now() < jikanDownUntil && fallbackFn) {
-    const fbData = await fallbackFn();
-    cache.set(cacheKey, fbData);
-    return fbData;
+    try {
+      const fbData = await fallbackFn();
+      cache.set(cacheKey, fbData);
+      return fbData;
+    } catch (fbErr: any) {
+      console.warn(`[MetadataService] Instant fallback error:`, fbErr.message);
+    }
   }
 
   try {
@@ -279,8 +283,8 @@ async function executeJikanRequest<T>(
     const isServerError = !error.response || error.response?.status >= 500;
 
     if (isRateLimited || isTimeout || isServerError) {
-      // Mark Jikan as down/rate-limited for 60s so all queries use instant AniList fallback
-      jikanDownUntil = Date.now() + 60_000;
+      // Mark Jikan as down/rate-limited for 5 minutes so all queries use instant AniList fallback
+      jikanDownUntil = Date.now() + 300_000;
     }
     if (fallbackFn) {
       try {

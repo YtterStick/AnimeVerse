@@ -6,10 +6,21 @@ export function errorHandler(
   res: Response,
   next: NextFunction
 ) {
-  console.error("❌ Error caught by global handler:", err);
+  console.error("❌ Error caught by global handler:", err?.message || err);
 
-  const status = err.status || 500;
-  const message = err.message || "An unexpected error occurred on the server";
+  // If an external upstream API returned 429 or 502, never proxy that directly as our own client status
+  const rawStatus = err.status || err.response?.status;
+  const status =
+    rawStatus === 429
+      ? 503
+      : typeof rawStatus === "number" && rawStatus >= 400 && rawStatus < 600
+      ? rawStatus
+      : 500;
+
+  const message =
+    rawStatus === 429
+      ? "Upstream service is temporarily busy. Please refresh in a moment."
+      : err.message || "An unexpected error occurred on the server";
 
   res.status(status).json({
     status,
