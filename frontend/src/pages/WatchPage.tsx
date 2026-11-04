@@ -255,13 +255,14 @@ export function WatchPage() {
     }
 
     // 2. Debounced save to Supabase backend database (every 12 seconds) for logged-in accounts
-    if (isAuthenticated && anime) {
+    if (isAuthenticated) {
       if (now - lastRemoteSaveRef.current >= 12000) {
         lastRemoteSaveRef.current = now;
+        const safeTitle = anime?.title || anime?.title_english || `Episode ${episodeNum}`;
         saveProgress({
           anime_id: animeId,
-          anime_title: anime.title,
-          anime_image: anime.images?.webp?.image_url || anime.images?.jpg?.image_url,
+          anime_title: safeTitle,
+          anime_image: anime?.images?.webp?.image_url || anime?.images?.jpg?.image_url || null,
           episode_number: episodeNum,
           episode_title: `Episode ${episodeNum}`,
           progress_seconds: currentRounded,

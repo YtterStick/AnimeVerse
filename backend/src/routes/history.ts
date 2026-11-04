@@ -42,9 +42,15 @@ router.post("/", async (req: AuthRequest, res: Response, next: NextFunction) => 
       duration_seconds,
     } = req.body;
 
-    if (!anime_id || !anime_title || isNaN(episode_number)) {
-      return res.status(400).json({ message: "Missing required fields" });
+    const epNum = Number(episode_number);
+    if (!anime_id || isNaN(epNum)) {
+      return res.status(400).json({ message: "Missing required fields: anime_id or episode_number" });
     }
+
+    const safeTitle =
+      typeof anime_title === "string" && anime_title.trim()
+        ? anime_title.trim()
+        : `Anime #${anime_id}`;
 
     const { data, error } = await supabase
       .from("watch_history")
@@ -52,10 +58,10 @@ router.post("/", async (req: AuthRequest, res: Response, next: NextFunction) => 
         {
           user_id: userId,
           anime_id,
-          anime_title,
-          anime_image,
-          episode_number,
-          episode_title: episode_title || `Episode ${episode_number}`,
+          anime_title: safeTitle,
+          anime_image: anime_image || null,
+          episode_number: epNum,
+          episode_title: episode_title || `Episode ${epNum}`,
           progress_seconds: progress_seconds || 0,
           duration_seconds: duration_seconds || 0,
           watched_at: new Date().toISOString(),

@@ -208,19 +208,22 @@ function buildProxyHeaders(
   return [
     {
       Referer: referer,
+      "User-Agent": userAgent,
+      ...baseRange,
+    },
+    {
+      Referer: referer,
       Origin: refererOrigin,
       "User-Agent": userAgent,
       ...baseRange,
     },
     {
       Referer: "https://krussdomi.com/",
-      Origin: "https://krussdomi.com",
       "User-Agent": userAgent,
       ...baseRange,
     },
     {
       Referer: `${origin}/`,
-      Origin: origin,
       "User-Agent": userAgent,
       ...baseRange,
     },
@@ -478,6 +481,46 @@ router.get("/skip-times/:animeId/:episode", async (req: Request, res: Response) 
   } catch (error: any) {
     console.warn("[SkipTimes] AniSkip lookup failed:", error.message);
     res.json({ found: false, skips: [] });
+  }
+});
+
+// GET /api/stream/slug/:animeId
+// Resolves KickAssAnime slug from MALSync using backend axios (no browser CORS restrictions)
+const slugCache = new Map<number, { at: number; slug: string | null }>();
+router.get("/slug/:animeId", async (req: Request, res: Response) => {
+  const animeId = parseInt(req.params.animeId, 10);
+  if (isNaN(animeId) || !animeId) {
+    return res.status(400).json({ slug: null });
+  }
+
+  const cached = slugCache.get(animeId);
+  if (cached && Date.now() - cached.at < 24 * 60 * 60 * 1000) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return res.json({ slug: cached.slug });
+  }
+
+  try {
+    const msRes = await axios.get(`https://api.malsync.moe/mal/anime/${animeId}`, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+        Accept: "application/json",
+      },
+      timeout: 5000,
+    });
+
+    const kaaEntries = Object.values(msRes.data?.Sites?.KickAssAnime || {}) as any[];
+    const slug = kaaEntries[0]?.identifier || null;
+
+    slugCache.set(animeId, { at: Date.now(), slug });
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return res.json({ slug });
+  } catch (err: any) {
+    console.warn(`[StreamSlug] Failed to resolve MALSync slug for ${animeId}:`, err.message);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    return res.json({ slug: null });
   }
 });
 

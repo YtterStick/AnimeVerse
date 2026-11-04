@@ -37,14 +37,28 @@ export async function resolveKaaClient(
   episodeNum: number
 ): Promise<StreamServer[]> {
   try {
-    // 1. Resolve slug from MALSync (with 6s timeout)
-    const msRes = await fetch(`https://api.malsync.moe/mal/anime/${animeId}`, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(6000),
-    }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    // 1. Resolve slug via backend endpoint (avoids browser CORS block on api.malsync.moe)
+    const slugApi = BACKEND_URL ? `${BACKEND_URL}/api/stream/slug/${animeId}` : `/api/stream/slug/${animeId}`;
+    let slug: string | null = null;
+    try {
+      const slugRes = await fetch(slugApi, { signal: AbortSignal.timeout(5000) })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      slug = slugRes?.slug || null;
+    } catch {
+      slug = null;
+    }
 
-    const kaaEntries = Object.values(msRes?.Sites?.KickAssAnime || {}) as any[];
-    const slug = kaaEntries[0]?.identifier;
+    if (!slug) {
+      // Direct fallback (safe if supported or proxies available)
+      const msRes = await fetch(`https://api.malsync.moe/mal/anime/${animeId}`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(4000),
+      }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      const kaaEntries = Object.values(msRes?.Sites?.KickAssAnime || {}) as any[];
+      slug = kaaEntries[0]?.identifier || null;
+    }
+
     if (!slug) return [];
 
     // 2. Query kaa.lt for episode list (has Access-Control-Allow-Origin: *)
