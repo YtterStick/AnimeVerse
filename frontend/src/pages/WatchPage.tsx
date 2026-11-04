@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Layers, Compass } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Layers, Compass, FastForward } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
-import { streamApi } from "@/lib/api";
+import { streamApi, type SkipInterval } from "@/lib/api";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { ServerSelector } from "@/components/player/ServerSelector";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,39 @@ export function WatchPage() {
   const recommendationsScrollRef = useRef<HTMLDivElement>(null);
   const [showRecommendationsLeft, setShowRecommendationsLeft] = useState(false);
   const [showRecommendationsRight, setShowRecommendationsRight] = useState(false);
+  const [skips, setSkips] = useState<SkipInterval[]>([]);
+  const [autoSkip, setAutoSkip] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("aniverse:autoSkip") !== "false";
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleAutoSkip = () => {
+    setAutoSkip((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("aniverse:autoSkip", String(next));
+      } catch {
+        // Ignore storage errors (private mode)
+      }
+      return next;
+    });
+  };
+
+  // Fetch intro/outro timestamps (AniSkip) for this episode
+  useEffect(() => {
+    let cancelled = false;
+    setSkips([]);
+    if (!animeId || !episodeNum) return;
+    streamApi.getSkipTimes(animeId, episodeNum).then((res) => {
+      if (!cancelled) setSkips(res.skips || []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [animeId, episodeNum]);
 
   const lastSavedProgress = useRef(0);
 
@@ -380,6 +413,8 @@ export function WatchPage() {
             onProgress={handleProgress}
             initialTime={initialTime}
             subtitles={activeServer.subtitles}
+            skips={skips}
+            autoSkip={autoSkip}
           />
         )}
 
@@ -417,6 +452,16 @@ export function WatchPage() {
                     DUB (Eng)
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant={autoSkip ? "default" : "secondary"}
+                  onClick={toggleAutoSkip}
+                  title={skips.length ? "Automatically skip intros and outros" : "No intro/outro timestamps found for this episode yet"}
+                  className="rounded-full px-3 text-xs font-bold gap-1"
+                >
+                  <FastForward className="w-3.5 h-3.5" />
+                  Auto Skip: {autoSkip ? "On" : "Off"}
+                </Button>
                 <Button
                   variant="secondary"
                   size="sm"

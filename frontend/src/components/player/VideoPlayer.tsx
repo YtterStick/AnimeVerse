@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { MediaPlayer, MediaProvider, Track } from "@vidstack/react";
 import { defaultLayoutIcons, DefaultVideoLayout } from "@vidstack/react/player/layouts/default";
 
@@ -6,6 +6,7 @@ import { defaultLayoutIcons, DefaultVideoLayout } from "@vidstack/react/player/l
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
 import type { SubtitleTrack } from "@/types";
+import type { SkipInterval } from "@/lib/api";
 
 interface VideoPlayerProps {
   src: string;
@@ -16,7 +17,17 @@ interface VideoPlayerProps {
   onProgress?: (currentTime: number, duration: number) => void;
   initialTime?: number;
   subtitles?: SubtitleTrack[];
+  /** Intro/outro/recap intervals in seconds */
+  skips?: SkipInterval[];
+  /** Automatically jump past intros/outros when playback enters them */
+  autoSkip?: boolean;
 }
+
+const SKIP_LABELS: Record<string, string> = {
+  op: "Skip Intro",
+  ed: "Skip Outro",
+  recap: "Skip Recap",
+};
 
 export function VideoPlayer({
   src,
@@ -27,8 +38,25 @@ export function VideoPlayer({
   onProgress,
   initialTime = 0,
   subtitles = [],
+  skips = [],
+  autoSkip = false,
 }: VideoPlayerProps) {
   const playerRef = useRef<any>(null);
+  const autoSkippedRef = useRef<Set<string>>(new Set());
+  const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
+  const [autoSkipToast, setAutoSkipToast] = useState<string | null>(null);
+
+  // Reset per-source skip bookkeeping
+  useEffect(() => {
+    autoSkippedRef.current = new Set();
+    setActiveSkip(null);
+  }, [src]);
+
+  useEffect(() => {
+    if (!autoSkipToast) return;
+    const t = window.setTimeout(() => setAutoSkipToast(null), 2000);
+    return () => window.clearTimeout(t);
+  }, [autoSkipToast]);
 
   const isSubMode = category !== "DUB";
 
@@ -85,11 +113,38 @@ export function VideoPlayer({
     syncSubtitleTrackMode();
   };
 
+  const skipKey = (s: SkipInterval) => `${s.type}:${s.start}`;
+
+  const seekPast = (interval: SkipInterval) => {
+    const player = playerRef.current;
+    if (!player) return;
+    const duration = Number(player.duration) || 0;
+    // Clamp so an outro that runs to the very end doesn't overshoot
+    const target = duration > 0 ? Math.min(interval.end, duration - 0.25) : interval.end;
+    player.currentTime = target;
+    setActiveSkip(null);
+  };
+
   const handleTimeUpdate = () => {
     if (!playerRef.current) return;
     const { currentTime, duration } = playerRef.current;
     if (currentTime && duration && onProgress) {
       onProgress(currentTime, duration);
+    }
+
+    // Find a skippable interval we're currently inside
+    const current = skips.find((s) => currentTime >= s.start && currentTime < s.end - 1) || null;
+
+    if (current && autoSkip && !autoSkippedRef.current.has(skipKey(current))) {
+      // Only auto-skip once per interval so users can seek back to rewatch an OP/ED
+      autoSkippedRef.current.add(skipKey(current));
+      seekPast(current);
+      setAutoSkipToast(current.type === "ed" ? "Outro skipped" : current.type === "recap" ? "Recap skipped" : "Intro skipped");
+      return;
+    }
+
+    if (current?.start !== activeSkip?.start || current?.type !== activeSkip?.type) {
+      setActiveSkip(current);
     }
   };
 
@@ -129,6 +184,23 @@ export function VideoPlayer({
           ))}
         </MediaProvider>
         <DefaultVideoLayout icons={defaultLayoutIcons} />
+
+        {/* Skip Intro / Outro button (rendered inside the player so it also shows in fullscreen) */}
+        {activeSkip && (
+          <button
+            type="button"
+            onClick={() => seekPast(activeSkip)}
+            className="absolute bottom-20 right-4 z-50 rounded-md border border-white/30 bg-black/70 px-4 py-2 text-sm font-bold text-white shadow-lg backdrop-blur-sm transition hover:bg-white hover:text-black"
+          >
+            {SKIP_LABELS[activeSkip.type] || "Skip"} ⏭
+          </button>
+        )}
+
+        {autoSkipToast && (
+          <div className="pointer-events-none absolute top-4 right-4 z-50 rounded-md bg-black/70 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+            {autoSkipToast}
+          </div>
+        )}
       </MediaPlayer>
     </div>
   );

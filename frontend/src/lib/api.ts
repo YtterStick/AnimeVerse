@@ -96,7 +96,21 @@ export const streamApi = {
     }
     return res;
   },
+
+  /** Intro/outro/recap timestamps (seconds) from AniSkip, proxied through our backend. */
+  getSkipTimes: (animeId: number, episode: number, duration = 0) =>
+    fetchApi<{ found: boolean; skips: SkipInterval[] }>(
+      `/stream/skip-times/${animeId}/${episode}?duration=${Math.round(duration)}`,
+      { timeoutMs: 8000 }
+    ).catch(() => ({ found: false, skips: [] as SkipInterval[] })),
 };
+
+export interface SkipInterval {
+  type: "op" | "ed" | "recap" | string;
+  start: number;
+  end: number;
+  episodeLength: number;
+}
 
 // ============================================
 // History Endpoints (requires auth)

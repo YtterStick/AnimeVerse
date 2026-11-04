@@ -321,6 +321,59 @@ router.get("/proxy", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/stream/debug/kaa/:animeId/:episode
+// Step-by-step diagnostics for the KickAssAnime provider (status codes per upstream call)
+router.get("/debug/kaa/:animeId/:episode", async (req: Request, res: Response) => {
+  const animeId = parseInt(req.params.animeId, 10);
+  const episode = parseInt(req.params.episode, 10);
+  if (isNaN(animeId) || isNaN(episode)) {
+    return res.status(400).json({ message: "Invalid parameters" });
+  }
+  res.json({ steps: await streamProvider.diagnoseKAA(animeId, episode) });
+});
+
+// GET /api/stream/skip-times/:animeId/:episode?duration=1440
+// Intro (OP) / outro (ED) / recap timestamps from the community AniSkip database
+const skipCache = new Map<string, { at: number; data: any }>();
+router.get("/skip-times/:animeId/:episode", async (req: Request, res: Response) => {
+  const animeId = parseInt(req.params.animeId, 10);
+  const episode = parseInt(req.params.episode, 10);
+  const duration = Math.max(0, Math.round(Number(req.query.duration) || 0));
+  if (isNaN(animeId) || isNaN(episode)) {
+    return res.status(400).json({ message: "Invalid parameters" });
+  }
+
+  const cacheKey = `${animeId}:${episode}`;
+  const cached = skipCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < 6 * 60 * 60 * 1000) {
+    return res.json(cached.data);
+  }
+
+  try {
+    const types = ["op", "ed", "mixed-op", "mixed-ed", "recap"].map((t) => `types=${t}`).join("&");
+    const response = await axios.get(
+      `https://api.aniskip.com/v2/skip-times/${animeId}/${episode}?${types}&episodeLength=${duration}`,
+      { timeout: 6000, validateStatus: (s) => s === 200 || s === 404 }
+    );
+
+    const results: any[] = response.data?.found ? response.data.results || [] : [];
+    const data = {
+      found: results.length > 0,
+      skips: results.map((r) => ({
+        type: String(r.skipType).replace("mixed-", ""),
+        start: Number(r.interval?.startTime) || 0,
+        end: Number(r.interval?.endTime) || 0,
+        episodeLength: Number(r.episodeLength) || 0,
+      })),
+    };
+    skipCache.set(cacheKey, { at: Date.now(), data });
+    res.json(data);
+  } catch (error: any) {
+    console.warn("[SkipTimes] AniSkip lookup failed:", error.message);
+    res.json({ found: false, skips: [] });
+  }
+});
+
 // GET /api/stream/:animeId/:episode
 // Returns MultiStreamResult with all available servers grouped by category ("SUB" and "DUB")
 router.get("/:animeId/:episode", async (req: Request, res: Response, _next: NextFunction) => {

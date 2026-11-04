@@ -799,12 +799,29 @@ export class ConsumetStreamProvider implements StreamProvider {
 
       const uniqueSources = [...new Set(rawSources)];
 
-      for (let i = 0; i < Math.min(uniqueSources.length, 2); i++) {
+      // AnimeHeaven sometimes serves a tiny ~3s "Watch on AnimeHeaven.Me" placeholder clip
+      // instead of the real episode, and some mirrors are unreachable from certain regions.
+      // Probe each source and keep only reachable, full-size videos.
+      const probed = await Promise.all(
+        uniqueSources.slice(0, 4).map(async (src) => ({ src, size: await this.probeVideoSize(src) }))
+      );
+      const validSources = probed
+        .filter((p) => p.size !== null && p.size >= this.minRealEpisodeBytes)
+        .map((p) => p.src);
+
+      if (validSources.length < probed.length) {
+        console.log(
+          `[AnimeHeaven] Dropped ${probed.length - validSources.length} placeholder/unreachable source(s): ` +
+            probed.map((p) => `${new URL(p.src).hostname}=${p.size ?? "ERR"}`).join(", ")
+        );
+      }
+
+      for (let i = 0; i < Math.min(validSources.length, 2); i++) {
         servers.push({
           id: `animeheaven-sub-${i}`,
           name: `AnimeHeaven #${i + 1} (Eng Sub)`,
           category: "SUB",
-          url: this.proxyUrl(uniqueSources[i], undefined, "https://animeheaven.me/"),
+          url: this.proxyUrl(validSources[i], undefined, "https://animeheaven.me/"),
           type: "mp4",
           quality: "1080p",
           subtitles: [],
@@ -815,6 +832,88 @@ export class ConsumetStreamProvider implements StreamProvider {
     }
 
     return servers;
+  }
+
+  /** Real episodes are tens/hundreds of MB; placeholder clips are ~100 KB. */
+  private readonly minRealEpisodeBytes = 5 * 1024 * 1024;
+
+  /**
+   * Returns the total byte size of a remote MP4 using a 2-byte Range request,
+   * or null if the source is unreachable.
+   */
+  private async probeVideoSize(url: string): Promise<number | null> {
+    try {
+      const res = await axios.get(this.sanitizeUrl(url), {
+        headers: { "User-Agent": USER_AGENT, Referer: "https://animeheaven.me/", Range: "bytes=0-1" },
+        responseType: "arraybuffer",
+        timeout: 5000,
+        validateStatus: (s) => s >= 200 && s < 300,
+      });
+      const range = String(res.headers["content-range"] || "");
+      const total = range.match(/\/(\d+)\s*$/)?.[1];
+      if (total) return parseInt(total, 10);
+      const len = res.headers["content-length"];
+      return len ? parseInt(String(len), 10) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Step-by-step diagnostics for KickAssAnime resolution (used by /api/stream/debug).
+   * Reports HTTP status + a short body preview for each upstream call so we can see
+   * whether a host is blocking the server's IP.
+   */
+  async diagnoseKAA(animeId: number, episode: number): Promise<any[]> {
+    const steps: any[] = [];
+    const record = async (name: string, fn: () => Promise<any>) => {
+      const started = Date.now();
+      try {
+        const res = await fn();
+        const body = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+        steps.push({ name, ok: true, status: res.status, ms: Date.now() - started, preview: String(body).slice(0, 200) });
+        return res;
+      } catch (err: any) {
+        const body = err?.response?.data;
+        steps.push({
+          name,
+          ok: false,
+          status: err?.response?.status ?? null,
+          ms: Date.now() - started,
+          error: err?.message,
+          server: err?.response?.headers?.server,
+          preview: body ? String(typeof body === "string" ? body : JSON.stringify(body)).slice(0, 200) : undefined,
+        });
+        return null;
+      }
+    };
+    const headers = { "User-Agent": USER_AGENT, Accept: "application/json", Referer: "https://kaa.lt/" };
+
+    const ms = await record("malsync", () => axios.get(`https://api.malsync.moe/mal/anime/${animeId}`, { timeout: 5000 }));
+    const slug = (Object.values(ms?.data?.Sites?.KickAssAnime || {}) as any[])[0]?.identifier;
+    steps.push({ name: "slug", value: slug ?? null });
+    if (!slug) return steps;
+
+    await record("kaa-show", () => axios.get(`https://kaa.lt/api/show/${slug}`, { headers, timeout: 6000 }));
+    const eps = await record("kaa-episodes", () =>
+      axios.get(`https://kaa.lt/api/show/${slug}/episodes?ep=${episode}&lang=ja-JP`, { headers, timeout: 6000 })
+    );
+    const target = (eps?.data?.result || []).find((e: any) => Math.floor(Number(e.episode_number)) === episode);
+    if (!target) return steps;
+
+    const detail = await record("kaa-episode-detail", () =>
+      axios.get(`https://kaa.lt/api/show/${slug}/episode/ep-${target.episode_string || episode}-${target.slug}`, {
+        headers,
+        timeout: 6000,
+      })
+    );
+    const src = detail?.data?.servers?.[0]?.src;
+    if (src) {
+      await record("krussdomi-player", () =>
+        axios.get(this.sanitizeUrl(src), { headers: { "User-Agent": USER_AGENT, Referer: "https://kaa.lt/" }, timeout: 8000 })
+      );
+    }
+    return steps;
   }
 
   // ─── Timeout & Ordering Helpers ───────────────────────────
