@@ -36,12 +36,32 @@ function resolveUrl(url: string, base: string): string {
 }
 
 /**
+ * Remove provider watermark cues (e.g. the "kaa.lt" box KickAssAnime injects at 0:00)
+ * from a WEBVTT document.
+ */
+function stripWatermarkCues(vtt: string): string {
+  const [header, ...blocks] = vtt.split(/\n{2,}/);
+  const watermark = /\b(?:kaa\.lt|kickassanime|kaa\.to|animeheaven\.me)\b/i;
+  const kept = blocks.filter((block) => {
+    if (!block.includes("-->")) return true;
+    const text = block
+      .split("\n")
+      .filter((line) => !line.includes("-->") && !/^\d+$/.test(line.trim()))
+      .join(" ")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+    return !(text && watermark.test(text) && text.length < 40);
+  });
+  return [header, ...kept].join("\n\n").trimEnd() + "\n";
+}
+
+/**
  * Convert SRT subtitle content to WEBVTT if it is not already WEBVTT.
  */
 function ensureWebVtt(content: string): string {
   const normalized = content.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
   if (normalized.startsWith("WEBVTT")) {
-    return normalized + "\n";
+    return stripWatermarkCues(normalized);
   }
 
   // Convert SRT numeric cue indices & comma timestamps (00:01:02,345 --> 00:01:05,678) to WEBVTT
@@ -49,19 +69,21 @@ function ensureWebVtt(content: string): string {
     .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2 --> $3.$4")
     .replace(/(\d{2}:\d{2}),(\d{3})\s*-->\s*(\d{2}:\d{2}),(\d{3})/g, "$1.$2 --> $3.$4");
 
-  return `WEBVTT\n\n${vttBody}\n`;
+  return stripWatermarkCues(`WEBVTT\n\n${vttBody}`);
 }
 
 /**
  * Rewrite ALL URLs in .m3u8 playlists to go through our backend proxy,
- * and optionally pin the desired audio track ("jpn" for SUB, "eng" for DUB).
+ * and optionally pin the desired audio track ("jpn" for SUB, "eng" for DUB)
+ * and/or pin a specific resolution (e.g. "1080p", "720p", "360p").
  */
 function rewriteM3U8(
   content: string,
   parentUrl: string,
   proxyBaseUrl: string,
   audioPref?: string,
-  customReferer?: string
+  customReferer?: string,
+  qualityPref?: string
 ): string {
   let rawLines = content.replace(/\r\n/g, "\n").split("\n");
   const parentBase = parentUrl.substring(0, parentUrl.lastIndexOf("/") + 1);
@@ -97,6 +119,41 @@ function rewriteM3U8(
             );
             return updated;
           });
+      }
+    }
+  }
+
+  // If qualityPref is requested (e.g. "720p", "1080p"), pin only that video variant in the master playlist
+  if (qualityPref) {
+    const targetHeight = qualityPref.replace(/[^0-9]/g, "");
+    if (targetHeight) {
+      const hasMatch = rawLines.some(
+        (l) =>
+          l.startsWith("#EXT-X-STREAM-INF:") &&
+          (l.includes(`x${targetHeight}`) || l.includes(`RESOLUTION=${targetHeight}`))
+      );
+      if (hasMatch) {
+        const filteredLines: string[] = [];
+        let skippingVariant = false;
+        for (let i = 0; i < rawLines.length; i++) {
+          const line = rawLines[i];
+          const t = line.trim();
+          if (t.startsWith("#EXT-X-STREAM-INF:")) {
+            const matchesHeight =
+              t.includes(`x${targetHeight}`) || t.includes(`RESOLUTION=${targetHeight}`);
+            if (matchesHeight) {
+              filteredLines.push(line);
+              skippingVariant = false;
+            } else {
+              skippingVariant = true;
+            }
+          } else if (skippingVariant && !t.startsWith("#")) {
+            skippingVariant = false;
+          } else {
+            filteredLines.push(line);
+          }
+        }
+        rawLines = filteredLines;
       }
     }
   }
@@ -180,6 +237,7 @@ router.get("/proxy", async (req: Request, res: Response) => {
   try {
     const rawUrl = req.query.url;
     const audioPref = typeof req.query.audio === "string" ? req.query.audio : undefined;
+    const qualityPref = typeof req.query.quality === "string" ? req.query.quality : undefined;
     const customReferer = typeof req.query.referer === "string" ? req.query.referer : undefined;
 
     if (!rawUrl || typeof rawUrl !== "string") {
@@ -254,7 +312,8 @@ router.get("/proxy", async (req: Request, res: Response) => {
             url,
             "/api/stream/proxy",
             audioPref,
-            referer
+            referer,
+            qualityPref
           );
           res.send(rewritten);
           return;

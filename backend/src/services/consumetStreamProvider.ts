@@ -59,7 +59,12 @@ export class ConsumetStreamProvider implements StreamProvider {
       .replace(/^http:\/\//i, "https://");
   }
 
-  private proxyUrl(url: string, audioPref?: "jpn" | "eng", customReferer?: string): string {
+  private proxyUrl(
+    url: string,
+    audioPref?: "jpn" | "eng",
+    customReferer?: string,
+    quality?: string
+  ): string {
     const clean = this.sanitizeUrl(url);
     let proxied = `/api/stream/proxy?url=${encodeURIComponent(clean)}`;
     if (audioPref) {
@@ -67,6 +72,9 @@ export class ConsumetStreamProvider implements StreamProvider {
     }
     if (customReferer) {
       proxied += `&referer=${encodeURIComponent(customReferer)}`;
+    }
+    if (quality) {
+      proxied += `&quality=${encodeURIComponent(quality)}`;
     }
     return proxied;
   }
@@ -622,14 +630,22 @@ export class ConsumetStreamProvider implements StreamProvider {
                   subtitles: serverSubs,
                 });
 
-                // If master.m3u8 does not use separate audio groups, expose direct 1080p / 720p quality servers too
-                if (!m3u8Info.hasAudioGroups && m3u8Info.qualities.length > 1) {
-                  for (const q of m3u8Info.qualities.slice(0, 2)) {
+                // Provide individual quality servers (1080p, 720p, 360p) so users always have multiple reliable options
+                if (m3u8Info.qualities.length > 1) {
+                  for (const q of m3u8Info.qualities) {
+                    const qLabel =
+                      q.quality === "1080p"
+                        ? "1080p Full HD"
+                        : q.quality === "720p"
+                        ? "720p Fast"
+                        : `${q.quality} Data Saver`;
                     servers.push({
-                      id: `kaa-sub-${srv.name.toLowerCase()}-${q.quality}-${i}`,
-                      name: `${srv.name} (${q.quality})`,
+                      id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${q.quality}-${i}`,
+                      name: `${srv.name} (${qLabel})`,
                       category: "SUB",
-                      url: this.proxyUrl(q.url),
+                      url: isHls
+                        ? this.proxyUrl(manifestUrl, "jpn", undefined, q.quality)
+                        : this.proxyUrl(q.url),
                       type: "hls",
                       quality: q.quality,
                       subtitles: serverSubs,
@@ -650,7 +666,7 @@ export class ConsumetStreamProvider implements StreamProvider {
                 foundDubServer = true;
                 servers.push({
                   id: `kaa-dub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
-                  name: `${srv.name} Dub (1080p)`,
+                  name: `${srv.name} Dub (Auto 1080p)`,
                   category: "DUB",
                   url: isHls ? this.proxyUrl(manifestUrl, "eng") : manifestUrl,
                   type: isHls ? "hls" : "mp4",
@@ -658,13 +674,21 @@ export class ConsumetStreamProvider implements StreamProvider {
                   subtitles: serverSubs,
                 });
 
-                if (!m3u8Info.hasAudioGroups && m3u8Info.qualities.length > 1) {
-                  for (const q of m3u8Info.qualities.slice(0, 2)) {
+                if (m3u8Info.qualities.length > 1) {
+                  for (const q of m3u8Info.qualities) {
+                    const qLabel =
+                      q.quality === "1080p"
+                        ? "1080p Full HD"
+                        : q.quality === "720p"
+                        ? "720p Fast"
+                        : `${q.quality} Data Saver`;
                     servers.push({
-                      id: `kaa-dub-${srv.name.toLowerCase()}-${q.quality}-${i}`,
-                      name: `${srv.name} Dub (${q.quality})`,
+                      id: `kaa-dub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${q.quality}-${i}`,
+                      name: `${srv.name} Dub (${qLabel})`,
                       category: "DUB",
-                      url: this.proxyUrl(q.url),
+                      url: isHls
+                        ? this.proxyUrl(manifestUrl, "eng", undefined, q.quality)
+                        : this.proxyUrl(q.url),
                       type: "hls",
                       quality: q.quality,
                       subtitles: serverSubs,

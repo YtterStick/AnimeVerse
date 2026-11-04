@@ -319,3 +319,58 @@
   background: white;
 }
 
+/* ============================================
+   Video Player: Subtitle Watermark Protection & Intro/Outro Seekbar Highlights
+   ============================================ */
+
+/* Hide any subtitle watermarks (like kaa.lt ruby box) completely */
+::cue(ruby),
+::cue(rt),
+::cue(rb) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  font-size: 0 !important;
+  height: 0 !important;
+  line-height: 0 !important;
+}
+
+/* Time Slider: Yellow Intro / Outro highlights */
+.vds-skip-highlights-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.vds-skip-indicator-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 5px;
+  background-color: #facc15 !important; /* Bright yellow */
+  border-radius: 9999px;
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.85);
+  pointer-events: none;
+  transition: height 0.15s ease, opacity 0.15s ease;
+  z-index: 5;
+}
+
+:where(.vds-time-slider:hover) .vds-skip-indicator-bar,
+:where(.vds-time-slider[data-active]) .vds-skip-indicator-bar {
+  height: 9px !important;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 1);
+}
+
+/* When chapter segments are rendered by Vidstack */
+:where(.vds-slider-chapter[data-chapter-type="intro"]) :where(.vds-slider-track),
+:where(.vds-slider-chapter[data-chapter-type="outro"]) :where(.vds-slider-track),
+:where(.vds-slider-chapter[data-chapter-type="recap"]) :where(.vds-slider-track) {
+  background-color: #facc15 !important;
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.8);
+}
+
+
