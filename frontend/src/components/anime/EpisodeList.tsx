@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Play, Check, AlertCircle } from "lucide-react";
 import type { Episode } from "@/types";
 import { useWatchHistory } from "@/hooks/useWatchHistory";
-import { getLocalEpisodeProgress } from "@/lib/watchProgress";
+import { getEpisodeWatchStatus } from "@/lib/watchProgress";
 
 interface EpisodeListProps {
   animeId: number;
@@ -25,17 +25,9 @@ export function EpisodeList({
   const { history } = useWatchHistory();
   const [activeRangeIndex, setActiveRangeIndex] = useState(0);
 
-  // Helper to check if user has watched this episode
-  const getProgress = (epNum: number) => {
-    const local = getLocalEpisodeProgress(animeId, epNum);
-    if (local && local.durationSeconds > 0) {
-      return local.progressSeconds / local.durationSeconds;
-    }
-    const record = history.find(
-      (h) => h.anime_id === animeId && h.episode_number === epNum
-    );
-    if (!record || !record.duration_seconds) return null;
-    return record.progress_seconds / record.duration_seconds;
+  // Helper to check if user has watched this episode or get its progress
+  const getStatus = (epNum: number) => {
+    return getEpisodeWatchStatus(animeId, epNum, history);
   };
 
   // Compute episode ranges of 50 episodes
@@ -121,8 +113,7 @@ export function EpisodeList({
         <div className="flex flex-col gap-3 max-w-4xl animate-fade-in">
           {displayedEpisodes.map((ep) => {
             const isCurrent = currentEpisodeNumber === ep.episode_number;
-            const progress = getProgress(ep.episode_number);
-            const isWatched = progress !== null && progress >= 0.9;
+            const { isWatched, progressPercent } = getStatus(ep.episode_number);
 
             return (
               <Link
@@ -131,6 +122,8 @@ export function EpisodeList({
                 className={`group flex items-center gap-4 p-3.5 rounded-xl border transition-all duration-200 select-none ${
                   isCurrent
                     ? "bg-primary/10 border-primary shadow-sm"
+                    : isWatched
+                    ? "bg-card/25 hover:bg-secondary/40 border-border/20 opacity-55 hover:opacity-90"
                     : "bg-card hover:bg-secondary/40 hover:border-border/80 border-border/40"
                 }`}
               >
@@ -139,7 +132,9 @@ export function EpisodeList({
                   <img
                     src={animeImage || "/placeholder-anime.jpg"}
                     alt={ep.title || `Episode ${ep.episode_number}`}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
+                      isWatched && !isCurrent ? "grayscale-[40%] opacity-70" : ""
+                    }`}
                   />
                   {/* Play button overlay */}
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -153,11 +148,11 @@ export function EpisodeList({
                   </span>
                   
                   {/* Watch Progress bar */}
-                  {progress !== null && progress > 0 && progress < 0.9 && (
+                  {!isWatched && progressPercent > 0 && (
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-secondary overflow-hidden">
                       <div
                         className="h-full bg-primary"
-                        style={{ width: `${progress * 100}%` }}
+                        style={{ width: `${progressPercent * 100}%` }}
                       />
                     </div>
                   )}
@@ -167,7 +162,7 @@ export function EpisodeList({
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded tracking-wide uppercase ${
-                      isCurrent ? "bg-primary/20 text-primary border border-primary/20" : "bg-secondary text-muted-foreground"
+                      isCurrent ? "bg-primary/20 text-primary border border-primary/20" : isWatched ? "bg-secondary/60 text-muted-foreground/60" : "bg-secondary text-muted-foreground"
                     }`}>
                       Episode {ep.episode_number}
                     </span>
@@ -182,7 +177,7 @@ export function EpisodeList({
                       </span>
                     )}
                     {isWatched && (
-                      <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
+                      <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-400/90">
                         <Check className="w-3 h-3 text-emerald-400" />
                         Watched
                       </span>
@@ -190,7 +185,7 @@ export function EpisodeList({
                   </div>
 
                   <h3 className={`text-sm sm:text-base font-bold leading-tight truncate group-hover:text-primary transition-colors ${
-                    isCurrent ? "text-primary" : "text-white"
+                    isCurrent ? "text-primary" : isWatched ? "text-muted-foreground/60 line-through decoration-muted-foreground/30" : "text-white"
                   }`}>
                     {ep.title || `Episode ${ep.episode_number}`}
                   </h3>
@@ -210,8 +205,7 @@ export function EpisodeList({
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 animate-fade-in">
           {displayedEpisodes.map((ep) => {
             const isCurrent = currentEpisodeNumber === ep.episode_number;
-            const progress = getProgress(ep.episode_number);
-            const isWatched = progress !== null && progress >= 0.9;
+            const { isWatched, progressPercent } = getStatus(ep.episode_number);
 
             return (
               <Link
@@ -220,6 +214,8 @@ export function EpisodeList({
                 className={`group relative flex flex-col justify-between p-3 rounded-lg border text-left transition-all duration-200 select-none ${
                   isCurrent
                     ? "bg-primary/10 border-primary shadow-sm"
+                    : isWatched
+                    ? "bg-card/25 hover:bg-secondary/40 border-border/20 opacity-55 hover:opacity-90"
                     : "bg-card hover:bg-secondary/60 hover:border-border/80 border-border/40"
                 }`}
               >
@@ -227,7 +223,7 @@ export function EpisodeList({
                 <div className="flex justify-between items-start gap-1.5">
                   <span
                     className={`text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide ${
-                      isCurrent ? "bg-primary text-white" : "bg-secondary text-muted-foreground"
+                      isCurrent ? "bg-primary text-white" : isWatched ? "bg-secondary/50 text-muted-foreground/60" : "bg-secondary text-muted-foreground"
                     }`}
                   >
                     EP {ep.episode_number}
@@ -243,7 +239,7 @@ export function EpisodeList({
                 {/* Title */}
                 <div className="mt-2 flex items-center justify-between gap-1">
                   <span className={`text-xs font-medium leading-snug line-clamp-1 flex-1 group-hover:text-primary transition-colors ${
-                    isCurrent ? "text-primary" : "text-foreground"
+                    isCurrent ? "text-primary" : isWatched ? "text-muted-foreground/60 line-through decoration-muted-foreground/30" : "text-foreground"
                   }`}>
                     {ep.title || `Episode ${ep.episode_number}`}
                   </span>
@@ -251,11 +247,11 @@ export function EpisodeList({
                 </div>
 
                 {/* Watch Progress Bar */}
-                {progress !== null && progress > 0 && progress < 0.9 && (
+                {!isWatched && progressPercent > 0 && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary rounded-b-lg overflow-hidden">
                     <div
                       className="h-full bg-primary"
-                      style={{ width: `${progress * 100}%` }}
+                      style={{ width: `${progressPercent * 100}%` }}
                     />
                   </div>
                 )}

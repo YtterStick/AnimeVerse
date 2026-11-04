@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Layers, Compass, FastForward } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Layers, Compass, FastForward, Check } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
-import { getLocalEpisodeProgress, saveLocalEpisodeProgress, isEpisodeFinished } from "@/lib/watchProgress";
+import { getLocalEpisodeProgress, saveLocalEpisodeProgress, isEpisodeFinished, getEpisodeWatchStatus } from "@/lib/watchProgress";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { ServerSelector } from "@/components/player/ServerSelector";
 import { Button } from "@/components/ui/button";
@@ -44,9 +44,9 @@ export function WatchPage() {
   const [skips, setSkips] = useState<SkipInterval[]>([]);
   const [autoSkip, setAutoSkip] = useState<boolean>(() => {
     try {
-      return localStorage.getItem("aniverse:autoSkip") !== "false";
+      return localStorage.getItem("aniverse:autoSkip") === "true";
     } catch {
-      return true;
+      return false;
     }
   });
 
@@ -781,20 +781,47 @@ export function WatchPage() {
             ) : (
               displayedEpisodes.map((ep) => {
                 const isActive = ep.episode_number === episodeNum;
+                const { isWatched, progressPercent } = getEpisodeWatchStatus(
+                  animeId,
+                  ep.episode_number,
+                  history
+                );
+
                 return (
                   <button
                     key={ep.episode_number}
                     onClick={() => navigate(`/watch/${animeId}/${ep.episode_number}`)}
-                    className={`w-full flex items-center justify-between p-3 rounded-lg border text-left text-xs font-medium cursor-pointer transition-all ${
+                    className={`relative w-full flex items-center justify-between p-3 rounded-lg border text-left text-xs font-medium cursor-pointer transition-all overflow-hidden ${
                       isActive
-                        ? "bg-primary text-white border-primary shadow-md"
+                        ? "bg-primary text-white border-primary shadow-md opacity-100 ring-1 ring-primary/40"
+                        : isWatched
+                        ? "bg-card/25 hover:bg-secondary/40 border-border/20 text-muted-foreground/45 opacity-50 hover:opacity-85"
                         : "bg-card hover:bg-secondary/40 border-border/40 text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <span className="truncate max-w-45">
+                    <span className={`truncate max-w-45 ${isWatched && !isActive ? "line-through decoration-muted-foreground/30" : ""}`}>
                       EP {ep.episode_number} — {ep.title || `Episode ${ep.episode_number}`}
                     </span>
-                    <Play className={`w-3.5 h-3.5 shrink-0 ${isActive ? "text-white" : "opacity-0 hover:opacity-100"}`} />
+
+                    {isActive ? (
+                      <Play className="w-3.5 h-3.5 shrink-0 text-white fill-white" />
+                    ) : isWatched ? (
+                      <span className="flex items-center gap-1 text-[10px] text-emerald-400/90 font-semibold shrink-0">
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      </span>
+                    ) : (
+                      <Play className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover:opacity-100" />
+                    )}
+
+                    {/* Progress indicator for partially watched episodes */}
+                    {!isActive && !isWatched && progressPercent > 0 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary/80 overflow-hidden">
+                        <div
+                          className="h-full bg-primary"
+                          style={{ width: `${progressPercent * 100}%` }}
+                        />
+                      </div>
+                    )}
                   </button>
                 );
               })
