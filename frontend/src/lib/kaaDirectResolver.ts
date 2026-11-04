@@ -77,7 +77,8 @@ export async function resolveKaaClient(
       let cleanSrc = sanitizeUrl(srv.src);
 
       try {
-        const playerHtml = await fetch(cleanSrc).then((r) => r.text());
+        // Must fetch player HTML via our proxy because krussdomi.com lacks CORS headers for browsers
+        const playerHtml = await fetch(buildProxyUrl(cleanSrc)).then((r) => r.text());
         const propsMatch = playerHtml.match(/props="([^"]+)"/);
         if (!propsMatch) continue;
 
@@ -107,7 +108,7 @@ export async function resolveKaaClient(
 
         // Add Auto 1080p
         servers.push({
-          id: `kaa-sub-${srv.name.toLowerCase()}-${i}`,
+          id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
           name: `${srv.name} (Auto 1080p)`,
           category: "SUB",
           url: buildProxyUrl(manifestUrl, "jpn"),
@@ -118,7 +119,7 @@ export async function resolveKaaClient(
 
         // Add 720p Fast
         servers.push({
-          id: `kaa-sub-${srv.name.toLowerCase()}-720p-${i}`,
+          id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-720p-${i}`,
           name: `${srv.name} (720p Fast)`,
           category: "SUB",
           url: buildProxyUrl(manifestUrl, "jpn", "720p"),
@@ -129,7 +130,7 @@ export async function resolveKaaClient(
 
         // Add 360p Data Saver
         servers.push({
-          id: `kaa-sub-${srv.name.toLowerCase()}-360p-${i}`,
+          id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-360p-${i}`,
           name: `${srv.name} (360p Data Saver)`,
           category: "SUB",
           url: buildProxyUrl(manifestUrl, "jpn", "360p"),
@@ -137,9 +138,59 @@ export async function resolveKaaClient(
           quality: "360p",
           subtitles,
         });
-      } catch {
-        // Continue to next server
+      } catch (err: any) {
+        console.warn(`[KaaDirectResolver] Failed to parse player for ${srv.name}:`, err.message);
       }
+    }
+
+    // 3. Also check for English DUB servers (en-US locale)
+    try {
+      const dubEpRes = await fetch(
+        `https://kaa.lt/api/show/${slug}/episodes?ep=${episodeNum}&lang=en-US`,
+        { headers: { Accept: "application/json" } }
+      ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+
+      const dubEpList: any[] = dubEpRes?.result || [];
+      const dubTarget = dubEpList.find(
+        (e) =>
+          Math.floor(Number(e.episode_number)) === episodeNum ||
+          String(e.episode_string) === String(episodeNum)
+      );
+      if (dubTarget) {
+        const epNumStr = dubTarget.episode_string || String(Math.floor(Number(dubTarget.episode_number)));
+        const dubDetail = await fetch(
+          `https://kaa.lt/api/show/${slug}/episode/ep-${epNumStr}-${dubTarget.slug}`,
+          { headers: { Accept: "application/json" } }
+        ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+
+        const dubServers: Array<{ name: string; src: string }> = dubDetail?.servers || [];
+        for (let i = 0; i < dubServers.length; i++) {
+          const srv = dubServers[i];
+          try {
+            const playerHtml = await fetch(buildProxyUrl(sanitizeUrl(srv.src))).then((r) => r.text());
+            const propsMatch = playerHtml.match(/props="([^"]+)"/);
+            if (!propsMatch) continue;
+            const jsonData = JSON.parse(decodeHtml(propsMatch[1]));
+            const rawManifest = jsonData?.manifest?.[1];
+            if (!rawManifest) continue;
+            const manifestUrl = sanitizeUrl(String(rawManifest));
+
+            servers.push({
+              id: `kaa-dub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
+              name: `${srv.name} Dub (Auto 1080p)`,
+              category: "DUB",
+              url: buildProxyUrl(manifestUrl, "eng"),
+              type: "hls",
+              quality: "1080p",
+              subtitles: [],
+            });
+          } catch {
+            // Ignore individual server error
+          }
+        }
+      }
+    } catch {
+      // Continue without DUB
     }
 
     return servers;
