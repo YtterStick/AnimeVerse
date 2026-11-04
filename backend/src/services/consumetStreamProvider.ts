@@ -10,9 +10,9 @@ import {
 } from "./streamProvider";
 import { jikanService } from "./jikanService";
 
-// Cache resolved slugs & streams (30 min TTL for slugs, 10 min for streams)
+// Cache resolved slugs & streams (30 min TTL for slugs, 3 min for streams)
 const slugCache = new NodeCache({ stdTTL: 1800, checkperiod: 120 });
-const streamCache = new NodeCache({ stdTTL: 600, checkperiod: 60 });
+const streamCache = new NodeCache({ stdTTL: 180, checkperiod: 60 });
 
 interface AnimeMetadata {
   malId: number;
@@ -1047,7 +1047,10 @@ export class ConsumetStreamProvider implements StreamProvider {
       default: this.pickDefaultServerIndex(allServers),
     };
 
-    streamCache.set(cacheKey, result);
+    // Only cache if we resolved full multi-server results (never cache degraded single-server states)
+    if (allServers.length > 1) {
+      streamCache.set(cacheKey, result);
+    }
     return result;
   }
 

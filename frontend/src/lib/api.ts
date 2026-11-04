@@ -6,6 +6,7 @@ import type {
   WatchHistoryEntry,
   WatchlistEntry,
 } from "@/types";
+import { resolveKaaClient } from "./kaaDirectResolver";
 
 export const BACKEND_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const API_BASE = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
@@ -82,8 +83,14 @@ export const animeApi = {
 // ============================================
 
 export const streamApi = {
-  getStreamUrl: async (animeId: number, episode: number) => {
-    const res = await fetchApi<MultiStreamResult>(`/stream/${animeId}/${episode}`);
+  getStreamUrl: async (animeId: number, episode: number): Promise<MultiStreamResult> => {
+    let res: MultiStreamResult | null = null;
+    try {
+      res = await fetchApi<MultiStreamResult>(`/stream/${animeId}/${episode}`);
+    } catch {
+      res = { servers: [], default: -1 };
+    }
+
     if (BACKEND_URL && res?.servers) {
       res.servers = res.servers.map((s) => ({
         ...s,
@@ -94,7 +101,25 @@ export const streamApi = {
         })),
       }));
     }
-    return res;
+
+    // Client-side fallback / enrichment:
+    // If backend did not return any KAA servers (e.g. cloud datacenter challenged by Cloudflare),
+    // resolve directly from the client browser which has residential IP and 0% block rate.
+    const hasKaa = res?.servers?.some((s) => s.id.startsWith("kaa-"));
+    if (!hasKaa) {
+      try {
+        const clientServers = await resolveKaaClient(animeId, episode);
+        if (clientServers.length > 0) {
+          if (!res) res = { servers: [], default: 0 };
+          res.servers = [...clientServers, ...(res.servers || [])];
+          res.default = 0;
+        }
+      } catch {
+        // Fall back to backend results
+      }
+    }
+
+    return res || { servers: [], default: -1 };
   },
 
   /** Intro/outro/recap timestamps (seconds) from AniSkip, proxied through our backend. */

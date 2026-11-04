@@ -273,12 +273,18 @@ router.get("/proxy", async (req: Request, res: Response) => {
       }
     }
 
-    const rangeHeader = typeof req.headers.range === "string" ? req.headers.range : undefined;
-    const headerAttempts = buildProxyHeaders(url, referer, rangeHeader);
-
     const isSubtitle = /\.(vtt|srt|ass|ssa)(?:[?#]|$)/i.test(url);
     const isPlaylist = !isSubtitle && /\.m3u8(?:[?#]|$)/i.test(url);
     const isMp4 = /video\.mp4|\.mp4(?:[?#]|$)/i.test(url);
+
+    // If client is requesting an MP4 and didn't provide a Range header,
+    // default to "bytes=0-" so upstream Apache/nginx sends 206 Partial Content immediately
+    let rangeHeader = typeof req.headers.range === "string" ? req.headers.range : undefined;
+    if (isMp4 && !rangeHeader) {
+      rangeHeader = "bytes=0-";
+    }
+
+    const headerAttempts = buildProxyHeaders(url, referer, rangeHeader);
 
     for (let i = 0; i < headerAttempts.length; i++) {
       try {
@@ -378,6 +384,30 @@ router.get("/proxy", async (req: Request, res: Response) => {
       res.status(502).send("Failed to proxy streaming resource");
     }
   }
+});
+
+// GET /api/stream/debug/proxy-test?target=...
+router.get("/debug/proxy-test", async (req: Request, res: Response) => {
+  const target = typeof req.query.target === "string" ? req.query.target : "https://cu.animeheaven.me/video.mp4?e9e0363ca5e03b67def6326835a045ed&073640e721015dbb3f043967abdf0075";
+  const results: any[] = [];
+  const headerAttempts = buildProxyHeaders(target, "https://animeheaven.me/", "bytes=0-1000");
+  for (let i = 0; i < headerAttempts.length; i++) {
+    const started = Date.now();
+    try {
+      const resp = await axios.get(target, {
+        headers: headerAttempts[i],
+        responseType: "stream",
+        timeout: 8000,
+        validateStatus: (s) => s >= 200 && s < 300,
+      });
+      results.push({ attempt: i, ok: true, status: resp.status, ms: Date.now() - started, headers: resp.headers });
+      resp.data.destroy();
+      return res.json({ success: true, results });
+    } catch (err: any) {
+      results.push({ attempt: i, ok: false, status: err.response?.status, error: err.message, ms: Date.now() - started });
+    }
+  }
+  res.status(502).json({ success: false, results });
 });
 
 // GET /api/stream/debug/ah/:animeId/:episode
