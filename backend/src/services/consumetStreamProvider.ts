@@ -26,7 +26,20 @@ interface AnimeMetadata {
 }
 
 const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+const KAA_HEADERS: Record<string, string> = {
+  "User-Agent": USER_AGENT,
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+  "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+  "sec-fetch-dest": "empty",
+  "sec-fetch-mode": "cors",
+  "sec-fetch-site": "same-origin",
+  Referer: "https://kaa.lt/",
+};
 
 /**
  * Multi-provider English SUB + DUB stream aggregator.
@@ -525,11 +538,7 @@ export class ConsumetStreamProvider implements StreamProvider {
       const kaaSlug = await this.resolveKAASlug(meta);
       if (!kaaSlug) return servers;
 
-      const showHeaders = {
-        "User-Agent": USER_AGENT,
-        Accept: "application/json",
-        Referer: "https://kaa.lt/",
-      };
+      const showHeaders = KAA_HEADERS;
 
       const showRes = await axios.get(`https://kaa.lt/api/show/${kaaSlug}`, {
         headers: showHeaders,
@@ -824,28 +833,26 @@ export class ConsumetStreamProvider implements StreamProvider {
       const uniqueSources = [...new Set(rawSources)];
 
       // AnimeHeaven sometimes serves a tiny ~3s "Watch on AnimeHeaven.Me" placeholder clip
-      // instead of the real episode, and some mirrors are unreachable from certain regions.
-      // Probe each source and keep only reachable, full-size videos.
+      // instead of the real episode. Only drop sources that are CONFIRMED to be small placeholders (< 5MB).
+      // If a probe times out (size === null), DO NOT discard the source!
       const probed = await Promise.all(
-        uniqueSources.slice(0, 4).map(async (src) => ({ src, size: await this.probeVideoSize(src) }))
+        uniqueSources.slice(0, 4).map(async (src) => ({ src, size: await this.probeVideoSize(src, epHash) }))
       );
+
+      // Filter out only confirmed placeholders (< 5MB and size !== null)
       const validSources = probed
-        .filter((p) => p.size !== null && p.size >= this.minRealEpisodeBytes)
+        .filter((p) => p.size === null || p.size >= this.minRealEpisodeBytes)
         .map((p) => p.src);
 
-      if (validSources.length < probed.length) {
-        console.log(
-          `[AnimeHeaven] Dropped ${probed.length - validSources.length} placeholder/unreachable source(s): ` +
-            probed.map((p) => `${new URL(p.src).hostname}=${p.size ?? "ERR"}`).join(", ")
-        );
-      }
+      // Ultimate fallback: if somehow all were filtered, keep uniqueSources so user is never left without streams
+      const sourcesToUse = validSources.length > 0 ? validSources : uniqueSources;
 
-      for (let i = 0; i < Math.min(validSources.length, 2); i++) {
+      for (let i = 0; i < Math.min(sourcesToUse.length, 3); i++) {
         servers.push({
           id: `animeheaven-sub-${i}`,
           name: `AnimeHeaven #${i + 1} (Eng Sub)`,
           category: "SUB",
-          url: this.proxyUrl(validSources[i], undefined, "https://animeheaven.me/"),
+          url: this.proxyUrl(sourcesToUse[i], undefined, "https://animeheaven.me/"),
           type: "mp4",
           quality: "1080p",
           subtitles: [],
@@ -863,14 +870,22 @@ export class ConsumetStreamProvider implements StreamProvider {
 
   /**
    * Returns the total byte size of a remote MP4 using a 2-byte Range request,
-   * or null if the source is unreachable.
+   * or null if the source probe timed out / failed.
    */
-  private async probeVideoSize(url: string): Promise<number | null> {
+  private async probeVideoSize(url: string, epHash?: string | null): Promise<number | null> {
     try {
+      const headers: Record<string, string> = {
+        "User-Agent": USER_AGENT,
+        Referer: "https://animeheaven.me/",
+        Range: "bytes=0-1",
+      };
+      if (epHash) {
+        headers["Cookie"] = `key=${epHash}`;
+      }
       const res = await axios.get(this.sanitizeUrl(url), {
-        headers: { "User-Agent": USER_AGENT, Referer: "https://animeheaven.me/", Range: "bytes=0-1" },
+        headers,
         responseType: "arraybuffer",
-        timeout: 5000,
+        timeout: 4000,
         validateStatus: (s) => s >= 200 && s < 300,
       });
       const range = String(res.headers["content-range"] || "");

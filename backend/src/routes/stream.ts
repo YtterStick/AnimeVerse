@@ -380,6 +380,24 @@ router.get("/proxy", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/stream/debug/ah/:animeId/:episode
+// Step-by-step diagnostics for the AnimeHeaven provider
+router.get("/debug/ah/:animeId/:episode", async (req: Request, res: Response) => {
+  const animeId = parseInt(req.params.animeId, 10);
+  const episode = parseInt(req.params.episode, 10);
+  try {
+    const meta = await (streamProvider as any).getAnimeMetadata(animeId);
+    const searchRes = await axios.get(
+      `https://animeheaven.me/search.php?s=${encodeURIComponent(meta?.titleEnglish || meta?.title || "")}`,
+      { headers: { "User-Agent": "Mozilla/5.0", Referer: "https://animeheaven.me/" }, timeout: 6000 }
+    );
+    const hrefs = [...String(searchRes.data).matchAll(/href=['"](anime\.php\?[a-z0-9]+)['"]/gi)].map((m) => m[1]);
+    res.json({ meta, hrefs: hrefs.slice(0, 3) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/stream/debug/kaa/:animeId/:episode
 // Step-by-step diagnostics for the KickAssAnime provider (status codes per upstream call)
 router.get("/debug/kaa/:animeId/:episode", async (req: Request, res: Response) => {
