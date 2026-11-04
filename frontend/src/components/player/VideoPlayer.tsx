@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { AlertCircle, RefreshCw } from "lucide-react";
 import { MediaPlayer, MediaProvider, Track } from "@vidstack/react";
 import { defaultLayoutIcons, DefaultVideoLayout } from "@vidstack/react/player/layouts/default";
 
@@ -25,6 +26,11 @@ interface VideoPlayerProps {
   autoSkip?: boolean;
   /** Current episode number (used to prevent prologue skipping on episode 1) */
   episodeNumber?: number;
+  onError?: (errorDetail?: any) => void;
+  onRetry?: () => void;
+  serverName?: string;
+  availableServers?: Array<{ id: string; name: string; category?: string }>;
+  onSelectServer?: (index: number) => void;
 }
 
 const SKIP_LABELS: Record<string, string> = {
@@ -45,6 +51,11 @@ export function VideoPlayer({
   skips = [],
   autoSkip = false,
   episodeNumber,
+  onError,
+  onRetry,
+  serverName,
+  availableServers,
+  onSelectServer,
 }: VideoPlayerProps) {
   const playerRef = useRef<any>(null);
   const autoSkippedRef = useRef<Set<string>>(new Set());
@@ -52,12 +63,25 @@ export function VideoPlayer({
   const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
   const [autoSkipToast, setAutoSkipToast] = useState<string | null>(null);
   const [duration, setDuration] = useState<number>(0);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [refinedSkips, setRefinedSkips] = useState<SkipInterval[]>(() =>
     episodeNumber === 1
       ? skips.filter((s) => !(s.type === "recap" && s.start < 60))
       : skips
   );
   const [sliderEl, setSliderEl] = useState<HTMLElement | null>(null);
+
+  // Clear error state whenever the source changes
+  useEffect(() => {
+    setPlaybackError(null);
+  }, [src]);
+
+  const handleMediaError = (event: any) => {
+    const errorMsg = event?.detail?.message || "Stream loading error";
+    console.warn("[VideoPlayer] Stream load error:", errorMsg, src);
+    setPlaybackError(errorMsg);
+    onError?.(event);
+  };
 
   // Keep refinedSkips in sync with props as baseline (filtering out false episode 1 recaps)
   useEffect(() => {
@@ -293,6 +317,7 @@ export function VideoPlayer({
         onCanPlay={handleCanPlay}
         onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
+        onError={handleMediaError}
         className="w-full h-full"
         key={src}
         autoPlay
@@ -362,6 +387,61 @@ export function VideoPlayer({
           </div>
         )}
       </MediaPlayer>
+
+      {/* Stream Error & Quick Server Switch Overlay */}
+      {playbackError && (
+        <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in select-none">
+          <div className="w-14 h-14 rounded-full bg-destructive/20 border border-destructive/40 flex items-center justify-center text-destructive">
+            <AlertCircle className="w-7 h-7" />
+          </div>
+          <div className="space-y-1.5 max-w-md">
+            <h3 className="text-base sm:text-lg font-bold text-white">
+              Stream Temporarily Unavailable
+            </h3>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              {serverName ? `"${serverName}" encountered an error loading this episode.` : "This server encountered an error loading this episode."}
+              {availableServers && availableServers.length > 1
+                ? " Please switch to another available server below or retry."
+                : " The upstream link may have expired. Please click Retry below."}
+            </p>
+          </div>
+
+          {availableServers && availableServers.length > 1 && onSelectServer && (
+            <div className="space-y-2 pt-1 w-full max-w-md">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-primary">Switch Server:</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {availableServers.map((srv, idx) => (
+                  <button
+                    key={srv.id || idx}
+                    type="button"
+                    onClick={() => {
+                      setPlaybackError(null);
+                      onSelectServer(idx);
+                    }}
+                    className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-secondary/80 hover:bg-primary hover:text-white text-foreground border border-border/50 hover:border-primary transition-all cursor-pointer"
+                  >
+                    {srv.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {onRetry && (
+            <button
+              type="button"
+              onClick={() => {
+                setPlaybackError(null);
+                onRetry();
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-white text-black hover:bg-white/90 shadow-lg cursor-pointer transition-all mt-1"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry Stream
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

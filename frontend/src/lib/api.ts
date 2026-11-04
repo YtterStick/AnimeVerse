@@ -91,10 +91,10 @@ export const animeApi = {
 // ============================================
 
 export const streamApi = {
-  getStreamUrl: async (animeId: number, episode: number): Promise<MultiStreamResult> => {
+  getStreamUrl: async (animeId: number, episode: number, fresh = false): Promise<MultiStreamResult> => {
     // Run backend stream resolution and client-side direct resolver concurrently
     const [backendSettled, clientSettled] = await Promise.allSettled([
-      fetchApi<MultiStreamResult>(`/stream/${animeId}/${episode}`, { timeoutMs: 12000 }),
+      fetchApi<MultiStreamResult>(`/stream/${animeId}/${episode}${fresh ? "?fresh=1" : ""}`, { timeoutMs: 15000 }),
       resolveKaaClient(animeId, episode),
     ]);
 
@@ -135,7 +135,29 @@ export const streamApi = {
       };
     }
 
-    res.default = 0;
+    // Deduplicate servers: keep at most one stream per distinct provider per category
+    const seenServerKeys = new Set<string>();
+    const uniqueServers: typeof res.servers = [];
+    for (const server of res.servers) {
+      const providerKey = `${server.name.replace(/\s*\(.*?\)/g, "").trim().toLowerCase()}-${server.category}`;
+      if (!seenServerKeys.has(providerKey)) {
+        seenServerKeys.add(providerKey);
+        uniqueServers.push(server);
+      }
+    }
+    res.servers = uniqueServers.length > 0 ? uniqueServers : res.servers;
+
+    // Pick best default server: Soft-subbed HLS with English subtitle track first, then any SUB
+    const engSubIdx = res.servers.findIndex(
+      (s) => (s.category || "SUB") === "SUB" && s.subtitles && s.subtitles.some((sub) => sub.lang === "en")
+    );
+    if (engSubIdx !== -1) {
+      res.default = engSubIdx;
+    } else {
+      const subIdx = res.servers.findIndex((s) => (s.category || "SUB") === "SUB");
+      res.default = subIdx !== -1 ? subIdx : 0;
+    }
+
     return res;
   },
 

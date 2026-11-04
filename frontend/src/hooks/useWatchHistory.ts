@@ -64,9 +64,18 @@ export function useSaveProgress() {
       progress_seconds: number;
       duration_seconds: number;
     }) => {
+      const numId = Number(data.anime_id);
+      const numEp = Number(data.episode_number);
+      if (!numId || isNaN(numId) || numId <= 0 || !numEp || isNaN(numEp) || numEp <= 0) {
+        return;
+      }
       if (!session?.access_token) return;
       try {
-        await historyApi.saveProgress(session.access_token, data);
+        await historyApi.saveProgress(session.access_token, {
+          ...data,
+          anime_id: numId,
+          episode_number: numEp,
+        });
       } catch (err) {
         console.error("Failed to save progress:", err);
       }

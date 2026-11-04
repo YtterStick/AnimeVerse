@@ -529,6 +529,7 @@ router.get("/slug/:animeId", async (req: Request, res: Response) => {
 router.get("/:animeId/:episode", async (req: Request, res: Response, _next: NextFunction) => {
   try {
     const { animeId, episode } = req.params;
+    const forceFresh = req.query.fresh === "true" || req.query.fresh === "1";
     const animeIdNum = parseInt(animeId, 10);
     const episodeNum = parseInt(episode, 10);
 
@@ -536,7 +537,7 @@ router.get("/:animeId/:episode", async (req: Request, res: Response, _next: Next
       return res.status(400).json({ message: "Invalid parameters" });
     }
 
-    const result = await streamProvider.getMultiStream(animeIdNum, episodeNum);
+    const result = await streamProvider.getMultiStream(animeIdNum, episodeNum, forceFresh);
     res.json(result);
   } catch (error: any) {
     console.error("Stream resolution error:", error.message);

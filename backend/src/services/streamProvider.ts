@@ -33,5 +33,5 @@ export interface MultiStreamResult {
 
 export interface StreamProvider {
   getStreamUrl(animeId: number, episode: number): Promise<StreamResult>;
-  getMultiStream(animeId: number, episode: number): Promise<MultiStreamResult>;
+  getMultiStream(animeId: number, episode: number, forceFresh?: boolean): Promise<MultiStreamResult>;
 }

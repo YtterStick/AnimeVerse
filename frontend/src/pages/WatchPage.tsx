@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Layers, Compass, FastForward, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Layers, Compass, FastForward, Check, X } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
@@ -28,6 +28,8 @@ export function WatchPage() {
   const [selectedServer, setSelectedServer] = useState(0);
   const [streamLoading, setStreamLoading] = useState(true);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [, setFailedServerIndices] = useState<Set<number>>(new Set());
+  const [serverToast, setServerToast] = useState<string | null>(null);
   const [initialTime, setInitialTime] = useState<number>(() => {
     if (!animeId || !episodeNum) return 0;
     const local = getLocalEpisodeProgress(animeId, episodeNum);
@@ -149,6 +151,8 @@ export function WatchPage() {
     setStreamError(null);
     setMultiStream(null);
     setSelectedServer(0);
+    setFailedServerIndices(new Set());
+    setServerToast(null);
 
     streamApi
       .getStreamUrl(animeId, episodeNum)
@@ -176,6 +180,15 @@ export function WatchPage() {
       cancelled = true;
     };
   }, [animeId, episodeNum]);
+
+  // Auto-dismiss server switch toast after 7 seconds
+  useEffect(() => {
+    if (!serverToast) return;
+    const timer = setTimeout(() => {
+      setServerToast(null);
+    }, 7000);
+    return () => clearTimeout(timer);
+  }, [serverToast]);
 
   // 2. Resolve initial start time from localStorage first, then fallback to database history
   useEffect(() => {
@@ -229,7 +242,9 @@ export function WatchPage() {
   }, [animeId, episodeNum, anime]);
 
   const handleProgress = (currentTime: number, duration: number) => {
-    if (!animeId || !episodeNum) return;
+    const numId = Number(animeId);
+    const numEp = Number(episodeNum);
+    if (!numId || isNaN(numId) || numId <= 0 || !numEp || isNaN(numEp) || numEp <= 0) return;
 
     currentPlaybackTimeRef.current = currentTime;
     currentDurationRef.current = duration;
@@ -245,8 +260,8 @@ export function WatchPage() {
     if (now - lastLocalSaveRef.current >= 2000) {
       lastLocalSaveRef.current = now;
       saveLocalEpisodeProgress({
-        animeId,
-        episodeNumber: episodeNum,
+        animeId: numId,
+        episodeNumber: numEp,
         progressSeconds: currentRounded,
         durationSeconds: durationRounded,
         animeTitle: anime?.title,
@@ -258,13 +273,13 @@ export function WatchPage() {
     if (isAuthenticated) {
       if (now - lastRemoteSaveRef.current >= 12000) {
         lastRemoteSaveRef.current = now;
-        const safeTitle = anime?.title || anime?.title_english || `Episode ${episodeNum}`;
+        const safeTitle = anime?.title || anime?.title_english || `Episode ${numEp}`;
         saveProgress({
-          anime_id: animeId,
+          anime_id: numId,
           anime_title: safeTitle,
           anime_image: anime?.images?.webp?.image_url || anime?.images?.jpg?.image_url || null,
-          episode_number: episodeNum,
-          episode_title: `Episode ${episodeNum}`,
+          episode_number: numEp,
+          episode_title: `Episode ${numEp}`,
           progress_seconds: currentRounded,
           duration_seconds: durationRounded,
         });
@@ -278,6 +293,45 @@ export function WatchPage() {
     if (cur > 0) setInitialTime(cur);
     setSelectedServer(index);
   };
+
+  const handleStreamError = useCallback(() => {
+    if (!multiStream || multiStream.servers.length <= 1) return;
+
+    setFailedServerIndices((prev) => {
+      const nextFailed = new Set(prev);
+      nextFailed.add(selectedServer);
+
+      const currentServer = multiStream.servers[selectedServer];
+      const currentCategory = currentServer?.category || "SUB";
+
+      // 1. First look for another working server of the SAME category (SUB or DUB)
+      let nextIndex = multiStream.servers.findIndex(
+        (s, idx) => idx !== selectedServer && !nextFailed.has(idx) && (s.category || "SUB") === currentCategory
+      );
+
+      // 2. If none left in this category, look for ANY other working server
+      if (nextIndex === -1) {
+        nextIndex = multiStream.servers.findIndex(
+          (_s, idx) => idx !== selectedServer && !nextFailed.has(idx)
+        );
+      }
+
+      if (nextIndex !== -1) {
+        const nextServer = multiStream.servers[nextIndex];
+        const curTime = Math.floor(currentPlaybackTimeRef.current);
+        if (curTime > 0) setInitialTime(curTime);
+
+        setServerToast(
+          `Server "${currentServer?.name || "Server"}" is unavailable for this episode. Switched to "${nextServer.name}".`
+        );
+        setSelectedServer(nextIndex);
+      } else {
+        setServerToast("All servers for this episode are currently unavailable. Click Retry or try another episode.");
+      }
+
+      return nextFailed;
+    });
+  }, [multiStream, selectedServer]);
 
   const handlePrevServer = () => {
     if (!multiStream?.servers.length) return;
@@ -294,13 +348,14 @@ export function WatchPage() {
   };
 
   const handleRetry = () => {
-    // Re-trigger the stream fetch
+    // Re-trigger the stream fetch with forceFresh = true
     setStreamLoading(true);
     setStreamError(null);
-    setMultiStream(null);
+    setFailedServerIndices(new Set());
+    setServerToast(null);
 
     streamApi
-      .getStreamUrl(animeId, episodeNum)
+      .getStreamUrl(animeId, episodeNum, true)
       .then((res) => {
         if (res.servers && res.servers.length > 0) {
           setMultiStream(res);
@@ -404,6 +459,24 @@ export function WatchPage() {
           Back to {title}
         </Link>
 
+        {/* Server Failover Toast Notification */}
+        {serverToast && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs sm:text-sm animate-fade-in shadow-md">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="truncate">{serverToast}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setServerToast(null)}
+              className="p-1 hover:bg-amber-500/20 rounded text-amber-300 hover:text-white transition-colors cursor-pointer shrink-0"
+              title="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Video Player Interface */}
         {streamLoading ? (
           /* Premium Player Skeleton Loader */
@@ -487,6 +560,11 @@ export function WatchPage() {
             skips={skips}
             autoSkip={autoSkip}
             episodeNumber={episodeNum}
+            onError={handleStreamError}
+            onRetry={handleRetry}
+            serverName={activeServer.name}
+            availableServers={multiStream?.servers || []}
+            onSelectServer={handleServerChange}
           />
         )}
 

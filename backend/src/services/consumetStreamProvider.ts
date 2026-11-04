@@ -10,8 +10,8 @@ import {
 } from "./streamProvider";
 import { jikanService } from "./jikanService";
 
-// Cache resolved slugs & streams (30 min TTL for slugs, 3 min for streams)
-const slugCache = new NodeCache({ stdTTL: 1800, checkperiod: 120 });
+// Cache resolved slugs for 7 days (exact MAL mappings never change), 3 min for streams
+const slugCache = new NodeCache({ stdTTL: 7 * 24 * 3600, checkperiod: 600 });
 const streamCache = new NodeCache({ stdTTL: 180, checkperiod: 60 });
 
 interface AnimeMetadata {
@@ -49,7 +49,7 @@ const KAA_HEADERS: Record<string, string> = {
  */
 export class ConsumetStreamProvider implements StreamProvider {
   private kaa: any;
-  private readonly providerTimeoutMs = 12000;
+  private readonly providerTimeoutMs = 15000;
 
   constructor() {
     this.kaa = new ANIME.KickAssAnime();
@@ -320,12 +320,12 @@ export class ConsumetStreamProvider implements StreamProvider {
     // 1. Try MALSync first (exact MAL ID mapping)
     try {
       const res = await axios.get(`https://api.malsync.moe/mal/anime/${meta.malId}`, {
-        timeout: 3500,
+        timeout: 7000,
       });
       const entries = Object.values(res.data?.Sites?.KickAssAnime || {}) as any[];
       if (entries.length > 0 && entries[0].identifier) {
         const slug = String(entries[0].identifier);
-        slugCache.set(cacheKey, slug);
+        slugCache.set(cacheKey, slug, 7 * 24 * 3600);
         return slug;
       }
     } catch {
@@ -631,36 +631,13 @@ export class ConsumetStreamProvider implements StreamProvider {
               if (category === "SUB") {
                 servers.push({
                   id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
-                  name: `${srv.name} (Auto 1080p)`,
+                  name: `${srv.name} (Eng Sub)`,
                   category: "SUB",
                   url: isHls ? this.proxyUrl(manifestUrl, "jpn") : manifestUrl,
                   type: isHls ? "hls" : "mp4",
                   quality: "1080p",
                   subtitles: serverSubs,
                 });
-
-                // Provide individual quality servers (1080p, 720p, 360p) so users always have multiple reliable options
-                if (m3u8Info.qualities.length > 1) {
-                  for (const q of m3u8Info.qualities) {
-                    const qLabel =
-                      q.quality === "1080p"
-                        ? "1080p Full HD"
-                        : q.quality === "720p"
-                        ? "720p Fast"
-                        : `${q.quality} Data Saver`;
-                    servers.push({
-                      id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${q.quality}-${i}`,
-                      name: `${srv.name} (${qLabel})`,
-                      category: "SUB",
-                      url: isHls
-                        ? this.proxyUrl(manifestUrl, "jpn", undefined, q.quality)
-                        : this.proxyUrl(q.url),
-                      type: "hls",
-                      quality: q.quality,
-                      subtitles: serverSubs,
-                    });
-                  }
-                }
 
                 // Remember if the SUB master playlist also embeds an English Dub audio track
                 if (m3u8Info.hasEnglishAudio && !sharedEnglishAudioMaster) {
@@ -675,35 +652,13 @@ export class ConsumetStreamProvider implements StreamProvider {
                 foundDubServer = true;
                 servers.push({
                   id: `kaa-dub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
-                  name: `${srv.name} Dub (Auto 1080p)`,
+                  name: `${srv.name} (Eng Dub)`,
                   category: "DUB",
                   url: isHls ? this.proxyUrl(manifestUrl, "eng") : manifestUrl,
                   type: isHls ? "hls" : "mp4",
                   quality: "1080p",
                   subtitles: serverSubs,
                 });
-
-                if (m3u8Info.qualities.length > 1) {
-                  for (const q of m3u8Info.qualities) {
-                    const qLabel =
-                      q.quality === "1080p"
-                        ? "1080p Full HD"
-                        : q.quality === "720p"
-                        ? "720p Fast"
-                        : `${q.quality} Data Saver`;
-                    servers.push({
-                      id: `kaa-dub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${q.quality}-${i}`,
-                      name: `${srv.name} Dub (${qLabel})`,
-                      category: "DUB",
-                      url: isHls
-                        ? this.proxyUrl(manifestUrl, "eng", undefined, q.quality)
-                        : this.proxyUrl(q.url),
-                      type: "hls",
-                      quality: q.quality,
-                      subtitles: serverSubs,
-                    });
-                  }
-                }
               }
             }
           } catch (err) {
@@ -721,7 +676,7 @@ export class ConsumetStreamProvider implements StreamProvider {
         };
         servers.push({
           id: `kaa-dub-multiaudio-0`,
-          name: `${master.serverName} Dub (1080p)`,
+          name: `${master.serverName} (Eng Dub)`,
           category: "DUB",
           url: this.proxyUrl(master.url, "eng"),
           type: "hls",
@@ -839,18 +794,16 @@ export class ConsumetStreamProvider implements StreamProvider {
         uniqueSources.slice(0, 4).map(async (src) => ({ src, size: await this.probeVideoSize(src, epHash) }))
       );
 
-      // Filter out only confirmed placeholders (< 5MB and size !== null)
-      const validSources = probed
-        .filter((p) => p.size === null || p.size >= this.minRealEpisodeBytes)
-        .map((p) => p.src);
+      // Prioritize confirmed real sources (>= 5MB) over unprobed/unknown sources
+      const realSources = probed.filter((p) => p.size !== null && p.size >= this.minRealEpisodeBytes).map((p) => p.src);
+      const unknownSources = probed.filter((p) => p.size === null).map((p) => p.src);
+      const candidateList = [...realSources, ...unknownSources];
+      const sourcesToUse = candidateList.length > 0 ? candidateList : uniqueSources;
 
-      // Ultimate fallback: if somehow all were filtered, keep uniqueSources so user is never left without streams
-      const sourcesToUse = validSources.length > 0 ? validSources : uniqueSources;
-
-      for (let i = 0; i < Math.min(sourcesToUse.length, 3); i++) {
+      for (let i = 0; i < Math.min(sourcesToUse.length, 2); i++) {
         servers.push({
           id: `animeheaven-sub-${i}`,
-          name: `AnimeHeaven #${i + 1} (Eng Sub)`,
+          name: i === 0 ? "AnimeHeaven (Eng Sub)" : "AnimeHeaven (Backup)",
           category: "SUB",
           url: this.proxyUrl(sourcesToUse[i], undefined, "https://animeheaven.me/"),
           type: "mp4",
@@ -1003,11 +956,15 @@ export class ConsumetStreamProvider implements StreamProvider {
 
   // ─── Main API ─────────────────────────────────────────────
 
-  async getMultiStream(animeId: number, episode: number): Promise<MultiStreamResult> {
+  async getMultiStream(animeId: number, episode: number, forceFresh = false): Promise<MultiStreamResult> {
     const cacheKey = `multistream:${animeId}:${episode}`;
-    const cached = streamCache.get<MultiStreamResult>(cacheKey);
-    if (cached) {
-      return cached;
+    if (!forceFresh) {
+      const cached = streamCache.get<MultiStreamResult>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    } else {
+      streamCache.del(cacheKey);
     }
 
     console.log(`[StreamProvider] Requesting streams for MAL ${animeId} ep ${episode}`);

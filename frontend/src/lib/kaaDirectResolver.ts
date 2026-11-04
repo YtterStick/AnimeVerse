@@ -41,22 +41,12 @@ export async function resolveKaaClient(
     const slugApi = BACKEND_URL ? `${BACKEND_URL}/api/stream/slug/${animeId}` : `/api/stream/slug/${animeId}`;
     let slug: string | null = null;
     try {
-      const slugRes = await fetch(slugApi, { signal: AbortSignal.timeout(5000) })
+      const slugRes = await fetch(slugApi, { signal: AbortSignal.timeout(12000) })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null);
       slug = slugRes?.slug || null;
     } catch {
       slug = null;
-    }
-
-    if (!slug) {
-      // Direct fallback (safe if supported or proxies available)
-      const msRes = await fetch(`https://api.malsync.moe/mal/anime/${animeId}`, {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(4000),
-      }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-      const kaaEntries = Object.values(msRes?.Sites?.KickAssAnime || {}) as any[];
-      slug = kaaEntries[0]?.identifier || null;
     }
 
     if (!slug) return [];
@@ -124,36 +114,14 @@ export async function resolveKaaClient(
           }
         }
 
-        // Add Auto 1080p
+        // Single top-quality adaptive 1080p master server
         servers.push({
           id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
-          name: `${srv.name} (Auto 1080p)`,
+          name: `${srv.name} (Eng Sub)`,
           category: "SUB",
           url: buildProxyUrl(manifestUrl, "jpn"),
           type: "hls",
           quality: "1080p",
-          subtitles,
-        });
-
-        // Add 720p Fast
-        servers.push({
-          id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-720p-${i}`,
-          name: `${srv.name} (720p Fast)`,
-          category: "SUB",
-          url: buildProxyUrl(manifestUrl, "jpn", "720p"),
-          type: "hls",
-          quality: "720p",
-          subtitles,
-        });
-
-        // Add 360p Data Saver
-        servers.push({
-          id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-360p-${i}`,
-          name: `${srv.name} (360p Data Saver)`,
-          category: "SUB",
-          url: buildProxyUrl(manifestUrl, "jpn", "360p"),
-          type: "hls",
-          quality: "360p",
           subtitles,
         });
       } catch (err: any) {
@@ -165,7 +133,7 @@ export async function resolveKaaClient(
     try {
       const dubEpRes = await fetch(
         `https://kaa.lt/api/show/${slug}/episodes?ep=${episodeNum}&lang=en-US`,
-        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(4000) }
+        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(6000) }
       ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
       const dubEpList: any[] = dubEpRes?.result || [];
@@ -178,7 +146,7 @@ export async function resolveKaaClient(
         const epNumStr = dubTarget.episode_string || String(Math.floor(Number(dubTarget.episode_number)));
         const dubDetail = await fetch(
           `https://kaa.lt/api/show/${slug}/episode/ep-${epNumStr}-${dubTarget.slug}`,
-          { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(5000) }
+          { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(6000) }
         ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
         const dubServers: Array<{ name: string; src: string }> = dubDetail?.servers || [];
@@ -197,7 +165,7 @@ export async function resolveKaaClient(
 
             servers.push({
               id: `kaa-dub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
-              name: `${srv.name} Dub (Auto 1080p)`,
+              name: `${srv.name} (Eng Dub)`,
               category: "DUB",
               url: buildProxyUrl(manifestUrl, "eng"),
               type: "hls",
