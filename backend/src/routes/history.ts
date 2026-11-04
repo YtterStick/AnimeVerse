@@ -101,4 +101,22 @@ router.delete("/:id", async (req: AuthRequest, res: Response, next: NextFunction
   }
 });
 
+// DELETE /api/history - Clear all history for current user
+router.delete("/", async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { error } = await supabase
+      .from("watch_history")
+      .delete()
+      .eq("user_id", userId);
+
+    if (error) throw error;
+    res.json({ message: "All history cleared successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

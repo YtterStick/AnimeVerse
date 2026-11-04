@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Heart, LogOut } from "lucide-react";
+import { Heart, History, LogOut } from "lucide-react";
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
@@ -61,6 +61,13 @@ export function UserMenu() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-border/40 my-1" />
         
+        <DropdownMenuItem asChild className="focus:bg-secondary/60 focus:text-foreground cursor-pointer rounded-lg px-2.5 py-2 text-xs">
+          <Link to="/history" className="flex items-center w-full">
+            <History className="w-4 h-4 mr-2.5 text-muted-foreground" />
+            Watch History
+          </Link>
+        </DropdownMenuItem>
+
         <DropdownMenuItem asChild className="focus:bg-secondary/60 focus:text-foreground cursor-pointer rounded-lg px-2.5 py-2 text-xs">
           <Link to="/watchlist" className="flex items-center w-full">
             <Heart className="w-4 h-4 mr-2.5 text-muted-foreground" />

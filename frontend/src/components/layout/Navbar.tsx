@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Search, Film, Heart, LogIn, Menu, X } from "lucide-react";
+import { Search, Film, Heart, LogIn, Menu, X, History } from "lucide-react";
 import { UserMenu } from "../auth/UserMenu";
 import { AuthModal } from "../auth/AuthModal";
 
@@ -88,6 +88,14 @@ export function Navbar() {
                 }`}
               >
                 Discover
+              </Link>
+              <Link
+                to="/history"
+                className={`transition-colors duration-200 flex items-center gap-1.5 ${
+                  isActive("/history") ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <History className="w-4 h-4" /> History
               </Link>
               {user && (
                 <>
@@ -182,6 +190,15 @@ export function Navbar() {
                 }`}
               >
                 Discover
+              </Link>
+              <Link
+                to="/history"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
+                  isActive("/history") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                }`}
+              >
+                <History className="w-4 h-4" /> History
               </Link>
               {user ? (
                 <Link

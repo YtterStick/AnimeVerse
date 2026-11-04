@@ -129,3 +129,45 @@ export function getRecentLocalHistory(): LocalWatchProgress[] {
   }
 }
 
+/**
+ * Remove an episode from local progress and history.
+ */
+export function removeLocalEpisodeProgress(animeId: number, episodeNumber: number): void {
+  try {
+    localStorage.removeItem(`${STORAGE_KEY_PREFIX}${animeId}:${episodeNumber}`);
+    const rawList = localStorage.getItem(RECENT_LIST_KEY);
+    if (rawList) {
+      const list: LocalWatchProgress[] = JSON.parse(rawList);
+      const filtered = list.filter(
+        (item) => !(item.animeId === animeId && item.episodeNumber === episodeNumber)
+      );
+      localStorage.setItem(RECENT_LIST_KEY, JSON.stringify(filtered));
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+/**
+ * Clear all local watch history.
+ */
+export function clearAllLocalHistory(): void {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith(STORAGE_KEY_PREFIX) ||
+          key.startsWith(LAST_WATCHED_PREFIX) ||
+          key === RECENT_LIST_KEY)
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    // Ignore
+  }
+}
+

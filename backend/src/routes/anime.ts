@@ -4,14 +4,23 @@ import { jikanService } from "../services/jikanService";
 const router = Router();
 
 // GET /api/anime/search
-router.get("/search", async (req: Request, res: Response, next: NextFunction) => {
+router.get("/search", async (req: Request, res: Response, _next: NextFunction) => {
   try {
-    const q = req.query.q as string || "";
+    const q = (req.query.q as string) || "";
     const page = parseInt(req.query.page as string, 10) || 1;
     const data = await jikanService.searchAnime(q, page);
     res.json(data);
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.warn("[AnimeRoute] Search failed:", error.message);
+    res.json({
+      data: [],
+      pagination: {
+        last_visible_page: 1,
+        has_next_page: false,
+        current_page: 1,
+        items: { count: 0, total: 0, per_page: 25 },
+      },
+    });
   }
 });
 

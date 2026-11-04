@@ -5,6 +5,7 @@ import { AnimePage } from "@/pages/AnimePage";
 import { SearchPage } from "@/pages/SearchPage";
 import { WatchPage } from "@/pages/WatchPage";
 import { WatchlistPage } from "@/pages/WatchlistPage";
+import { HistoryPage } from "@/pages/HistoryPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 
 export function App() {
@@ -17,6 +18,7 @@ export function App() {
           <Route path="search" element={<SearchPage />} />
           <Route path="watch/:id/:episode" element={<WatchPage />} />
           <Route path="watchlist" element={<WatchlistPage />} />
+          <Route path="history" element={<HistoryPage />} />
           <Route path="auth/callback" element={<AuthCallbackPage />} />
         </Route>
       </Routes>

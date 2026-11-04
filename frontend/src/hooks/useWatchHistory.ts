@@ -25,7 +25,30 @@ export function useWatchHistory() {
     fetchHistory();
   }, [fetchHistory]);
 
-  return { history, loading, refetch: fetchHistory };
+  const deleteEntry = useCallback(
+    async (id: string) => {
+      if (!session?.access_token) return;
+      try {
+        await historyApi.deleteEntry(session.access_token, id);
+        setHistory((prev) => prev.filter((h) => h.id !== id));
+      } catch (err) {
+        console.error("Failed to delete history item:", err);
+      }
+    },
+    [session?.access_token]
+  );
+
+  const clearHistory = useCallback(async () => {
+    if (!session?.access_token) return;
+    try {
+      await historyApi.clearAll(session.access_token);
+      setHistory([]);
+    } catch (err) {
+      console.error("Failed to clear watch history:", err);
+    }
+  }, [session?.access_token]);
+
+  return { history, loading, refetch: fetchHistory, deleteEntry, clearHistory };
 }
 
 export function useSaveProgress() {

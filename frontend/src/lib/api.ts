@@ -179,6 +179,12 @@ export const historyApi = {
       method: "DELETE",
       headers: withAuth(token),
     }),
+
+  clearAll: (token: string) =>
+    fetchApi<void>("/history", {
+      method: "DELETE",
+      headers: withAuth(token),
+    }),
 };
 
 // ============================================

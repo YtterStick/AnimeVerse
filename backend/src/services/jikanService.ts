@@ -274,15 +274,23 @@ async function executeJikanRequest<T>(
     cache.set(cacheKey, data);
     return data;
   } catch (error: any) {
-    if (error.code === "ETIMEDOUT" || error.code === "ECONNABORTED" || !error.response) {
-      // Mark Jikan as unreachable for 2 minutes so subsequent requests use instant AniList fallback
-      jikanDownUntil = Date.now() + 120_000;
+    const isRateLimited = error.response?.status === 429;
+    const isTimeout = error.code === "ETIMEDOUT" || error.code === "ECONNABORTED";
+    const isServerError = !error.response || error.response?.status >= 500;
+
+    if (isRateLimited || isTimeout || isServerError) {
+      // Mark Jikan as down/rate-limited for 60s so all queries use instant AniList fallback
+      jikanDownUntil = Date.now() + 60_000;
     }
     if (fallbackFn) {
-      console.warn(`[MetadataService] Jikan failed on ${endpoint} (${error.message}), using AniList fallback`);
-      const fbData = await fallbackFn();
-      cache.set(cacheKey, fbData);
-      return fbData;
+      try {
+        console.warn(`[MetadataService] Jikan returned ${error.response?.status || error.code} on ${endpoint}, using AniList fallback`);
+        const fbData = await fallbackFn();
+        cache.set(cacheKey, fbData);
+        return fbData;
+      } catch (fbErr: any) {
+        console.error(`[MetadataService] AniList fallback also failed:`, fbErr.message);
+      }
     }
     throw error;
   }
