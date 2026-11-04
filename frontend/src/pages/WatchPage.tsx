@@ -42,7 +42,7 @@ export function WatchPage() {
   const [activeRangeIndex, setActiveRangeIndex] = useState(0);
   const recommendationsScrollRef = useRef<HTMLDivElement>(null);
   const [showRecommendationsLeft, setShowRecommendationsLeft] = useState(false);
-  const [showRecommendationsRight, setShowRecommendationsRight] = useState(false);
+  const [showRecommendationsRight, setShowRecommendationsRight] = useState(true);
   const [skips, setSkips] = useState<SkipInterval[]>([]);
   const [autoSkip, setAutoSkip] = useState<boolean>(() => {
     try {
@@ -98,23 +98,32 @@ export function WatchPage() {
     };
   }, [animeId, episodeNum]);
 
-  const updateRecommendationsScrollState = () => {
+  const updateRecommendationsScrollState = useCallback(() => {
     const el = recommendationsScrollRef.current;
     if (!el) return;
 
-    setShowRecommendationsLeft(el.scrollLeft > 10);
-    setShowRecommendationsRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 5);
-  };
+    setShowRecommendationsLeft(el.scrollLeft > 15);
+    setShowRecommendationsRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 15);
+  }, []);
 
   const scrollRecommendations = (direction: "left" | "right") => {
     const el = recommendationsScrollRef.current;
     if (!el) return;
 
-    const scrollAmount = el.clientWidth * 0.8;
+    const scrollAmount = Math.max(300, el.clientWidth * 0.75);
     el.scrollBy({
       left: direction === "left" ? -scrollAmount : scrollAmount,
       behavior: "smooth",
     });
+    setTimeout(updateRecommendationsScrollState, 350);
+  };
+
+  const handleWheelRecommendations = (e: React.WheelEvent<HTMLDivElement>) => {
+    const el = recommendationsScrollRef.current;
+    if (!el) return;
+    if (Math.abs(e.deltaX) < Math.abs(e.deltaY) && Math.abs(e.deltaY) > 5) {
+      el.scrollLeft += e.deltaY;
+    }
   };
 
   // Compute episode ranges (25 episodes per tab for long series like Black Clover, 50 for shorter ones)
@@ -188,12 +197,16 @@ export function WatchPage() {
     el.addEventListener("scroll", handleScroll);
     window.addEventListener("resize", handleScroll);
     updateRecommendationsScrollState();
+    const t1 = setTimeout(updateRecommendationsScrollState, 150);
+    const t2 = setTimeout(updateRecommendationsScrollState, 500);
 
     return () => {
       el.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleScroll);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
-  }, [recommendations, recommendationsLoading]);
+  }, [recommendations, recommendationsLoading, updateRecommendationsScrollState]);
 
   // 1. Fetch all available streaming servers
   useEffect(() => {
@@ -423,14 +436,14 @@ export function WatchPage() {
   if (animeLoading) {
     return (
       <div className="min-h-screen bg-background w-full max-w-full page-enter animate-pulse overflow-x-hidden pb-12">
-        <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 lg:px-8 space-y-6">
+        <div className="w-full max-w-[1800px] mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
           <Skeleton className="h-4 w-32 bg-card" />
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="lg:col-span-8 space-y-4">
+            <div className="lg:col-span-8 xl:col-span-8 2xl:col-span-9 space-y-4">
               <Skeleton className="w-full aspect-video rounded-2xl bg-card" />
               <Skeleton className="h-14 w-full bg-card rounded-xl" />
             </div>
-            <div className="lg:col-span-4 rounded-2xl border border-border/40 bg-card/25 p-4 space-y-3 h-[560px]">
+            <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 rounded-2xl border border-border/40 bg-card/25 p-4 space-y-3 h-[560px] lg:h-[620px]">
               <Skeleton className="h-6 w-28 bg-card" />
               <div className="space-y-2">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -490,7 +503,7 @@ export function WatchPage() {
 
   return (
     <div className="min-h-screen bg-background w-full max-w-full page-enter overflow-x-hidden pb-12">
-      <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 lg:px-8 space-y-6">
+      <div className="w-full max-w-[1800px] mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
         {/* Back Link */}
         <Link
           to={`/anime/${animeId}`}
@@ -519,9 +532,9 @@ export function WatchPage() {
         )}
 
         {/* Top Section: Player & Server (8 cols) and Episode List Card (4 cols) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start">
           {/* Left Column: Player & Server */}
-          <div className="lg:col-span-8 space-y-4 min-w-0">
+          <div className="lg:col-span-8 xl:col-span-8 2xl:col-span-9 space-y-4 min-w-0">
             {/* Video Player Interface */}
         {streamLoading ? (
           /* Premium Player Skeleton Loader */
@@ -695,8 +708,8 @@ export function WatchPage() {
       </div>
 
       {/* Right Column: Self-contained Episode List Card */}
-      <div className="lg:col-span-4 min-w-0">
-        <div className="rounded-2xl border border-border/40 bg-card/40 backdrop-blur-md shadow-xl flex flex-col overflow-hidden h-[540px] sm:h-[580px] lg:h-[620px]">
+      <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 min-w-0">
+        <div className="rounded-2xl border border-border/40 bg-card/40 backdrop-blur-md shadow-xl flex flex-col overflow-hidden h-[540px] sm:h-[580px] lg:h-[620px] 2xl:h-[680px]">
           {/* Card Header */}
           <div className="p-3 sm:p-3.5 flex items-center justify-between border-b border-border/40 bg-card/60 select-none shrink-0 gap-2">
             <div className="flex items-center gap-2 min-w-0">
@@ -965,10 +978,32 @@ export function WatchPage() {
 
         {/* Recommended / Similar Section */}
         <div className="space-y-4 pt-6 border-t border-border/20 min-w-0">
-          <h3 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
-            <Compass className="w-5 h-5 text-primary" />
-            More Like This
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
+              <Compass className="w-5 h-5 text-primary" />
+              More Like This
+            </h3>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => scrollRecommendations("left")}
+                aria-label="Previous recommendations"
+                className="w-8 h-8 rounded-full border border-border/60 bg-card/70 hover:bg-primary hover:text-white hover:border-primary text-muted-foreground flex items-center justify-center transition-all cursor-pointer shadow-sm"
+                title="Scroll left"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollRecommendations("right")}
+                aria-label="Next recommendations"
+                className="w-8 h-8 rounded-full border border-border/60 bg-card/70 hover:bg-primary hover:text-white hover:border-primary text-muted-foreground flex items-center justify-center transition-all cursor-pointer shadow-sm"
+                title="Scroll right"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
 
           {recommendationsLoading ? (
             <div className="relative min-w-0 max-w-full overflow-hidden">
@@ -997,13 +1032,13 @@ export function WatchPage() {
               )}
             </div>
           ) : (
-            <div className="relative min-w-0 max-w-full overflow-hidden">
+            <div className="relative min-w-0 w-full group/rec">
               {showRecommendationsLeft && (
                 <button
                   type="button"
                   onClick={() => scrollRecommendations("left")}
                   aria-label="Scroll recommendations left"
-                  className="absolute left-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full glass border border-border/80 text-foreground shadow-lg transition hover:bg-primary hover:text-white hover:border-primary"
+                  className="absolute left-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full glass border border-border/80 text-foreground shadow-xl transition hover:bg-primary hover:text-white hover:border-primary cursor-pointer"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
@@ -1014,7 +1049,7 @@ export function WatchPage() {
                   type="button"
                   onClick={() => scrollRecommendations("right")}
                   aria-label="Scroll recommendations right"
-                  className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full glass border border-border/80 text-foreground shadow-lg transition hover:bg-primary hover:text-white hover:border-primary"
+                  className="absolute right-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full glass border border-border/80 text-foreground shadow-xl transition hover:bg-primary hover:text-white hover:border-primary cursor-pointer"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>
@@ -1022,7 +1057,8 @@ export function WatchPage() {
 
               <div
                 ref={recommendationsScrollRef}
-                className="flex w-max min-w-full gap-4 overflow-x-auto pb-4 carousel-scroll scrollbar-none hide-scrollbar snap-x snap-mandatory"
+                onWheel={handleWheelRecommendations}
+                className="flex gap-4 overflow-x-auto pb-4 carousel-scroll scrollbar-none hide-scrollbar snap-x snap-mandatory w-full touch-pan-x"
               >
                 {recommendations.slice(0, 15).map((rec: any) => {
                   const recAnime = rec.entry;
