@@ -890,7 +890,18 @@ export class ConsumetStreamProvider implements StreamProvider {
     const headers = { "User-Agent": USER_AGENT, Accept: "application/json", Referer: "https://kaa.lt/" };
 
     const ms = await record("malsync", () => axios.get(`https://api.malsync.moe/mal/anime/${animeId}`, { timeout: 5000 }));
-    const slug = (Object.values(ms?.data?.Sites?.KickAssAnime || {}) as any[])[0]?.identifier;
+    let slug = (Object.values(ms?.data?.Sites?.KickAssAnime || {}) as any[])[0]?.identifier;
+    if (!slug) {
+      const meta = await this.getAnimeMetadata(animeId);
+      const search = await record("kaa-fsearch", () =>
+        axios.post(
+          "https://kaa.lt/api/fsearch",
+          { query: meta?.title || "", page: 1 },
+          { headers: { ...headers, "Content-Type": "application/json", Referer: "https://kaa.lt/anime" }, timeout: 6000 }
+        )
+      );
+      slug = search?.data?.result?.[0]?.slug;
+    }
     steps.push({ name: "slug", value: slug ?? null });
     if (!slug) return steps;
 
