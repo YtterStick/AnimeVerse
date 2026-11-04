@@ -1,81 +1,231 @@
 import type { SkipInterval } from "@/lib/api";
 
-interface Cue {
+export interface Cue {
   start: number;
   end: number;
+  text?: string;
 }
 
-const MIN_SONG_GAP = 50; // OP/ED songs are ~85-95s; allow trimmed/short versions
-const MAX_SONG_GAP = 160;
+interface SongCandidate {
+  start: number;
+  end: number;
+  type: "op" | "ed";
+  source: string;
+}
 
 function toSeconds(ts: string): number {
   const parts = ts.trim().replace(",", ".").split(":").map(Number);
   return parts.reduce((acc, p) => acc * 60 + p, 0);
 }
 
-/** Parse WEBVTT/SRT text into a sorted list of dialogue cue time ranges. */
+/** Parse WEBVTT/SRT text into a sorted list of subtitle cues with timestamps and dialogue text. */
 export function parseCues(text: string): Cue[] {
   const cues: Cue[] = [];
   const re = /((?:\d{1,2}:)?\d{1,2}:\d{2}[.,]\d{1,3})\s*-->\s*((?:\d{1,2}:)?\d{1,2}:\d{2}[.,]\d{1,3})/g;
-  for (const m of text.matchAll(re)) {
-    const start = toSeconds(m[1]);
-    const end = toSeconds(m[2]);
-    if (end > start) cues.push({ start, end });
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const start = toSeconds(match[1]);
+    const end = toSeconds(match[2]);
+    if (end > start) {
+      const idx = match.index + match[0].length;
+      const snippet = text.slice(idx, idx + 250).split(/\r?\n\r?\n/)[0] || "";
+      const cleanText = snippet
+        .replace(/<[^>]+>/g, "")
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l && !l.includes("-->") && !/^\d+$/.test(l))
+        .join(" ");
+      cues.push({ start, end, text: cleanText });
+    }
   }
   return cues.sort((a, b) => a.start - b.start);
 }
 
-/** Silent stretches between subtitle cues (where songs usually play, since lyrics are rarely subbed). */
-function findGaps(cues: Cue[], duration: number): Cue[] {
-  const gaps: Cue[] = [];
-  let cursor = 0;
-  for (const cue of cues) {
-    if (cue.start - cursor >= MIN_SONG_GAP) gaps.push({ start: cursor, end: cue.start });
-    cursor = Math.max(cursor, cue.end);
+/**
+ * Checks if a given time range contains spoken character dialogue rather than a song.
+ *
+ * Spoken anime scenes have rapid back-and-forth lines (short cues <= 2.2s) and conversational words.
+ * An OP/ED song has long sustained musical phrasing (avg display duration >= 2.4s) or silence.
+ */
+export function isHighDensityDialogue(cues: Cue[], start: number, end: number): boolean {
+  const inRange = cues.filter((c) => c.start >= start - 1.5 && c.end <= end + 1.5);
+  if (inRange.length < 5) return false;
+
+  const shortCues = inRange.filter((c) => c.end - c.start <= 2.2);
+  const conversationalCues = inRange.filter(
+    (c) =>
+      /\b(aye|sir|mister|hey|get up|okay|look|what|yes|no|let's|wait|stop|please|thanks|sorry|wizards?|magic|train|guild)\b/i.test(
+        c.text || ""
+      ) || /\?/.test(c.text || "")
+  );
+
+  if (shortCues.length >= 7 || (shortCues.length >= 5 && conversationalCues.length >= 3)) {
+    return true;
   }
-  if (duration > 0 && duration - cursor >= MIN_SONG_GAP) gaps.push({ start: cursor, end: duration });
-  return gaps.filter((g) => g.end - g.start <= MAX_SONG_GAP);
+  return false;
 }
 
-const overlap = (a: Cue, b: Cue) => Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start));
+/**
+ * Find candidate OP and ED song time intervals from subtitle cues:
+ * 1. Unsubbed gaps (silent stretches where theme songs play).
+ * 2. Subbed song lyrics (sustained poetic lyrics followed/preceded by title-card silence).
+ */
+export function findSongCandidates(cues: Cue[], duration: number): SongCandidate[] {
+  const candidates: SongCandidate[] = [];
+
+  // 1. Silent gaps (unsubbed OP / ED)
+  let cursor = 0;
+  for (const cue of cues) {
+    const gap = cue.start - cursor;
+    if (gap >= 65 && gap <= 120) {
+      if (cursor <= 260) {
+        candidates.push({ start: cursor, end: cue.start, type: "op", source: "unsubbed-gap" });
+      } else if (duration > 0 && cursor >= duration * 0.78) {
+        candidates.push({ start: cursor, end: cue.start, type: "ed", source: "unsubbed-gap" });
+      }
+    }
+    cursor = Math.max(cursor, cue.end);
+  }
+  if (duration > 0 && duration - cursor >= 65 && duration - cursor <= 120) {
+    candidates.push({ start: cursor, end: duration, type: "ed", source: "unsubbed-gap" });
+  }
+
+  // 2. Subbed song lyrics
+  // Opening theme: in first 4.5 minutes (0 to 260s)
+  // Ending theme: in last 3.5 minutes (after duration * 0.80)
+  for (let i = 0; i < cues.length; i++) {
+    const startCue = cues[i];
+    const isOp = startCue.start <= 260;
+    const isEd = duration > 0 && startCue.start >= duration * 0.8;
+    if (!isOp && !isEd) continue;
+
+    for (let j = i + 4; j < Math.min(cues.length, i + 28); j++) {
+      const endCue = cues[j];
+      const cueSpan = endCue.end - startCue.start;
+      if (cueSpan >= 70 && cueSpan <= 96) {
+        const subCues = cues.slice(i, j + 1);
+        const avgDur = subCues.reduce((a, c) => a + (c.end - c.start), 0) / subCues.length;
+        const nextCue = cues[j + 1];
+        const gapAfter = nextCue ? nextCue.start - endCue.end : duration > 0 ? duration - endCue.end : 0;
+        const prevCue = i > 0 ? cues[i - 1] : null;
+        const gapBefore = prevCue ? startCue.start - prevCue.end : startCue.start;
+
+        if (avgDur >= 2.4 && (gapAfter >= 5 || gapBefore >= 5)) {
+          const songEnd = gapAfter >= 5 && nextCue ? nextCue.start - 0.4 : endCue.end;
+          const candidateTotalLen = songEnd - startCue.start;
+          if (candidateTotalLen >= 75 && candidateTotalLen <= 98) {
+            const cand: SongCandidate = {
+              start: Math.max(0, startCue.start - 0.4),
+              end: songEnd,
+              type: isOp ? "op" : "ed",
+              source: "subbed-lyrics",
+            };
+            if (!isHighDensityDialogue(cues, cand.start, cand.end)) {
+              candidates.push(cand);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return candidates;
+}
+
+const overlap = (a: { start: number; end: number }, b: { start: number; end: number }) =>
+  Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start));
 
 /**
  * Make skip intervals match *this* video file.
  *
- * AniSkip timestamps come from whatever release the submitter watched, so they can be
- * several seconds off (or include the recap) for our source. When the episode has
- * English subtitles, the OP/ED songs show up as long gaps with no dialogue, so we snap
- * each interval to the overlapping gap. If AniSkip has nothing, we detect the songs
- * from those gaps alone (first ~35% = intro, last ~30% = outro).
+ * 1. Filters out bogus recaps on Episode 1 (cold opens / series prologues).
+ * 2. Validates AniSkip intervals against subtitle dialogue density to discard shifted/corrupted AniSkip data.
+ * 3. Snaps valid intervals to frame-accurate song boundaries (unsubbed gaps or subbed lyrics).
+ * 4. Automatically detects and synthesizes OP and ED when AniSkip is absent or invalid.
  */
-export function refineSkips(skips: SkipInterval[], cues: Cue[], duration: number): SkipInterval[] {
-  if (!cues.length) return skips;
-  const gaps = findGaps(cues, duration);
-  if (!gaps.length) return skips;
-
-  const used = new Set<Cue>();
-  const refined = skips.map((s) => {
-    if (s.type !== "op" && s.type !== "ed") return s;
-    const best = gaps
-      .filter((g) => !used.has(g))
-      .map((g) => ({ g, o: overlap(g, s) }))
-      .sort((a, b) => b.o - a.o)[0];
-    if (!best || best.o < 20) return s;
-    used.add(best.g);
-    return { ...s, start: best.g.start, end: Math.max(best.g.start, best.g.end - 0.3) };
+export function refineSkips(
+  skips: SkipInterval[],
+  cues: Cue[],
+  duration: number,
+  episodeNumber?: number
+): SkipInterval[] {
+  // 1. In episode 1, recaps starting under 60 seconds are always series prologues, never recaps
+  const cleanSkips = skips.filter((s) => {
+    if (s.type === "recap" && episodeNumber === 1 && s.start < 60) {
+      return false;
+    }
+    return true;
   });
 
-  if (duration > 0) {
-    if (!refined.some((s) => s.type === "op")) {
-      const g = gaps.find((x) => !used.has(x) && x.end <= duration * 0.35);
-      if (g) {
-        used.add(g);
-        refined.push({ type: "op", start: g.start, end: g.end - 0.3, episodeLength: duration });
-      }
+  if (!cues.length) return cleanSkips;
+
+  const candidates = findSongCandidates(cues, duration);
+  const used = new Set<SongCandidate>();
+  const refined: SkipInterval[] = [];
+
+  for (const s of cleanSkips) {
+    if (s.type !== "op" && s.type !== "ed") {
+      refined.push(s);
+      continue;
     }
-    if (!refined.some((s) => s.type === "ed")) {
-      const g = [...gaps].reverse().find((x) => !used.has(x) && x.start >= duration * 0.7);
-      if (g) refined.push({ type: "ed", start: g.start, end: g.end - 0.3, episodeLength: duration });
+
+    // Check if AniSkip's interval is actually character dialogue (e.g. shifted by pre-roll or wrong broadcast)
+    const isBad = isHighDensityDialogue(cues, s.start, s.end);
+    if (isBad) {
+      // Discard invalid AniSkip interval
+      continue;
+    }
+
+    // Try to snap to the closest matching song candidate
+    const matching = candidates
+      .filter((c) => c.type === s.type && !used.has(c))
+      .map((c) => ({ c, o: overlap(c, s) }))
+      .filter((x) => x.o >= 20)
+      .sort((a, b) => Math.abs(a.c.end - a.c.start - 89.5) - Math.abs(b.c.end - b.c.start - 89.5))[0];
+
+    if (matching) {
+      used.add(matching.c);
+      refined.push({
+        ...s,
+        start: matching.c.start,
+        end: Math.max(matching.c.start, matching.c.end - 0.2),
+      });
+    } else {
+      refined.push(s);
+    }
+  }
+
+  // If OP was missing or discarded because it was dialogue, pick the best OP candidate
+  if (duration > 0 && !refined.some((s) => s.type === "op")) {
+    const opCandidates = candidates
+      .filter((c) => c.type === "op" && !used.has(c))
+      .sort((a, b) => Math.abs(a.end - a.start - 89.5) - Math.abs(b.end - b.start - 89.5));
+    const bestOp = opCandidates[0];
+    if (bestOp) {
+      used.add(bestOp);
+      refined.push({
+        type: "op",
+        start: bestOp.start,
+        end: Math.max(bestOp.start, bestOp.end - 0.2),
+        episodeLength: duration,
+      });
+    }
+  }
+
+  // If ED was missing, pick the best ED candidate
+  if (duration > 0 && !refined.some((s) => s.type === "ed")) {
+    const edCandidates = candidates
+      .filter((c) => c.type === "ed" && !used.has(c))
+      .sort((a, b) => Math.abs(a.end - a.start - 89.5) - Math.abs(b.end - b.start - 89.5));
+    const bestEd = edCandidates[0];
+    if (bestEd) {
+      used.add(bestEd);
+      refined.push({
+        type: "ed",
+        start: bestEd.start,
+        end: Math.max(bestEd.start, bestEd.end - 0.2),
+        episodeLength: duration,
+      });
     }
   }
 
@@ -107,4 +257,3 @@ export function buildChaptersVtt(skips: SkipInterval[], duration: number): strin
   if (duration - cursor >= 1) parts.push(`${fmt(cursor)} --> ${fmt(duration)}`, "Episode", "");
   return parts.join("\n");
 }
-

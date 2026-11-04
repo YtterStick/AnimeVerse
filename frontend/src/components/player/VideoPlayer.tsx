@@ -23,6 +23,8 @@ interface VideoPlayerProps {
   skips?: SkipInterval[];
   /** Automatically jump past intros/outros when playback enters them */
   autoSkip?: boolean;
+  /** Current episode number (used to prevent prologue skipping on episode 1) */
+  episodeNumber?: number;
 }
 
 const SKIP_LABELS: Record<string, string> = {
@@ -42,6 +44,7 @@ export function VideoPlayer({
   subtitles = [],
   skips = [],
   autoSkip = false,
+  episodeNumber,
 }: VideoPlayerProps) {
   const playerRef = useRef<any>(null);
   const autoSkippedRef = useRef<Set<string>>(new Set());
@@ -49,13 +52,21 @@ export function VideoPlayer({
   const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
   const [autoSkipToast, setAutoSkipToast] = useState<string | null>(null);
   const [duration, setDuration] = useState<number>(0);
-  const [refinedSkips, setRefinedSkips] = useState<SkipInterval[]>(skips);
+  const [refinedSkips, setRefinedSkips] = useState<SkipInterval[]>(() =>
+    episodeNumber === 1
+      ? skips.filter((s) => !(s.type === "recap" && s.start < 60))
+      : skips
+  );
   const [sliderEl, setSliderEl] = useState<HTMLElement | null>(null);
 
-  // Keep refinedSkips in sync with props as baseline
+  // Keep refinedSkips in sync with props as baseline (filtering out false episode 1 recaps)
   useEffect(() => {
-    setRefinedSkips(skips);
-  }, [skips]);
+    if (episodeNumber === 1) {
+      setRefinedSkips(skips.filter((s) => !(s.type === "recap" && s.start < 60)));
+    } else {
+      setRefinedSkips(skips);
+    }
+  }, [skips, episodeNumber]);
 
   // Reset per-source skip and initial seek bookkeeping
   useEffect(() => {
@@ -64,13 +75,18 @@ export function VideoPlayer({
     setActiveSkip(null);
   }, [src]);
 
-  // Attempt to refine skip times to frame-accurate timestamps using dialogue subtitle gaps
+  // Attempt to refine skip times to frame-accurate timestamps using dialogue subtitle cues
   useEffect(() => {
     let cancelled = false;
     const engSub =
       subtitles.find((s) => s.lang === "en" || /english/i.test(s.label)) || subtitles[0];
 
-    if (!engSub?.url || skips.length === 0) return;
+    if (!engSub?.url) {
+      if (episodeNumber === 1) {
+        setRefinedSkips(skips.filter((s) => !(s.type === "recap" && s.start < 60)));
+      }
+      return;
+    }
 
     fetch(engSub.url)
       .then((res) => (res.ok ? res.text() : ""))
@@ -78,18 +94,18 @@ export function VideoPlayer({
         if (cancelled || !text) return;
         const cues = parseCues(text);
         if (cues.length > 0) {
-          const accurate = refineSkips(skips, cues, duration);
+          const accurate = refineSkips(skips, cues, duration, episodeNumber);
           setRefinedSkips(accurate);
         }
       })
       .catch(() => {
-        // Fall back to raw skips if subtitle fetch fails
+        // Fall back to baseline skips if subtitle fetch fails
       });
 
     return () => {
       cancelled = true;
     };
-  }, [subtitles, skips, duration]);
+  }, [subtitles, skips, duration, episodeNumber]);
 
   // Locate the Vidstack seekbar element in the player DOM to mount yellow skip lines
   useEffect(() => {
@@ -241,11 +257,17 @@ export function VideoPlayer({
     // Find a skippable interval we're currently inside
     const current = refinedSkips.find((s) => currentTime >= s.start && currentTime < s.end - 0.5) || null;
 
-    if (current && autoSkip && !autoSkippedRef.current.has(skipKey(current))) {
+    // Only automatically jump past intros and outros. Recaps must be clicked manually to prevent accidental skips.
+    if (
+      current &&
+      autoSkip &&
+      (current.type === "op" || current.type === "ed") &&
+      !autoSkippedRef.current.has(skipKey(current))
+    ) {
       // Only auto-skip once per interval so users can seek back to rewatch an OP/ED
       autoSkippedRef.current.add(skipKey(current));
       seekPast(current);
-      setAutoSkipToast(current.type === "ed" ? "Outro skipped" : current.type === "recap" ? "Recap skipped" : "Intro skipped");
+      setAutoSkipToast(current.type === "ed" ? "Outro skipped" : "Intro skipped");
       return;
     }
 

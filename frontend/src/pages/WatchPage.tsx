@@ -486,6 +486,7 @@ export function WatchPage() {
             subtitles={activeServer.subtitles}
             skips={skips}
             autoSkip={autoSkip}
+            episodeNumber={episodeNum}
           />
         )}
 
