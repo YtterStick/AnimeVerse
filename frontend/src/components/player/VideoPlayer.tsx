@@ -28,6 +28,7 @@ interface VideoPlayerProps {
   episodeNumber?: number;
   onError?: (errorDetail?: any) => void;
   onRetry?: () => void;
+  onEnded?: () => void;
   serverName?: string;
   availableServers?: Array<{ id: string; name: string; category?: string }>;
   onSelectServer?: (index: number) => void;
@@ -53,6 +54,7 @@ export function VideoPlayer({
   episodeNumber,
   onError,
   onRetry,
+  onEnded,
   serverName,
   availableServers,
   onSelectServer,
@@ -318,6 +320,7 @@ export function VideoPlayer({
         onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
         onError={handleMediaError}
+        onEnd={onEnded}
         className="w-full h-full"
         key={src}
         autoPlay

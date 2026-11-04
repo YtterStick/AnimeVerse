@@ -64,6 +64,27 @@ export function WatchPage() {
     });
   };
 
+  const [autoNext, setAutoNext] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem("aniverse:autoNext");
+      return stored === null ? true : stored === "true";
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleAutoNext = () => {
+    setAutoNext((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("aniverse:autoNext", String(next));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
+
   // Fetch intro/outro timestamps (AniSkip) for this episode
   useEffect(() => {
     let cancelled = false;
@@ -333,20 +354,6 @@ export function WatchPage() {
     });
   }, [multiStream, selectedServer]);
 
-  const handlePrevServer = () => {
-    if (!multiStream?.servers.length) return;
-    const cur = Math.floor(currentPlaybackTimeRef.current);
-    if (cur > 0) setInitialTime(cur);
-    setSelectedServer((current) => (current - 1 + multiStream.servers.length) % multiStream.servers.length);
-  };
-
-  const handleNextServer = () => {
-    if (!multiStream?.servers.length) return;
-    const cur = Math.floor(currentPlaybackTimeRef.current);
-    if (cur > 0) setInitialTime(cur);
-    setSelectedServer((current) => (current + 1) % multiStream.servers.length);
-  };
-
   const handleRetry = () => {
     // Re-trigger the stream fetch with forceFresh = true
     setStreamLoading(true);
@@ -436,6 +443,12 @@ export function WatchPage() {
 
   const title = anime.title_english || anime.title;
   const hasNext = episodes.some((ep) => ep.episode_number === episodeNum + 1) || (anime.episodes ? episodeNum < anime.episodes : true);
+
+  const handleVideoEnded = () => {
+    if (autoNext && hasNext) {
+      navigate(`/watch/${animeId}/${episodeNum + 1}`);
+    }
+  };
 
   // Get the current active server's stream URL
   const activeServer = multiStream?.servers?.[selectedServer] ?? null;
@@ -562,6 +575,7 @@ export function WatchPage() {
             episodeNumber={episodeNum}
             onError={handleStreamError}
             onRetry={handleRetry}
+            onEnded={handleVideoEnded}
             serverName={activeServer.name}
             availableServers={multiStream?.servers || []}
             onSelectServer={handleServerChange}
@@ -581,7 +595,7 @@ export function WatchPage() {
                     : "Playing Japanese audio with English subtitles."}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 {firstSubIndex !== -1 && (
                   <Button
                     size="sm"
@@ -602,34 +616,40 @@ export function WatchPage() {
                     DUB (Eng)
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  variant={autoSkip ? "default" : "secondary"}
-                  onClick={toggleAutoSkip}
-                  title={skips.length ? "Automatically skip intros and outros" : "No intro/outro timestamps found for this episode yet"}
-                  className="rounded-full px-3 text-xs font-bold gap-1"
+
+                {/* Auto Skip Checkbox */}
+                <label
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary/80 border border-border/40 text-xs font-semibold text-white/90 hover:text-white cursor-pointer select-none transition-colors"
+                  title="Automatically skip intros and outros"
                 >
-                  <FastForward className="w-3.5 h-3.5" />
-                  Auto Skip: {autoSkip ? "On" : "Off"}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handlePrevServer}
-                  className="rounded-full px-3 border border-border/40"
+                  <input
+                    type="checkbox"
+                    checked={autoSkip}
+                    onChange={toggleAutoSkip}
+                    className="w-3.5 h-3.5 rounded border-border text-primary accent-primary cursor-pointer"
+                  />
+                  <span className="flex items-center gap-1.5">
+                    <FastForward className="w-3.5 h-3.5 text-primary" />
+                    Auto Skip
+                  </span>
+                </label>
+
+                {/* Auto Next Checkbox */}
+                <label
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary/80 border border-border/40 text-xs font-semibold text-white/90 hover:text-white cursor-pointer select-none transition-colors"
+                  title="Automatically play the next episode when current episode ends"
                 >
-                  <ChevronLeft className="w-4 h-4 mr-1" />
-                  Prev
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleNextServer}
-                  className="rounded-full px-3 border border-border/40"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
+                  <input
+                    type="checkbox"
+                    checked={autoNext}
+                    onChange={toggleAutoNext}
+                    className="w-3.5 h-3.5 rounded border-border text-primary accent-primary cursor-pointer"
+                  />
+                  <span className="flex items-center gap-1.5">
+                    <Play className="w-3 h-3 text-primary fill-primary" />
+                    Auto Next
+                  </span>
+                </label>
               </div>
             </div>
 
