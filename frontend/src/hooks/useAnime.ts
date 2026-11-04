@@ -50,10 +50,14 @@ export function usePopular() {
   return useAnimeQuery<Anime[]>(() => animeApi.popular(), []);
 }
 
-export function useAnimeSearch(query: string) {
+export function useTopRated() {
+  return useAnimeQuery<Anime[]>(() => animeApi.topRated(), []);
+}
+
+export function useAnimeSearch(query: string, genres = "") {
   return useAnimeQuery<Anime[]>(
-    () => animeApi.search(query),
-    [query]
+    () => animeApi.search(query, 1, genres),
+    [query, genres]
   );
 }
 

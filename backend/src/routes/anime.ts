@@ -1,14 +1,21 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { jikanService } from "../services/jikanService";
+import { jikanService, GENRE_MAP } from "../services/jikanService";
 
 const router = Router();
+
+// GET /api/anime/genres
+router.get("/genres", (_req: Request, res: Response) => {
+  const genres = Object.entries(GENRE_MAP).map(([name, id]) => ({ id, name }));
+  res.json({ data: genres });
+});
 
 // GET /api/anime/search
 router.get("/search", async (req: Request, res: Response, _next: NextFunction) => {
   try {
     const q = (req.query.q as string) || "";
     const page = parseInt(req.query.page as string, 10) || 1;
-    const data = await jikanService.searchAnime(q, page);
+    const genres = (req.query.genres as string) || "";
+    const data = await jikanService.searchAnime(q, page, genres);
     res.json(data);
   } catch (error: any) {
     console.warn("[AnimeRoute] Search failed:", error.message);
@@ -21,6 +28,17 @@ router.get("/search", async (req: Request, res: Response, _next: NextFunction) =
         items: { count: 0, total: 0, per_page: 25 },
       },
     });
+  }
+});
+
+// GET /api/anime/top-rated
+router.get("/top-rated", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const data = await jikanService.getTopRated(page);
+    res.json(data);
+  } catch (error) {
+    next(error);
   }
 });
 

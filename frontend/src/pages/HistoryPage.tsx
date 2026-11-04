@@ -40,62 +40,122 @@ export function HistoryPage() {
     setLocalHistory(getRecentLocalHistory());
   }, []);
 
-  // Merge local storage items and cloud database history
+  // Merge local storage items and cloud database history into a deduplicated single anime list (showing latest watched episode)
   const combinedHistory = useMemo<HistoryItem[]>(() => {
-    const map = new Map<string, HistoryItem>();
+    const map = new Map<number, HistoryItem>();
 
     // 1. Local history entries
     for (const item of localHistory) {
       if (item.durationSeconds > 0) {
-        const key = `${item.animeId}:${item.episodeNumber}`;
-        map.set(key, {
-          id: `local-${key}`,
-          anime_id: item.animeId,
-          anime_title: item.animeTitle || `Anime #${item.animeId}`,
-          anime_image: item.animeImage || null,
-          episode_number: item.episodeNumber,
-          episode_title: `Episode ${item.episodeNumber}`,
-          progress_seconds: item.progressSeconds,
-          duration_seconds: item.durationSeconds,
-          updated_at: item.updatedAt,
-          isLocalOnly: true,
-        });
+        const existing = map.get(item.animeId);
+        const existingTime = existing?.updated_at
+          ? typeof existing.updated_at === "number"
+            ? existing.updated_at
+            : new Date(existing.updated_at).getTime()
+          : 0;
+
+        if (!existing || item.updatedAt > existingTime) {
+          map.set(item.animeId, {
+            id: `local-${item.animeId}-${item.episodeNumber}`,
+            anime_id: item.animeId,
+            anime_title: item.animeTitle || `Anime #${item.animeId}`,
+            anime_image: item.animeImage || null,
+            episode_number: item.episodeNumber,
+            episode_title: `Episode ${item.episodeNumber}`,
+            progress_seconds: item.progressSeconds,
+            duration_seconds: item.durationSeconds,
+            updated_at: item.updatedAt,
+            isLocalOnly: true,
+          });
+        }
       }
     }
 
     // 2. Database history entries
     for (const h of history) {
-      const key = `${h.anime_id}:${h.episode_number}`;
-      const existing = map.get(key);
-      if (existing) {
-        // Keep the more recent progress or merge database ID
-        existing.id = h.id;
-        existing.isLocalOnly = false;
-      } else if (h.duration_seconds > 0) {
-        map.set(key, {
-          id: h.id,
-          anime_id: h.anime_id,
-          anime_title: h.anime_title,
-          anime_image: h.anime_image,
-          episode_number: h.episode_number,
-          episode_title: h.episode_title || `Episode ${h.episode_number}`,
-          progress_seconds: h.progress_seconds,
-          duration_seconds: h.duration_seconds,
-          updated_at: h.watched_at,
-          isLocalOnly: false,
-        });
+      if (h.duration_seconds > 0) {
+        const existing = map.get(h.anime_id);
+        const hTime = h.watched_at ? new Date(h.watched_at).getTime() : 0;
+        const existingTime = existing?.updated_at
+          ? typeof existing.updated_at === "number"
+            ? existing.updated_at
+            : new Date(existing.updated_at).getTime()
+          : 0;
+
+        if (!existing) {
+          map.set(h.anime_id, {
+            id: h.id,
+            anime_id: h.anime_id,
+            anime_title: h.anime_title,
+            anime_image: h.anime_image,
+            episode_number: h.episode_number,
+            episode_title: h.episode_title || `Episode ${h.episode_number}`,
+            progress_seconds: h.progress_seconds,
+            duration_seconds: h.duration_seconds,
+            updated_at: h.watched_at,
+            isLocalOnly: false,
+          });
+        } else if (h.episode_number === existing.episode_number) {
+          // Merge database ID
+          existing.id = h.id;
+          existing.isLocalOnly = false;
+        } else if (hTime > existingTime) {
+          map.set(h.anime_id, {
+            id: h.id,
+            anime_id: h.anime_id,
+            anime_title: h.anime_title,
+            anime_image: h.anime_image || existing.anime_image,
+            episode_number: h.episode_number,
+            episode_title: h.episode_title || `Episode ${h.episode_number}`,
+            progress_seconds: h.progress_seconds,
+            duration_seconds: h.duration_seconds,
+            updated_at: h.watched_at,
+            isLocalOnly: false,
+          });
+        }
       }
     }
 
-    return Array.from(map.values());
+    // Sort by most recently watched first
+    return Array.from(map.values()).sort((a, b) => {
+      const tA =
+        typeof a.updated_at === "number"
+          ? a.updated_at
+          : a.updated_at
+          ? new Date(a.updated_at).getTime()
+          : 0;
+      const tB =
+        typeof b.updated_at === "number"
+          ? b.updated_at
+          : b.updated_at
+          ? new Date(b.updated_at).getTime()
+          : 0;
+      return tB - tA;
+    });
   }, [history, localHistory]);
 
   const handleDeleteItem = async (item: HistoryItem) => {
+    // 1. Remove local progress for all episodes of this anime
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`aniverse:progress:${item.anime_id}:`)) {
+          localStorage.removeItem(key);
+        }
+      }
+      localStorage.removeItem(`aniverse:lastWatched:${item.anime_id}`);
+    } catch {
+      // Ignore
+    }
     removeLocalEpisodeProgress(item.anime_id, item.episode_number);
     setLocalHistory(getRecentLocalHistory());
 
-    if (!item.isLocalOnly && typeof item.id === "string" && !item.id.startsWith("local-")) {
-      await deleteEntry(item.id);
+    // 2. Remove cloud history entries for this anime
+    const cloudEntries = history.filter((h) => h.anime_id === item.anime_id);
+    for (const ce of cloudEntries) {
+      if (ce.id) {
+        await deleteEntry(ce.id);
+      }
     }
   };
 

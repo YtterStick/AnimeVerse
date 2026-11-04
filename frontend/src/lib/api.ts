@@ -52,9 +52,11 @@ function withAuth(token: string | null): Record<string, string> {
 // ============================================
 
 export const animeApi = {
-  search: (query: string, page = 1) =>
+  search: (query: string, page = 1, genres = "") =>
     fetchApi<ApiResponse<Anime[]>>(
-      `/anime/search?q=${encodeURIComponent(query)}&page=${page}`
+      `/anime/search?q=${encodeURIComponent(query)}&page=${page}${
+        genres ? `&genres=${encodeURIComponent(genres)}` : ""
+      }`
     ),
 
   trending: (page = 1) =>
@@ -65,6 +67,12 @@ export const animeApi = {
 
   popular: (page = 1) =>
     fetchApi<ApiResponse<Anime[]>>(`/anime/popular?page=${page}`),
+
+  topRated: (page = 1) =>
+    fetchApi<ApiResponse<Anime[]>>(`/anime/top-rated?page=${page}`),
+
+  getGenres: () =>
+    fetchApi<{ data: { id: number; name: string }[] }>(`/anime/genres`),
 
   getById: (id: number) =>
     fetchApi<{ data: Anime }>(`/anime/${id}`),

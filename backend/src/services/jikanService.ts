@@ -296,6 +296,46 @@ async function executeJikanRequest<T>(
   }
 }
 
+export const GENRE_MAP: Record<string, number> = {
+  Action: 1,
+  Adventure: 2,
+  Comedy: 4,
+  Drama: 8,
+  Fantasy: 10,
+  Horror: 14,
+  Mystery: 7,
+  Romance: 22,
+  "Sci-Fi": 24,
+  "Slice of Life": 36,
+  Sports: 30,
+  Supernatural: 37,
+  Suspense: 41,
+  Psychological: 40,
+  Mecha: 18,
+  Music: 19,
+  Isekai: 62,
+};
+
+export const ID_TO_GENRE: Record<number, string> = {
+  1: "Action",
+  2: "Adventure",
+  4: "Comedy",
+  8: "Drama",
+  10: "Fantasy",
+  14: "Horror",
+  7: "Mystery",
+  22: "Romance",
+  24: "Sci-Fi",
+  36: "Slice of Life",
+  30: "Sports",
+  37: "Supernatural",
+  41: "Suspense",
+  40: "Psychological",
+  18: "Mecha",
+  19: "Music",
+  62: "Isekai",
+};
+
 async function fetchAniListMediaList(
   sort: string[],
   page: number,
@@ -303,7 +343,7 @@ async function fetchAniListMediaList(
   extraVars: Record<string, any> = {}
 ) {
   const query = `
-    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $search: String) {
+    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $search: String, $genre_in: [String]) {
       Page(page: $page, perPage: $perPage) {
         pageInfo {
           total
@@ -312,7 +352,7 @@ async function fetchAniListMediaList(
           lastPage
           hasNextPage
         }
-        media(type: ANIME, isAdult: false, sort: $sort, status: $status, search: $search) {
+        media(type: ANIME, isAdult: false, sort: $sort, status: $status, search: $search, genre_in: $genre_in) {
           ${ANILIST_MEDIA_FIELDS}
         }
       }
@@ -345,15 +385,67 @@ async function fetchAniListMediaList(
 }
 
 export const jikanService = {
-  // Search for anime
-  searchAnime: async (query: string, page = 1) => {
+  // Search for anime (supports text query and multi-genre filtering)
+  searchAnime: async (query: string, page = 1, genres = "") => {
+    const trimmed = query.trim();
+    const tokens = genres
+      ? genres
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+
+    const genreIds: number[] = [];
+    const genreNames: string[] = [];
+
+    for (const t of tokens) {
+      const num = parseInt(t, 10);
+      if (!isNaN(num) && ID_TO_GENRE[num]) {
+        genreIds.push(num);
+        genreNames.push(ID_TO_GENRE[num]);
+      } else if (GENRE_MAP[t]) {
+        genreIds.push(GENRE_MAP[t]);
+        genreNames.push(t);
+      } else if (t) {
+        genreNames.push(t);
+      }
+    }
+
+    const jikanParams: Record<string, any> = { page, limit: 25 };
+    if (trimmed) {
+      jikanParams.q = trimmed;
+    } else {
+      jikanParams.order_by = "popularity";
+      jikanParams.sort = "desc";
+    }
+
+    if (genreIds.length > 0) {
+      jikanParams.genres = genreIds.join(",");
+    }
+
+    const extraVars: Record<string, any> = {};
+    if (trimmed) extraVars.search = trimmed;
+    if (genreNames.length > 0) extraVars.genre_in = genreNames;
+
     return executeJikanRequest<any>(
       "/anime",
-      { q: query, page, limit: 25 },
+      jikanParams,
       () =>
-        query.trim()
-          ? fetchAniListMediaList(["POPULARITY_DESC", "SCORE_DESC"], page, 25, { search: query.trim() })
-          : fetchAniListMediaList(["POPULARITY_DESC"], page, 25)
+        fetchAniListMediaList(
+          ["POPULARITY_DESC", "SCORE_DESC"],
+          page,
+          25,
+          extraVars
+        )
+    );
+  },
+
+  // Get top rated anime
+  getTopRated: async (page = 1) => {
+    return executeJikanRequest<any>(
+      "/top/anime",
+      { page, limit: 25 },
+      () => fetchAniListMediaList(["SCORE_DESC", "POPULARITY_DESC"], page, 25)
     );
   },
 
