@@ -71,6 +71,9 @@ export const animeApi = {
   topRated: (page = 1) =>
     fetchApi<ApiResponse<Anime[]>>(`/anime/top-rated?page=${page}`),
 
+  getSchedule: (day = "monday") =>
+    fetchApi<ApiResponse<Anime[]>>(`/anime/schedule?day=${encodeURIComponent(day)}`),
+
   getGenres: () =>
     fetchApi<{ data: { id: number; name: string }[] }>(`/anime/genres`),
 

@@ -75,6 +75,17 @@ router.get("/popular", async (req: Request, res: Response, next: NextFunction) =
   }
 });
 
+// GET /api/anime/schedule?day=monday
+router.get("/schedule", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const day = (req.query.day as string) || "monday";
+    const data = await jikanService.getSchedule(day);
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/anime/:id
 router.get("/:id", async (req: Request, res: Response, next: NextFunction) => {
   try {

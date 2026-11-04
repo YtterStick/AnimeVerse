@@ -54,6 +54,10 @@ export function useTopRated() {
   return useAnimeQuery<Anime[]>(() => animeApi.topRated(), []);
 }
 
+export function useAnimeSchedule(day: string) {
+  return useAnimeQuery<Anime[]>(() => animeApi.getSchedule(day), [day]);
+}
+
 export function useAnimeSearch(query: string, genres = "") {
   return useAnimeQuery<Anime[]>(
     () => animeApi.search(query, 1, genres),

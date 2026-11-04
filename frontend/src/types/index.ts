@@ -44,6 +44,14 @@ export interface Anime {
     to: string | null;
     string: string | null;
   } | null;
+  broadcast?: {
+    day?: string | null;
+    time?: string | null;
+    timezone?: string | null;
+    string?: string | null;
+  } | null;
+  airing_at?: number | null;
+  episode?: number | null;
   relations?: any[];
 }
 

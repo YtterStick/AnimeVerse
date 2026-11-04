@@ -6,6 +6,7 @@ import { useWatchHistory } from "@/hooks/useWatchHistory";
 import { getRecentLocalHistory, isEpisodeFinished } from "@/lib/watchProgress";
 import { HeroBanner } from "@/components/anime/HeroBanner";
 import { AnimeCarousel } from "@/components/anime/AnimeCarousel";
+import { EstimatedSchedule } from "@/components/anime/EstimatedSchedule";
 import { formatEpisodeNumber } from "@/lib/utils";
 
 interface ContinueItem {
@@ -140,6 +141,9 @@ export function HomePage() {
         <AnimeCarousel title="Trending Now" animeList={trending} loading={trendingLoading} />
         <AnimeCarousel title="Top Airing" animeList={topAiring} loading={topAiringLoading} />
         <AnimeCarousel title="Most Popular" animeList={popular} loading={popularLoading} />
+
+        {/* Estimated Broadcast Schedule */}
+        <EstimatedSchedule />
       </div>
     </div>
   );

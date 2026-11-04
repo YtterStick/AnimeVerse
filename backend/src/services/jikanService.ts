@@ -384,6 +384,98 @@ async function fetchAniListMediaList(
   };
 }
 
+async function fetchAniListSchedule(day: string) {
+  const DAY_INDEX: Record<string, number> = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+
+  const targetDayIdx = DAY_INDEX[day.toLowerCase()] ?? 1;
+  const now = new Date();
+  const currentDayIdx = now.getUTCDay();
+
+  let diff = targetDayIdx - currentDayIdx;
+  const targetDate = new Date(now);
+  targetDate.setUTCDate(now.getUTCDate() + diff);
+  targetDate.setUTCHours(0, 0, 0, 0);
+
+  const startTimestamp = Math.floor(targetDate.getTime() / 1000) - 86400;
+  const endTimestamp = startTimestamp + 2 * 86400;
+
+  const query = `
+    query ($start: Int, $end: Int) {
+      Page(page: 1, perPage: 50) {
+        airingSchedules(airingAt_greater: $start, airingAt_lesser: $end, sort: TIME) {
+          id
+          airingAt
+          timeUntilAiring
+          episode
+          media {
+            ${ANILIST_MEDIA_FIELDS}
+            countryOfOrigin
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await queryAniList(query, { start: startTimestamp, end: endTimestamp });
+  const rawSchedules = data?.Page?.airingSchedules || [];
+  const dayNamePrefix = day.slice(0, 3).toLowerCase();
+
+  const filtered = rawSchedules
+    .filter((item: any) => {
+      if (!item?.media?.idMal && !item?.media?.id) return false;
+      if (item?.media?.isAdult) return false;
+      if (item?.media?.countryOfOrigin && item?.media?.countryOfOrigin !== "JP") return false;
+      const d = new Date(item.airingAt * 1000);
+      const jstDay = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "Asia/Tokyo" }).toLowerCase();
+      return jstDay === dayNamePrefix;
+    })
+    .map((item: any) => {
+      const d = new Date(item.airingAt * 1000);
+      const timeJST = d.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "Asia/Tokyo",
+      });
+      const dayJST = d.toLocaleDateString("en-US", { weekday: "long", timeZone: "Asia/Tokyo" });
+      const base = mapAniListMediaToJikan(item.media);
+
+      return {
+        ...base,
+        broadcast: {
+          day: dayJST,
+          time: timeJST,
+          timezone: "Asia/Tokyo",
+          string: `${dayJST} at ${timeJST} (JST)`,
+        },
+        airing_at: item.airingAt,
+        episode: item.episode,
+      };
+    });
+
+  return {
+    data: filtered,
+    pagination: {
+      last_visible_page: 1,
+      has_next_page: false,
+      current_page: 1,
+      items: {
+        count: filtered.length,
+        total: filtered.length,
+        per_page: 50,
+      },
+    },
+  };
+}
+
 export const jikanService = {
   // Search for anime (supports text query and multi-genre filtering)
   searchAnime: async (query: string, page = 1, genres = "") => {
@@ -473,6 +565,16 @@ export const jikanService = {
       "/top/anime",
       { filter: "bypopularity", page, limit: 25 },
       () => fetchAniListMediaList(["POPULARITY_DESC"], page, 25)
+    );
+  },
+
+  // Get airing schedule for a given day (e.g. monday, tuesday, etc.)
+  getSchedule: async (day = "monday") => {
+    const normalizedDay = day.toLowerCase();
+    return executeJikanRequest<any>(
+      "/schedules",
+      { filter: normalizedDay, sfw: true },
+      () => fetchAniListSchedule(normalizedDay)
     );
   },
 
