@@ -1,0 +1,348 @@
+import { Router, Request, Response, NextFunction } from "express";
+import axios from "axios";
+import ConsumetStreamProvider from "../services/consumetStreamProvider";
+
+const router = Router();
+const streamProvider = new ConsumetStreamProvider();
+
+/**
+ * Clean malformed URLs (e.g. "https:///subbl.krussdomi.com/..." or "https:////bl.krussdomi.com/...")
+ */
+function sanitizeRemoteUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed.replace(/^\/+/, "//")}`;
+  }
+  return trimmed
+    .replace(/^https?:\/{3,}/i, "https://")
+    .replace(/^https:https:\/\//i, "https://")
+    .replace(/^http:\/\//i, "https://");
+}
+
+/**
+ * Resolve a URL that may be relative, protocol-relative, or absolute
+ * into a full https:// URL.
+ */
+function resolveUrl(url: string, base: string): string {
+  const cleaned = sanitizeRemoteUrl(url);
+  if (cleaned.startsWith("https://") || cleaned.startsWith("http://")) {
+    return cleaned.replace(/^http:\/\//i, "https://");
+  }
+  try {
+    return new URL(cleaned, base).toString();
+  } catch {
+    return cleaned;
+  }
+}
+
+/**
+ * Convert SRT subtitle content to WEBVTT if it is not already WEBVTT.
+ */
+function ensureWebVtt(content: string): string {
+  const normalized = content.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
+  if (normalized.startsWith("WEBVTT")) {
+    return normalized + "\n";
+  }
+
+  // Convert SRT numeric cue indices & comma timestamps (00:01:02,345 --> 00:01:05,678) to WEBVTT
+  const vttBody = normalized
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2 --> $3.$4")
+    .replace(/(\d{2}:\d{2}),(\d{3})\s*-->\s*(\d{2}:\d{2}),(\d{3})/g, "$1.$2 --> $3.$4");
+
+  return `WEBVTT\n\n${vttBody}\n`;
+}
+
+/**
+ * Rewrite ALL URLs in .m3u8 playlists to go through our backend proxy,
+ * and optionally pin the desired audio track ("jpn" for SUB, "eng" for DUB).
+ */
+function rewriteM3U8(
+  content: string,
+  parentUrl: string,
+  proxyBaseUrl: string,
+  audioPref?: string,
+  customReferer?: string
+): string {
+  let rawLines = content.replace(/\r\n/g, "\n").split("\n");
+  const parentBase = parentUrl.substring(0, parentUrl.lastIndexOf("/") + 1);
+
+  // If audioPref ("eng" or "jpn") is requested and the master playlist has #EXT-X-MEDIA:TYPE=AUDIO tracks,
+  // filter/pin the matching language track so hls.js always plays the exact language requested.
+  if (audioPref === "eng" || audioPref === "jpn") {
+    const audioLines = rawLines.filter((l) => l.trim().startsWith("#EXT-X-MEDIA:TYPE=AUDIO"));
+    if (audioLines.length > 1) {
+      const matcher =
+        audioPref === "eng"
+          ? /LANGUAGE="(?:en|eng|en-US|en-GB)"|NAME="[^"]*(?:English|Eng)[^"]*"/i
+          : /LANGUAGE="(?:ja|jpn|ja-JP)"|NAME="[^"]*(?:Japanese|Jpn|Original)[^"]*"/i;
+
+      const matchingAudio = audioLines.filter((l) => matcher.test(l));
+      if (matchingAudio.length > 0) {
+        rawLines = rawLines
+          .filter((l) => {
+            const t = l.trim();
+            if (!t.startsWith("#EXT-X-MEDIA:TYPE=AUDIO")) return true;
+            return matcher.test(t);
+          })
+          .map((l) => {
+            const t = l.trim();
+            if (!t.startsWith("#EXT-X-MEDIA:TYPE=AUDIO")) return l;
+            // Ensure DEFAULT=YES,AUTOSELECT=YES on the selected audio track
+            let updated = t
+              .replace(/,DEFAULT=(?:YES|NO)/gi, "")
+              .replace(/,AUTOSELECT=(?:YES|NO)/gi, "");
+            updated = updated.replace(
+              /#EXT-X-MEDIA:TYPE=AUDIO/i,
+              "#EXT-X-MEDIA:TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES"
+            );
+            return updated;
+          });
+      }
+    }
+  }
+
+  const buildProxyLink = (targetUrl: string) => {
+    let link = `${proxyBaseUrl}?url=${encodeURIComponent(targetUrl)}`;
+    if (customReferer) {
+      link += `&referer=${encodeURIComponent(customReferer)}`;
+    }
+    return link;
+  };
+
+  return rawLines
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return line;
+
+      // Handle tags with URI="..." attributes
+      if (trimmed.startsWith("#")) {
+        return line.replace(/URI="([^"]+)"/g, (_match, uri) => {
+          const absoluteUri = resolveUrl(uri, parentBase);
+          return `URI="${buildProxyLink(absoluteUri)}"`;
+        });
+      }
+
+      // All other lines are segment/playlist URLs — proxy them all
+      const absoluteUrl = resolveUrl(trimmed, parentBase);
+      return buildProxyLink(absoluteUrl);
+    })
+    .join("\n");
+}
+
+function buildProxyHeaders(
+  url: string,
+  referer: string,
+  rangeHeader?: string
+): Array<Record<string, string>> {
+  const targetUrl = new URL(url);
+  const origin = targetUrl.origin;
+  const refererOrigin = (() => {
+    try {
+      return new URL(referer).origin;
+    } catch {
+      return referer;
+    }
+  })();
+  const userAgent =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
+
+  const baseRange: Record<string, string> = rangeHeader ? { Range: rangeHeader } : {};
+
+  return [
+    {
+      Referer: referer,
+      Origin: refererOrigin,
+      "User-Agent": userAgent,
+      ...baseRange,
+    },
+    {
+      Referer: "https://krussdomi.com/",
+      Origin: "https://krussdomi.com",
+      "User-Agent": userAgent,
+      ...baseRange,
+    },
+    {
+      Referer: `${origin}/`,
+      Origin: origin,
+      "User-Agent": userAgent,
+      ...baseRange,
+    },
+    {
+      "User-Agent": userAgent,
+      ...baseRange,
+    },
+  ];
+}
+
+// GET /api/stream/proxy
+// Proxies .m3u8, .vtt/.srt subtitles, and video segments/mp4s to bypass CORS and Referer checks
+router.get("/proxy", async (req: Request, res: Response) => {
+  try {
+    const rawUrl = req.query.url;
+    const audioPref = typeof req.query.audio === "string" ? req.query.audio : undefined;
+    const customReferer = typeof req.query.referer === "string" ? req.query.referer : undefined;
+
+    if (!rawUrl || typeof rawUrl !== "string") {
+      return res.status(400).send("Missing target URL");
+    }
+
+    const url = sanitizeRemoteUrl(rawUrl);
+
+    // Determine the correct Referer based on the target domain
+    const targetUrl = new URL(url);
+    const refererMap: Record<string, string> = {
+      "krussdomi.com": "https://krussdomi.com/",
+      "advancedairesearchlab.xyz": "https://krussdomi.com/",
+      "habibikun.xyz": "https://krussdomi.com/",
+      "babybayw.xyz": "https://krussdomi.com/",
+      "narutokun.xyz": "https://krussdomi.com/",
+      "animeheaven.me": "https://animeheaven.me/",
+    };
+
+    let referer = customReferer || `${targetUrl.origin}/`;
+    if (!customReferer) {
+      for (const [domain, ref] of Object.entries(refererMap)) {
+        if (targetUrl.hostname.endsWith(domain)) {
+          referer = ref;
+          break;
+        }
+      }
+      if (
+        referer === `${targetUrl.origin}/` &&
+        (targetUrl.hostname.endsWith(".xyz") || targetUrl.hostname.includes("krussdomi"))
+      ) {
+        referer = "https://krussdomi.com/";
+      }
+    }
+
+    const rangeHeader = typeof req.headers.range === "string" ? req.headers.range : undefined;
+    const headerAttempts = buildProxyHeaders(url, referer, rangeHeader);
+
+    const isSubtitle = /\.(vtt|srt|ass|ssa)(?:[?#]|$)/i.test(url);
+    const isPlaylist = !isSubtitle && /\.m3u8(?:[?#]|$)/i.test(url);
+    const isMp4 = /video\.mp4|\.mp4(?:[?#]|$)/i.test(url);
+
+    for (let i = 0; i < headerAttempts.length; i++) {
+      try {
+        if (isSubtitle) {
+          const response = await axios.get(url, {
+            headers: headerAttempts[i],
+            responseType: "text",
+            timeout: 15000,
+          });
+
+          res.setHeader("Content-Type", "text/vtt; charset=utf-8");
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Cache-Control", "public, max-age=86400");
+          res.send(ensureWebVtt(String(response.data || "")));
+          return;
+        }
+
+        if (isPlaylist) {
+          const response = await axios.get(url, {
+            headers: headerAttempts[i],
+            responseType: "text",
+            timeout: 15000,
+          });
+
+          res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+
+          const rewritten = rewriteM3U8(
+            String(response.data || ""),
+            url,
+            "/api/stream/proxy",
+            audioPref,
+            referer
+          );
+          res.send(rewritten);
+          return;
+        }
+
+        // Binary mode for segments (.jpg, .ts, .m4s) and .mp4 streams
+        const response = await axios.get(url, {
+          headers: headerAttempts[i],
+          responseType: "stream",
+          timeout: 30000,
+          validateStatus: (status) => status >= 200 && status < 300,
+        });
+
+        res.status(response.status);
+
+        const upstreamType = String(response.headers["content-type"] || "");
+        const contentType = isMp4
+          ? "video/mp4"
+          : upstreamType && !upstreamType.includes("image/")
+          ? upstreamType
+          : "video/mp2t";
+
+        res.setHeader("Content-Type", contentType);
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        if (!isMp4) {
+          res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+        }
+        if (response.headers["content-length"]) {
+          res.setHeader("Content-Length", String(response.headers["content-length"]));
+        }
+        if (response.headers["content-range"]) {
+          res.setHeader("Content-Range", String(response.headers["content-range"]));
+        }
+        if (response.headers["accept-ranges"]) {
+          res.setHeader("Accept-Ranges", String(response.headers["accept-ranges"]));
+        } else if (isMp4) {
+          res.setHeader("Accept-Ranges", "bytes");
+        }
+
+        req.on("close", () => {
+          if (response.data && typeof response.data.destroy === "function") {
+            response.data.destroy();
+          }
+        });
+
+        response.data.pipe(res);
+        return;
+      } catch (attemptError: any) {
+        const status = attemptError?.response?.status;
+        const lastAttempt = i === headerAttempts.length - 1;
+
+        if (!lastAttempt && (status === 403 || status === 404 || status === 429 || status >= 500)) {
+          continue;
+        }
+
+        throw attemptError;
+      }
+    }
+  } catch (error: any) {
+    console.error("[StreamProxy] Error proxying stream:", error.message);
+    if (!res.headersSent) {
+      res.status(502).send("Failed to proxy streaming resource");
+    }
+  }
+});
+
+// GET /api/stream/:animeId/:episode
+// Returns MultiStreamResult with all available servers grouped by category ("SUB" and "DUB")
+router.get("/:animeId/:episode", async (req: Request, res: Response, _next: NextFunction) => {
+  try {
+    const { animeId, episode } = req.params;
+    const animeIdNum = parseInt(animeId, 10);
+    const episodeNum = parseInt(episode, 10);
+
+    if (isNaN(animeIdNum) || isNaN(episodeNum)) {
+      return res.status(400).json({ message: "Invalid parameters" });
+    }
+
+    const result = await streamProvider.getMultiStream(animeIdNum, episodeNum);
+    res.json(result);
+  } catch (error: any) {
+    console.error("Stream resolution error:", error.message);
+    res.status(502).json({
+      message: error.message || "Failed to resolve streaming sources.",
+      servers: [],
+      default: -1,
+    });
+  }
+});
+
+export default router;
