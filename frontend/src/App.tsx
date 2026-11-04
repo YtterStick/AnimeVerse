@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import { Layout } from "@/components/layout/Layout";
 import { HomePage } from "@/pages/HomePage";
 import { AnimePage } from "@/pages/AnimePage";
@@ -22,6 +23,7 @@ export function App() {
           <Route path="auth/callback" element={<AuthCallbackPage />} />
         </Route>
       </Routes>
+      <Analytics />
     </BrowserRouter>
   );
 }

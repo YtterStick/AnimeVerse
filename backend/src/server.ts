@@ -36,10 +36,19 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health Check
-app.get("/health", (req, res) => {
-  res.json({ status: "healthy", timestamp: new Date() });
-});
+// Health Check (supports both GET and HEAD on /health and /api/health for cron pingers)
+const healthHandler = (_req: express.Request, res: express.Response) => {
+  res.status(200).json({
+    status: "ok",
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+};
+
+app.get("/health", healthHandler);
+app.get("/api/health", healthHandler);
+app.head("/health", (_req, res) => res.status(200).end());
+app.head("/api/health", (_req, res) => res.status(200).end());
 
 // Register API Routes
 app.use("/api/anime", animeRoutes);
