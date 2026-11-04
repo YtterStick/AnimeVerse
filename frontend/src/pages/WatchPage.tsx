@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Layers, Compass, FastForward, Check, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Layers, Compass, FastForward, Check, X, Search, LayoutGrid } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
@@ -117,9 +117,9 @@ export function WatchPage() {
     });
   };
 
-  // Compute episode ranges of 50 episodes
+  // Compute episode ranges (25 episodes per tab for long series like Black Clover, 50 for shorter ones)
   const ranges = useMemo(() => {
-    const CHUNK_SIZE = 50;
+    const CHUNK_SIZE = episodes.length > 50 ? 25 : 50;
     const list: [number, number][] = [];
     const sorted = [...episodes].sort((a, b) => a.episode_number - b.episode_number);
     for (let i = 0; i < sorted.length; i += CHUNK_SIZE) {
@@ -129,6 +129,10 @@ export function WatchPage() {
     }
     return list;
   }, [episodes]);
+
+  const [episodeSearch, setEpisodeSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const activeEpisodeRef = useRef<HTMLButtonElement | null>(null);
 
   // Auto-select range index containing the current episode
   useEffect(() => {
@@ -140,14 +144,40 @@ export function WatchPage() {
     }
   }, [episodeNum, ranges]);
 
-  // Filter episodes based on active range
+  // Filter episodes based on active search or active range
   const displayedEpisodes = useMemo(() => {
+    const sorted = [...episodes].sort((a, b) => a.episode_number - b.episode_number);
+
+    // If searching (e.g. typing "81" or "dragon"), search across all episodes
+    if (episodeSearch.trim()) {
+      const q = episodeSearch.trim().toLowerCase();
+      return sorted.filter(
+        (ep) =>
+          String(ep.episode_number) === q ||
+          String(ep.episode_number).includes(q) ||
+          (ep.title && ep.title.toLowerCase().includes(q))
+      );
+    }
+
     const activeRange = ranges[activeRangeIndex];
     const filtered = activeRange
-      ? episodes.filter((ep) => ep.episode_number >= activeRange[0] && ep.episode_number <= activeRange[1])
-      : episodes;
-    return [...filtered].sort((a, b) => a.episode_number - b.episode_number);
-  }, [episodes, ranges, activeRangeIndex]);
+      ? sorted.filter((ep) => ep.episode_number >= activeRange[0] && ep.episode_number <= activeRange[1])
+      : sorted;
+    return filtered;
+  }, [episodes, ranges, activeRangeIndex, episodeSearch]);
+
+  // Auto-scroll to center the currently active episode in view
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeEpisodeRef.current) {
+        activeEpisodeRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [episodeNum, activeRangeIndex, displayedEpisodes, viewMode]);
 
   useEffect(() => {
     const el = recommendationsScrollRef.current;
@@ -392,37 +422,36 @@ export function WatchPage() {
 
   if (animeLoading) {
     return (
-      <div className="flex-1 min-w-0 flex flex-col lg:flex-row bg-background w-full max-w-full page-enter animate-pulse overflow-x-hidden">
-        {/* Left Column */}
-        <div className="flex-1 min-w-0 px-4 py-6 sm:px-6 lg:pl-8 lg:pr-4 space-y-4">
-          {/* Back link */}
+      <div className="min-h-screen bg-background w-full max-w-full page-enter animate-pulse overflow-x-hidden pb-12">
+        <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 lg:px-8 space-y-6">
           <Skeleton className="h-4 w-32 bg-card" />
-          {/* Player Area */}
-          <Skeleton className="w-full aspect-video rounded-xl bg-card" />
-          {/* Server selector */}
-          <Skeleton className="h-12 w-full bg-card rounded-lg" />
-          {/* Episode Title metadata */}
-          <div className="space-y-2 py-2 border-b border-border/20 pb-6">
-            <Skeleton className="h-7 w-48 bg-card" />
-            <Skeleton className="h-4 w-64 bg-card" />
-          </div>
-          {/* Synopsis */}
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-20 bg-card" />
-            <div className="space-y-1.5">
-              <Skeleton className="h-4 w-full bg-card" />
-              <Skeleton className="h-4 w-full bg-card" />
-              <Skeleton className="h-4 w-2/3 bg-card" />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div className="lg:col-span-8 space-y-4">
+              <Skeleton className="w-full aspect-video rounded-2xl bg-card" />
+              <Skeleton className="h-14 w-full bg-card rounded-xl" />
+            </div>
+            <div className="lg:col-span-4 rounded-2xl border border-border/40 bg-card/25 p-4 space-y-3 h-[560px]">
+              <Skeleton className="h-6 w-28 bg-card" />
+              <div className="space-y-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full bg-card rounded-lg" />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-        {/* Right Column (Sidebar) */}
-        <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-border/40 bg-card/25 p-4 space-y-3">
-          <Skeleton className="h-6 w-24 bg-card" />
-          <div className="space-y-2">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 w-full bg-card rounded-lg" />
-            ))}
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2 py-2 border-b border-border/20 pb-6">
+              <Skeleton className="h-7 w-48 bg-card" />
+              <Skeleton className="h-4 w-64 bg-card" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-20 bg-card" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-4 w-full bg-card" />
+                <Skeleton className="h-4 w-full bg-card" />
+                <Skeleton className="h-4 w-2/3 bg-card" />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -460,9 +489,8 @@ export function WatchPage() {
   const firstDubIndex = multiStream?.servers.findIndex((s) => s.category === "DUB") ?? -1;
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col lg:flex-row bg-background w-full max-w-full page-enter overflow-x-hidden">
-      {/* Left side: Video Player, Server Selector, Title, Nav Controls */}
-      <div className="flex-1 min-w-0 px-4 py-6 sm:px-6 lg:pl-8 lg:pr-4 space-y-4">
+    <div className="min-h-screen bg-background w-full max-w-full page-enter overflow-x-hidden pb-12">
+      <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 lg:px-8 space-y-6">
         {/* Back Link */}
         <Link
           to={`/anime/${animeId}`}
@@ -490,7 +518,11 @@ export function WatchPage() {
           </div>
         )}
 
-        {/* Video Player Interface */}
+        {/* Top Section: Player & Server (8 cols) and Episode List Card (4 cols) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Player & Server */}
+          <div className="lg:col-span-8 space-y-4 min-w-0">
+            {/* Video Player Interface */}
         {streamLoading ? (
           /* Premium Player Skeleton Loader */
           <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative flex flex-col justify-between p-4 sm:p-6 select-none">
@@ -660,8 +692,196 @@ export function WatchPage() {
             />
           </div>
         )}
+      </div>
 
-        {/* Episode Controls & Metadata */}
+      {/* Right Column: Self-contained Episode List Card */}
+      <div className="lg:col-span-4 min-w-0">
+        <div className="rounded-2xl border border-border/40 bg-card/40 backdrop-blur-md shadow-xl flex flex-col overflow-hidden h-[540px] sm:h-[580px] lg:h-[620px]">
+          {/* Card Header */}
+          <div className="p-3 sm:p-3.5 flex items-center justify-between border-b border-border/40 bg-card/60 select-none shrink-0 gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <List className="w-4 h-4 text-primary shrink-0" />
+              <h2 className="font-bold text-white text-xs uppercase tracking-wider truncate">
+                Episodes ({episodes.length})
+              </h2>
+            </div>
+
+            {/* Right Header: Search & View Toggle */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Quick Ep jump search input */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={episodeSearch}
+                  onChange={(e) => setEpisodeSearch(e.target.value)}
+                  placeholder="Ep. #"
+                  className="w-20 sm:w-24 pl-6 pr-5 py-1 text-xs rounded-lg bg-secondary/60 border border-border/40 focus:outline-none focus:border-primary text-white placeholder:text-muted-foreground/60 transition-all"
+                />
+                {episodeSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setEpisodeSearch("")}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                    title="Clear search"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* View Toggle (List vs Grid) */}
+              <div className="flex items-center rounded-lg bg-secondary/60 p-0.5 border border-border/40">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  className={`p-1 rounded transition-colors ${
+                    viewMode === "list"
+                      ? "bg-primary text-white"
+                      : "text-muted-foreground hover:text-white"
+                  }`}
+                  title="List View"
+                >
+                  <List className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  className={`p-1 rounded transition-colors ${
+                    viewMode === "grid"
+                      ? "bg-primary text-white"
+                      : "text-muted-foreground hover:text-white"
+                  }`}
+                  title="Grid View"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Range tabs (1-25, 26-50, etc.) */}
+          {ranges.length > 1 && !episodeSearch && (
+            <div className="flex items-center gap-1.5 p-2.5 border-b border-border/40 bg-card/30 overflow-x-auto hide-scrollbar shrink-0">
+              {ranges.map(([start, end], idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveRangeIndex(idx)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer shrink-0 border ${
+                    idx === activeRangeIndex
+                      ? "bg-primary text-white border-primary shadow-sm"
+                      : "bg-secondary/60 text-muted-foreground border-border/40 hover:text-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {start}-{end}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Episode ScrollArea */}
+          <ScrollArea className="flex-1 min-h-0 p-3">
+            {episodesLoading && episodes.length === 0 ? (
+              <div className="space-y-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-11 rounded-lg bg-card/40 skeleton-shimmer border border-border/20" />
+                ))}
+              </div>
+            ) : displayedEpisodes.length === 0 ? (
+              <div className="text-center py-12 text-xs text-muted-foreground">
+                {episodeSearch ? `No episode matching "${episodeSearch}"` : "No episodes found."}
+              </div>
+            ) : viewMode === "grid" ? (
+              /* GRID VIEW (Compact number badges) */
+              <div className="grid grid-cols-5 gap-2 pb-4">
+                {displayedEpisodes.map((ep) => {
+                  const isActive = ep.episode_number === episodeNum;
+                  const { isWatched } = getEpisodeWatchStatus(animeId, ep.episode_number, history);
+                  return (
+                    <button
+                      key={ep.episode_number}
+                      ref={isActive ? activeEpisodeRef : null}
+                      onClick={() => navigate(`/watch/${animeId}/${ep.episode_number}`)}
+                      className={`relative aspect-square rounded-xl border flex flex-col items-center justify-center font-bold text-xs transition-all cursor-pointer ${
+                        isActive
+                          ? "bg-primary text-white border-primary shadow-lg shadow-primary/25 ring-2 ring-primary/40 scale-105"
+                          : isWatched
+                          ? "bg-card/25 border-border/30 text-muted-foreground/45 hover:bg-secondary/50 hover:text-white"
+                          : "bg-card/60 border-border/40 text-foreground hover:bg-secondary/70 hover:border-primary/50 hover:text-white"
+                      }`}
+                      title={`Episode ${ep.episode_number}${ep.title ? `: ${ep.title}` : ""}`}
+                    >
+                      <span>{ep.episode_number}</span>
+                      {isWatched && !isActive && (
+                        <Check className="w-2.5 h-2.5 text-emerald-400 absolute bottom-1 right-1" />
+                      )}
+                      {isActive && (
+                        <Play className="w-2.5 h-2.5 text-white fill-white absolute bottom-1 right-1" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              /* LIST VIEW (Detailed with title & progress) */
+              <div className="space-y-2 pb-4">
+                {displayedEpisodes.map((ep) => {
+                  const isActive = ep.episode_number === episodeNum;
+                  const { isWatched, progressPercent } = getEpisodeWatchStatus(
+                    animeId,
+                    ep.episode_number,
+                    history
+                  );
+
+                  return (
+                    <button
+                      key={ep.episode_number}
+                      ref={isActive ? activeEpisodeRef : null}
+                      onClick={() => navigate(`/watch/${animeId}/${ep.episode_number}`)}
+                      className={`relative w-full flex items-center justify-between p-3 rounded-xl border text-left text-xs font-medium cursor-pointer transition-all overflow-hidden ${
+                        isActive
+                          ? "bg-primary text-white border-primary shadow-md opacity-100 ring-2 ring-primary/40"
+                          : isWatched
+                          ? "bg-card/25 hover:bg-secondary/40 border-border/20 text-muted-foreground/45 opacity-50 hover:opacity-85"
+                          : "bg-card hover:bg-secondary/40 border-border/40 text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <span className={`truncate pr-2 ${isWatched && !isActive ? "line-through decoration-muted-foreground/30" : ""}`}>
+                        EP {ep.episode_number} — {ep.title || `Episode ${ep.episode_number}`}
+                      </span>
+
+                      {isActive ? (
+                        <Play className="w-3.5 h-3.5 shrink-0 text-white fill-white" />
+                      ) : isWatched ? (
+                        <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-semibold shrink-0">
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        </span>
+                      ) : (
+                        <Play className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover:opacity-100" />
+                      )}
+
+                      {/* Progress indicator for partially watched episodes */}
+                      {!isActive && !isWatched && progressPercent > 0 && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary/80 overflow-hidden">
+                          <div
+                            className="h-full bg-primary"
+                            style={{ width: `${progressPercent * 100}%` }}
+                          />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+      </div>
+    </div>
+
+    {/* Bottom Section: Full Width Controls, Metadata, Synopsis, Related, More Like This */}
+    <div className="space-y-8 pt-2">
+      {/* Episode Controls & Metadata */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 border-b border-border/20 pb-6">
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-white line-clamp-1 leading-tight">
@@ -839,96 +1059,9 @@ export function WatchPage() {
           )}
         </div>
       </div>
-
-      {/* Right side: Sidebar of Episodes list */}
-      <div className="w-full lg:w-80 bg-card/25 border-t lg:border-t-0 lg:border-l border-border/40 flex flex-col shrink-0">
-        <div className="p-4 flex items-center gap-2 border-b border-border/40 bg-card/20 select-none shrink-0">
-          <List className="w-4 h-4 text-primary" />
-          <h2 className="font-bold text-white text-xs uppercase tracking-wider">Episodes</h2>
-        </div>
-
-        {/* Category Tabs (1-50, 51-100, etc.) */}
-        {ranges.length > 1 && (
-          <div className="flex flex-wrap gap-1.5 p-3 border-b border-border/40 bg-card/10 max-h-30 overflow-y-auto custom-scrollbar shrink-0">
-            {ranges.map(([start, end], idx) => (
-              <button
-                key={idx}
-                onClick={() => setActiveRangeIndex(idx)}
-                className={`px-2 py-0.5 text-[10px] font-bold rounded transition-all cursor-pointer border ${
-                  idx === activeRangeIndex
-                    ? "bg-primary text-white border-primary shadow-sm"
-                    : "bg-secondary text-muted-foreground border-border/40 hover:text-foreground hover:bg-secondary/80"
-                }`}
-              >
-                {start}-{end}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <ScrollArea className="flex-1 max-h-[50vh] lg:max-h-[75vh] p-4">
-          <div className="space-y-2 pb-6">
-            {episodesLoading && episodes.length === 0 ? (
-              Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="h-11 rounded-lg bg-card/40 skeleton-shimmer border border-border/20" />
-              ))
-            ) : displayedEpisodes.length === 0 ? (
-              <div className="text-center py-8 text-xs text-muted-foreground">
-                No episodes list returned.
-              </div>
-            ) : (
-              displayedEpisodes.map((ep) => {
-                const isActive = ep.episode_number === episodeNum;
-                const { isWatched, progressPercent } = getEpisodeWatchStatus(
-                  animeId,
-                  ep.episode_number,
-                  history
-                );
-
-                return (
-                  <button
-                    key={ep.episode_number}
-                    onClick={() => navigate(`/watch/${animeId}/${ep.episode_number}`)}
-                    className={`relative w-full flex items-center justify-between p-3 rounded-lg border text-left text-xs font-medium cursor-pointer transition-all overflow-hidden ${
-                      isActive
-                        ? "bg-primary text-white border-primary shadow-md opacity-100 ring-1 ring-primary/40"
-                        : isWatched
-                        ? "bg-card/25 hover:bg-secondary/40 border-border/20 text-muted-foreground/45 opacity-50 hover:opacity-85"
-                        : "bg-card hover:bg-secondary/40 border-border/40 text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <span className={`truncate max-w-45 ${isWatched && !isActive ? "line-through decoration-muted-foreground/30" : ""}`}>
-                      EP {ep.episode_number} — {ep.title || `Episode ${ep.episode_number}`}
-                    </span>
-
-                    {isActive ? (
-                      <Play className="w-3.5 h-3.5 shrink-0 text-white fill-white" />
-                    ) : isWatched ? (
-                      <span className="flex items-center gap-1 text-[10px] text-emerald-400/90 font-semibold shrink-0">
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      </span>
-                    ) : (
-                      <Play className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover:opacity-100" />
-                    )}
-
-                    {/* Progress indicator for partially watched episodes */}
-                    {!isActive && !isWatched && progressPercent > 0 && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary/80 overflow-hidden">
-                        <div
-                          className="h-full bg-primary"
-                          style={{ width: `${progressPercent * 100}%` }}
-                        />
-                      </div>
-                    )}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </ScrollArea>
-      </div>
     </div>
-  );
+  </div>
+);
 }
 
 export default WatchPage;
