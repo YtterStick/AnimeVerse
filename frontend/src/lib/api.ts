@@ -84,42 +84,51 @@ export const animeApi = {
 
 export const streamApi = {
   getStreamUrl: async (animeId: number, episode: number): Promise<MultiStreamResult> => {
-    let res: MultiStreamResult | null = null;
-    try {
-      res = await fetchApi<MultiStreamResult>(`/stream/${animeId}/${episode}`);
-    } catch {
-      res = { servers: [], default: -1 };
-    }
+    // Run backend stream resolution and client-side direct resolver concurrently
+    const [backendSettled, clientSettled] = await Promise.allSettled([
+      fetchApi<MultiStreamResult>(`/stream/${animeId}/${episode}`, { timeoutMs: 12000 }),
+      resolveKaaClient(animeId, episode),
+    ]);
 
-    if (BACKEND_URL && res?.servers) {
-      res.servers = res.servers.map((s) => ({
-        ...s,
-        url: s.url.startsWith("http") ? s.url : `${BACKEND_URL}${s.url}`,
-        subtitles: s.subtitles?.map((sub) => ({
-          ...sub,
-          url: sub.url.startsWith("http") ? sub.url : `${BACKEND_URL}${sub.url}`,
-        })),
-      }));
-    }
+    let res: MultiStreamResult = { servers: [], default: 0 };
 
-    // Client-side fallback / enrichment:
-    // If backend did not return any KAA servers (e.g. cloud datacenter challenged by Cloudflare),
-    // resolve directly from the client browser which has residential IP and 0% block rate.
-    const hasKaa = res?.servers?.some((s) => s.id.startsWith("kaa-"));
-    if (!hasKaa) {
-      try {
-        const clientServers = await resolveKaaClient(animeId, episode);
-        if (clientServers.length > 0) {
-          if (!res) res = { servers: [], default: 0 };
-          res.servers = [...clientServers, ...(res.servers || [])];
-          res.default = 0;
-        }
-      } catch {
-        // Fall back to backend results
+    if (backendSettled.status === "fulfilled" && backendSettled.value?.servers) {
+      res = backendSettled.value;
+      if (BACKEND_URL && res.servers) {
+        res.servers = res.servers.map((s) => ({
+          ...s,
+          url: s.url.startsWith("http") ? s.url : `${BACKEND_URL}${s.url}`,
+          subtitles: s.subtitles?.map((sub) => ({
+            ...sub,
+            url: sub.url.startsWith("http") ? sub.url : `${BACKEND_URL}${sub.url}`,
+          })),
+        }));
       }
     }
 
-    return res || { servers: [], default: -1 };
+    const clientServers =
+      clientSettled.status === "fulfilled" && Array.isArray(clientSettled.value)
+        ? clientSettled.value
+        : [];
+
+    if (clientServers.length > 0) {
+      const hasKaa = res.servers?.some((s) => s.id.startsWith("kaa-"));
+      if (!hasKaa) {
+        // Prepend client-side resolved CatStream servers (fastest & highest quality)
+        res.servers = [...clientServers, ...(res.servers || [])];
+      }
+    }
+
+    if (!res.servers || res.servers.length === 0) {
+      return {
+        servers: [],
+        default: -1,
+        message: "No streaming servers found for this episode.",
+      };
+    }
+
+    res.default = 0;
+    return res;
   },
 
   /** Intro/outro/recap timestamps (seconds) from AniSkip, proxied through our backend. */

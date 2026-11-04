@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshC
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
+import { getLocalEpisodeProgress, saveLocalEpisodeProgress, isEpisodeFinished } from "@/lib/watchProgress";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { ServerSelector } from "@/components/player/ServerSelector";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,15 @@ export function WatchPage() {
   const [selectedServer, setSelectedServer] = useState(0);
   const [streamLoading, setStreamLoading] = useState(true);
   const [streamError, setStreamError] = useState<string | null>(null);
-  const [initialTime, setInitialTime] = useState(0);
+  const [initialTime, setInitialTime] = useState<number>(() => {
+    if (!animeId || !episodeNum) return 0;
+    const local = getLocalEpisodeProgress(animeId, episodeNum);
+    return local ? local.progressSeconds : 0;
+  });
+  const currentPlaybackTimeRef = useRef<number>(initialTime);
+  const currentDurationRef = useRef<number>(0);
+  const lastLocalSaveRef = useRef<number>(0);
+  const lastRemoteSaveRef = useRef<number>(0);
   const [activeRangeIndex, setActiveRangeIndex] = useState(0);
   const recommendationsScrollRef = useRef<HTMLDivElement>(null);
   const [showRecommendationsLeft, setShowRecommendationsLeft] = useState(false);
@@ -65,8 +74,6 @@ export function WatchPage() {
       cancelled = true;
     };
   }, [animeId, episodeNum]);
-
-  const lastSavedProgress = useRef(0);
 
   const updateRecommendationsScrollState = () => {
     const el = recommendationsScrollRef.current;
@@ -170,55 +177,118 @@ export function WatchPage() {
     };
   }, [animeId, episodeNum]);
 
-  // 2. Resolve initial start time from user watch history progress
+  // 2. Resolve initial start time from localStorage first, then fallback to database history
   useEffect(() => {
+    if (!animeId || !episodeNum) return;
+    const local = getLocalEpisodeProgress(animeId, episodeNum);
+    if (local && local.progressSeconds > 3) {
+      setInitialTime(local.progressSeconds);
+      currentPlaybackTimeRef.current = local.progressSeconds;
+      return;
+    }
     if (history.length > 0) {
       const record = history.find(
         (h) => h.anime_id === animeId && h.episode_number === episodeNum
       );
-      if (record && record.progress_seconds > 5) {
-        // Exclude finished ones (near completion e.g. within 30s)
-        const isNearEnd = record.duration_seconds - record.progress_seconds < 30;
-        setInitialTime(isNearEnd ? 0 : record.progress_seconds);
-      } else {
-        setInitialTime(0);
+      if (
+        record &&
+        record.progress_seconds > 5 &&
+        !isEpisodeFinished(record.progress_seconds, record.duration_seconds)
+      ) {
+        setInitialTime(record.progress_seconds);
+        currentPlaybackTimeRef.current = record.progress_seconds;
+        return;
       }
     }
+    setInitialTime(0);
+    currentPlaybackTimeRef.current = 0;
   }, [history, animeId, episodeNum]);
 
+  // 3. Flush progress on page unload / refresh
+  useEffect(() => {
+    const flushProgress = () => {
+      const curTime = Math.floor(currentPlaybackTimeRef.current);
+      const curDur = Math.floor(currentDurationRef.current);
+      if (curTime > 3 && curDur > 0 && animeId && episodeNum) {
+        saveLocalEpisodeProgress({
+          animeId,
+          episodeNumber: episodeNum,
+          progressSeconds: curTime,
+          durationSeconds: curDur,
+          animeTitle: anime?.title,
+          animeImage: anime?.images?.webp?.image_url || anime?.images?.jpg?.image_url,
+        });
+      }
+    };
+
+    window.addEventListener("beforeunload", flushProgress);
+    return () => {
+      window.removeEventListener("beforeunload", flushProgress);
+      flushProgress();
+    };
+  }, [animeId, episodeNum, anime]);
+
   const handleProgress = (currentTime: number, duration: number) => {
-    if (!anime || !isAuthenticated) return;
+    if (!animeId || !episodeNum) return;
+
+    currentPlaybackTimeRef.current = currentTime;
+    currentDurationRef.current = duration;
 
     const currentRounded = Math.floor(currentTime);
+    const durationRounded = Math.floor(duration);
+    if (currentRounded <= 0 || durationRounded <= 0) return;
+
     const now = Date.now();
 
-    // Debounce: save progress at most once every 15 seconds, or when they hit important percentages
-    if (now - lastSavedProgress.current >= 15000) {
-      lastSavedProgress.current = now;
-
-      saveProgress({
-        anime_id: animeId,
-        anime_title: anime.title,
-        anime_image: anime.images?.webp?.image_url || anime.images?.jpg?.image_url,
-        episode_number: episodeNum,
-        episode_title: `Episode ${episodeNum}`,
-        progress_seconds: currentRounded,
-        duration_seconds: Math.floor(duration),
+    // 1. Instant save to localStorage (throttled to at most once per 2 seconds)
+    // Guarantees 0-latency resume on refresh even for guest sessions
+    if (now - lastLocalSaveRef.current >= 2000) {
+      lastLocalSaveRef.current = now;
+      saveLocalEpisodeProgress({
+        animeId,
+        episodeNumber: episodeNum,
+        progressSeconds: currentRounded,
+        durationSeconds: durationRounded,
+        animeTitle: anime?.title,
+        animeImage: anime?.images?.webp?.image_url || anime?.images?.jpg?.image_url,
       });
+    }
+
+    // 2. Debounced save to Supabase backend database (every 12 seconds) for logged-in accounts
+    if (isAuthenticated && anime) {
+      if (now - lastRemoteSaveRef.current >= 12000) {
+        lastRemoteSaveRef.current = now;
+        saveProgress({
+          anime_id: animeId,
+          anime_title: anime.title,
+          anime_image: anime.images?.webp?.image_url || anime.images?.jpg?.image_url,
+          episode_number: episodeNum,
+          episode_title: `Episode ${episodeNum}`,
+          progress_seconds: currentRounded,
+          duration_seconds: durationRounded,
+        });
+      }
     }
   };
 
   const handleServerChange = (index: number) => {
+    // Retain playback timestamp when switching servers
+    const cur = Math.floor(currentPlaybackTimeRef.current);
+    if (cur > 0) setInitialTime(cur);
     setSelectedServer(index);
   };
 
   const handlePrevServer = () => {
     if (!multiStream?.servers.length) return;
+    const cur = Math.floor(currentPlaybackTimeRef.current);
+    if (cur > 0) setInitialTime(cur);
     setSelectedServer((current) => (current - 1 + multiStream.servers.length) % multiStream.servers.length);
   };
 
   const handleNextServer = () => {
     if (!multiStream?.servers.length) return;
+    const cur = Math.floor(currentPlaybackTimeRef.current);
+    if (cur > 0) setInitialTime(cur);
     setSelectedServer((current) => (current + 1) % multiStream.servers.length);
   };
 

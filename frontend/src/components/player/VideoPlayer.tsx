@@ -45,6 +45,7 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const playerRef = useRef<any>(null);
   const autoSkippedRef = useRef<Set<string>>(new Set());
+  const hasSeekedInitialRef = useRef(false);
   const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
   const [autoSkipToast, setAutoSkipToast] = useState<string | null>(null);
   const [duration, setDuration] = useState<number>(0);
@@ -56,9 +57,10 @@ export function VideoPlayer({
     setRefinedSkips(skips);
   }, [skips]);
 
-  // Reset per-source skip bookkeeping
+  // Reset per-source skip and initial seek bookkeeping
   useEffect(() => {
     autoSkippedRef.current = new Set();
+    hasSeekedInitialRef.current = false;
     setActiveSkip(null);
   }, [src]);
 
@@ -173,15 +175,41 @@ export function VideoPlayer({
     return () => window.clearTimeout(timer);
   }, [src, category, subtitles]);
 
+  // Imperatively seek to initial position as soon as player is ready
+  const seekToInitialIfReady = () => {
+    if (hasSeekedInitialRef.current || !initialTime || initialTime <= 0) return;
+    const player = playerRef.current;
+    if (!player) return;
+
+    try {
+      player.currentTime = initialTime;
+      hasSeekedInitialRef.current = true;
+    } catch {
+      // player may still be initializing
+    }
+  };
+
+  // If initialTime updates after mount (e.g. async history fetch or server switch), seek immediately
+  useEffect(() => {
+    if (initialTime > 0 && !hasSeekedInitialRef.current) {
+      seekToInitialIfReady();
+    }
+  }, [initialTime]);
+
   // Seek to initial position and activate subtitles when media is loaded
   const handleCanPlay = () => {
-    if (initialTime > 0 && playerRef.current) {
-      playerRef.current.currentTime = initialTime;
-    }
+    seekToInitialIfReady();
     if (playerRef.current?.duration) {
       setDuration(playerRef.current.duration);
     }
     syncSubtitleTrackMode();
+  };
+
+  const handleLoadedMetadata = () => {
+    seekToInitialIfReady();
+    if (playerRef.current?.duration) {
+      setDuration(playerRef.current.duration);
+    }
   };
 
   const skipKey = (s: SkipInterval) => `${s.type}:${s.start}`;
@@ -201,6 +229,10 @@ export function VideoPlayer({
     const { currentTime, duration: currentDuration } = playerRef.current;
     if (currentDuration && currentDuration !== duration) {
       setDuration(currentDuration);
+    }
+    // If playback progressed past initial time, mark initial seek as completed
+    if (currentTime > 0 && (!initialTime || currentTime >= initialTime - 1)) {
+      hasSeekedInitialRef.current = true;
     }
     if (currentTime && currentDuration && onProgress) {
       onProgress(currentTime, currentDuration);
@@ -235,7 +267,9 @@ export function VideoPlayer({
         ref={playerRef}
         title={title}
         src={mediaSource as any}
+        currentTime={initialTime > 0 ? initialTime : undefined}
         onCanPlay={handleCanPlay}
+        onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
         className="w-full h-full"
         key={src}

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Play, Check, AlertCircle } from "lucide-react";
 import type { Episode } from "@/types";
 import { useWatchHistory } from "@/hooks/useWatchHistory";
+import { getLocalEpisodeProgress } from "@/lib/watchProgress";
 
 interface EpisodeListProps {
   animeId: number;
@@ -26,10 +27,14 @@ export function EpisodeList({
 
   // Helper to check if user has watched this episode
   const getProgress = (epNum: number) => {
+    const local = getLocalEpisodeProgress(animeId, epNum);
+    if (local && local.durationSeconds > 0) {
+      return local.progressSeconds / local.durationSeconds;
+    }
     const record = history.find(
       (h) => h.anime_id === animeId && h.episode_number === epNum
     );
-    if (!record) return null;
+    if (!record || !record.duration_seconds) return null;
     return record.progress_seconds / record.duration_seconds;
   };
 

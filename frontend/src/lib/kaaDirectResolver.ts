@@ -37,9 +37,10 @@ export async function resolveKaaClient(
   episodeNum: number
 ): Promise<StreamServer[]> {
   try {
-    // 1. Resolve slug from MALSync
+    // 1. Resolve slug from MALSync (with 6s timeout)
     const msRes = await fetch(`https://api.malsync.moe/mal/anime/${animeId}`, {
       headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(6000),
     }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
     const kaaEntries = Object.values(msRes?.Sites?.KickAssAnime || {}) as any[];
@@ -49,7 +50,7 @@ export async function resolveKaaClient(
     // 2. Query kaa.lt for episode list (has Access-Control-Allow-Origin: *)
     const epRes = await fetch(
       `https://kaa.lt/api/show/${slug}/episodes?ep=${episodeNum}&lang=ja-JP`,
-      { headers: { Accept: "application/json" } }
+      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(6000) }
     ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
     const epList: any[] = epRes?.result || [];
@@ -65,6 +66,7 @@ export async function resolveKaaClient(
 
     const detail = await fetch(detailUrl, {
       headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(6000),
     }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
     const epServers: Array<{ name: string; src: string }> = detail?.servers || [];
@@ -78,7 +80,9 @@ export async function resolveKaaClient(
 
       try {
         // Must fetch player HTML via our proxy because krussdomi.com lacks CORS headers for browsers
-        const playerHtml = await fetch(buildProxyUrl(cleanSrc)).then((r) => r.text());
+        const playerHtml = await fetch(buildProxyUrl(cleanSrc), {
+          signal: AbortSignal.timeout(7000),
+        }).then((r) => r.text());
         const propsMatch = playerHtml.match(/props="([^"]+)"/);
         if (!propsMatch) continue;
 
@@ -147,7 +151,7 @@ export async function resolveKaaClient(
     try {
       const dubEpRes = await fetch(
         `https://kaa.lt/api/show/${slug}/episodes?ep=${episodeNum}&lang=en-US`,
-        { headers: { Accept: "application/json" } }
+        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(4000) }
       ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
       const dubEpList: any[] = dubEpRes?.result || [];
@@ -160,14 +164,16 @@ export async function resolveKaaClient(
         const epNumStr = dubTarget.episode_string || String(Math.floor(Number(dubTarget.episode_number)));
         const dubDetail = await fetch(
           `https://kaa.lt/api/show/${slug}/episode/ep-${epNumStr}-${dubTarget.slug}`,
-          { headers: { Accept: "application/json" } }
+          { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(5000) }
         ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
         const dubServers: Array<{ name: string; src: string }> = dubDetail?.servers || [];
         for (let i = 0; i < dubServers.length; i++) {
           const srv = dubServers[i];
           try {
-            const playerHtml = await fetch(buildProxyUrl(sanitizeUrl(srv.src))).then((r) => r.text());
+            const playerHtml = await fetch(buildProxyUrl(sanitizeUrl(srv.src)), {
+              signal: AbortSignal.timeout(6000),
+            }).then((r) => r.text());
             const propsMatch = playerHtml.match(/props="([^"]+)"/);
             if (!propsMatch) continue;
             const jsonData = JSON.parse(decodeHtml(propsMatch[1]));
