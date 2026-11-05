@@ -6,6 +6,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="AniVerse — Discover and stream anime with a premium dark-themed dashboard. Browse trending series, manage your watchlist, and track your watch history." />
     <title>AniVerse — Anime Streaming</title>
+    <script>
+      // Automatically refresh when a new deployment invalidates cached chunk hashes
+      window.addEventListener('vite:preloadError', function () {
+        window.location.reload();
+      });
+      window.addEventListener(
+        'error',
+        function (e) {
+          var target = e.target || e.srcElement;
+          var isScriptTag = target && target.tagName === 'SCRIPT';
+          var msg = (e && e.message ? e.message : '').toLowerCase();
+          if (
+            isScriptTag ||
+            msg.indexOf('failed to load module script') !== -1 ||
+            msg.indexOf('dynamically imported module') !== -1 ||
+            msg.indexOf('mime type') !== -1
+          ) {
+            var last = sessionStorage.getItem('aniverse:chunk_reload');
+            var now = Date.now();
+            if (!last || now - parseInt(last, 10) > 8000) {
+              sessionStorage.setItem('aniverse:chunk_reload', String(now));
+              window.location.reload();
+            }
+          }
+        },
+        true
+      );
+    </script>
   </head>
   <body>
     <div id="root"></div>
