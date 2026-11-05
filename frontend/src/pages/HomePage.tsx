@@ -138,9 +138,24 @@ export function HomePage() {
         )}
 
         {/* Anime Rows */}
-        <AnimeCarousel title="Trending Now" animeList={trending} loading={trendingLoading} />
-        <AnimeCarousel title="Top Airing" animeList={topAiring} loading={topAiringLoading} />
-        <AnimeCarousel title="Most Popular" animeList={popular} loading={popularLoading} />
+        <AnimeCarousel
+          title="Trending Now"
+          animeList={trending}
+          loading={trendingLoading}
+          viewMoreLink="/search?category=trending"
+        />
+        <AnimeCarousel
+          title="Top Airing"
+          animeList={topAiring}
+          loading={topAiringLoading}
+          viewMoreLink="/search?category=top-airing"
+        />
+        <AnimeCarousel
+          title="Most Popular"
+          animeList={popular}
+          loading={popularLoading}
+          viewMoreLink="/search?category=popular"
+        />
 
         {/* Estimated Broadcast Schedule */}
         <EstimatedSchedule />

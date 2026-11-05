@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import {
   useAnimeSearch,
   usePopular,
@@ -7,6 +7,7 @@ import {
   useTopAiring,
 } from "@/hooks/useAnime";
 import { AnimeGrid } from "@/components/anime/AnimeGrid";
+import { Pagination } from "@/components/shared/Pagination";
 import {
   Search,
   SlidersHorizontal,
@@ -17,6 +18,7 @@ import {
   Sparkles,
   Check,
   RotateCcw,
+  ChevronRight,
   Swords,
   Compass,
   Laugh,
@@ -53,14 +55,51 @@ export const POPULAR_GENRES = [
   { id: 62, name: "Isekai", icon: DoorOpen },
 ];
 
+export const CATEGORY_CONFIG: Record<
+  string,
+  {
+    title: string;
+    subtitle: string;
+    badge: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }
+> = {
+  trending: {
+    title: "Trending Anime Now",
+    subtitle: "What fans are buzzing about and streaming right now worldwide",
+    badge: "Trending",
+    icon: Flame,
+  },
+  "top-airing": {
+    title: "Top Airing Series",
+    subtitle: "Highest ranked ongoing broadcasts released this season",
+    badge: "Top Airing",
+    icon: Radio,
+  },
+  popular: {
+    title: "Most Popular Anime",
+    subtitle: "All-time most watched, favorited, and legendary masterpieces",
+    badge: "Most Popular",
+    icon: Flame,
+  },
+  "top-rated": {
+    title: "Top Rated Masterpieces",
+    subtitle: "Critically acclaimed, all-time highest scoring anime in history",
+    badge: "Top Rated",
+    icon: Star,
+  },
+};
+
 export function SearchPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Extract 'q' and 'genres' query parameters from URL
+  // Extract 'q', 'genres', 'category', and 'page' query parameters from URL
   const queryParams = new URLSearchParams(location.search);
   const urlQuery = queryParams.get("q") || "";
   const urlGenresRaw = queryParams.get("genres") || "";
+  const urlCategory = queryParams.get("category") || "";
+  const urlPage = Math.max(1, parseInt(queryParams.get("page") || "1", 10));
 
   const selectedGenres = useMemo(() => {
     return urlGenresRaw
@@ -79,21 +118,30 @@ export function SearchPage() {
     setSearchTerm(urlQuery);
   }, [urlQuery]);
 
-  const hasFilters = urlQuery.trim().length > 0 || selectedGenres.length > 0;
+  const hasFilters =
+    urlQuery.trim().length > 0 ||
+    selectedGenres.length > 0 ||
+    Boolean(urlCategory);
 
-  // Search results hook (runs when filters or query exist)
+  // Paginated Search & Category Hook
   const {
     data: searchResults,
+    pagination,
     loading: searchLoading,
     error: searchError,
-  } = useAnimeSearch(urlQuery, selectedGenres.join(","));
+  } = useAnimeSearch(urlQuery, selectedGenres.join(","), urlPage, urlCategory);
 
-  // Discover showcase hooks (active when no specific query/genre filter is applied)
+  // Discover showcase hooks (active when in default overview mode)
   const { data: popularList, loading: popularLoading } = usePopular();
   const { data: topRatedList, loading: topRatedLoading } = useTopRated();
   const { data: topAiringList, loading: topAiringLoading } = useTopAiring();
 
-  const updateSearch = (newQuery: string, newGenres: string[]) => {
+  const updateSearch = (
+    newQuery: string,
+    newGenres: string[],
+    newPage = 1,
+    newCategory = urlCategory
+  ) => {
     const params = new URLSearchParams();
     if (newQuery.trim()) {
       params.set("q", newQuery.trim());
@@ -101,13 +149,19 @@ export function SearchPage() {
     if (newGenres.length > 0) {
       params.set("genres", newGenres.join(","));
     }
+    if (newCategory) {
+      params.set("category", newCategory);
+    }
+    if (newPage > 1) {
+      params.set("page", String(newPage));
+    }
     const qs = params.toString();
     navigate(qs ? `/search?${qs}` : "/search");
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateSearch(searchTerm, selectedGenres);
+    updateSearch(searchTerm, selectedGenres, 1, urlCategory);
   };
 
   const toggleGenre = (genreName: string) => {
@@ -115,7 +169,21 @@ export function SearchPage() {
     const nextGenres = isSelected
       ? selectedGenres.filter((g) => g !== genreName)
       : [...selectedGenres, genreName];
-    updateSearch(searchTerm, nextGenres);
+    updateSearch(searchTerm, nextGenres, 1, urlCategory);
+  };
+
+  const removeGenre = (genreName: string) => {
+    const nextGenres = selectedGenres.filter((g) => g !== genreName);
+    updateSearch(searchTerm, nextGenres, 1, urlCategory);
+  };
+
+  const removeCategory = () => {
+    updateSearch(searchTerm, selectedGenres, 1, "");
+  };
+
+  const removeQuery = () => {
+    setSearchTerm("");
+    updateSearch("", selectedGenres, 1, urlCategory);
   };
 
   const clearAllFilters = () => {
@@ -123,9 +191,9 @@ export function SearchPage() {
     navigate("/search");
   };
 
-  const removeGenre = (genreName: string) => {
-    const nextGenres = selectedGenres.filter((g) => g !== genreName);
-    updateSearch(searchTerm, nextGenres);
+  const handlePageChange = (newPage: number) => {
+    updateSearch(searchTerm, selectedGenres, newPage, urlCategory);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -241,48 +309,84 @@ export function SearchPage() {
 
       {/* Main Body: Filtered Results vs Default Discover Sections */}
       {hasFilters ? (
-        /* Filtered Search Results Section */
+        /* Filtered Search Results Section with Pagination */
         <div className="space-y-6 flex-1 flex flex-col justify-start">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/30 pb-3">
             <div className="space-y-1">
-              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-                <span>Results</span>
-                {urlQuery && (
-                  <span className="text-muted-foreground font-normal text-sm sm:text-base">
-                    for &ldquo;<span className="text-primary font-semibold">{urlQuery}</span>&rdquo;
+              <h2 className="text-lg sm:text-2xl font-bold text-white flex items-center gap-2">
+                {urlCategory && CATEGORY_CONFIG[urlCategory] ? (
+                  <span>{CATEGORY_CONFIG[urlCategory].title}</span>
+                ) : urlQuery ? (
+                  <>
+                    <span>Results for</span>
+                    <span className="text-primary font-semibold">&ldquo;{urlQuery}&rdquo;</span>
+                  </>
+                ) : selectedGenres.length > 0 ? (
+                  <span>{selectedGenres.join(" • ")} Anime</span>
+                ) : (
+                  <span>Browse Anime</span>
+                )}
+                {urlPage > 1 && (
+                  <span className="text-xs font-normal text-muted-foreground bg-secondary/80 px-2.5 py-0.5 rounded-full border border-border/50">
+                    Page {urlPage}
                   </span>
                 )}
               </h2>
 
-              {/* Active genre chips */}
-              {selectedGenres.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[11px] text-muted-foreground mr-1">Genres:</span>
-                  {selectedGenres.map((g) => (
-                    <span
-                      key={g}
-                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/20 text-primary border border-primary/30"
+              {/* Active Filter Chips */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                {urlCategory && CATEGORY_CONFIG[urlCategory] && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/20 text-primary border border-primary/30">
+                    <span>Category: {CATEGORY_CONFIG[urlCategory].badge}</span>
+                    <button
+                      type="button"
+                      onClick={removeCategory}
+                      className="hover:text-white rounded-full p-0.5 hover:bg-primary/40 transition-colors cursor-pointer"
+                      title="Clear category filter"
                     >
-                      <span>{g}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeGenre(g)}
-                        className="hover:text-white rounded-full p-0.5 hover:bg-primary/40 transition-colors"
-                        title={`Remove ${g} filter`}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {urlQuery && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-secondary/80 text-foreground border border-border">
+                    <span>Search: {urlQuery}</span>
+                    <button
+                      type="button"
+                      onClick={removeQuery}
+                      className="hover:text-white rounded-full p-0.5 hover:bg-muted transition-colors cursor-pointer"
+                      title="Clear text search"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {selectedGenres.map((g) => (
+                  <span
+                    key={g}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/20 text-primary border border-primary/30"
+                  >
+                    <span>{g}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeGenre(g)}
+                      className="hover:text-white rounded-full p-0.5 hover:bg-primary/40 transition-colors cursor-pointer"
+                      title={`Remove ${g} filter`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
 
             <Button
               variant="outline"
               size="sm"
               onClick={clearAllFilters}
-              className="h-8 text-xs self-start sm:self-center border-border/50 text-muted-foreground hover:text-white"
+              className="h-8 text-xs self-start sm:self-center border-border/50 text-muted-foreground hover:text-white cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5 mr-1" /> Clear All Filters
             </Button>
@@ -290,23 +394,35 @@ export function SearchPage() {
 
           {searchError ? (
             <div className="text-center py-16 space-y-3 bg-card/20 rounded-2xl border border-destructive/20 p-6">
-              <p className="font-semibold text-destructive">Failed to load search results</p>
+              <p className="font-semibold text-destructive">Failed to load anime results</p>
               <p className="text-xs text-muted-foreground max-w-md mx-auto">{searchError}</p>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => updateSearch(searchTerm, selectedGenres)}
-                className="rounded-full mt-2"
+                onClick={() => updateSearch(searchTerm, selectedGenres, urlPage, urlCategory)}
+                className="rounded-full mt-2 cursor-pointer"
               >
-                Retry Search
+                Retry
               </Button>
             </div>
           ) : (
-            <AnimeGrid animeList={searchResults} loading={searchLoading} />
+            <>
+              <AnimeGrid animeList={searchResults} loading={searchLoading} />
+
+              {/* Responsive Pagination Controls */}
+              {!searchLoading && searchResults && searchResults.length > 0 && (
+                <Pagination
+                  currentPage={urlPage}
+                  totalPages={pagination?.last_visible_page || 1}
+                  hasNextPage={pagination?.has_next_page}
+                  onPageChange={handlePageChange}
+                />
+              )}
+            </>
           )}
         </div>
       ) : (
-        /* Default Discover Showcase Sections (Genre Showcase, Most Watched, Top Rated) */
+        /* Default Discover Showcase Sections with View More Links */
         <div className="space-y-12 flex-1 flex flex-col justify-start">
           {/* Section 1: Most Watched / Popular Anime */}
           <section className="space-y-4">
@@ -324,6 +440,14 @@ export function SearchPage() {
                   </p>
                 </div>
               </div>
+
+              <Link
+                to="/search?category=popular"
+                className="text-xs sm:text-sm text-primary hover:text-primary/80 flex items-center gap-1 font-semibold transition-colors group cursor-pointer"
+              >
+                <span>View More</span>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
             </div>
 
             <AnimeGrid
@@ -348,6 +472,14 @@ export function SearchPage() {
                   </p>
                 </div>
               </div>
+
+              <Link
+                to="/search?category=top-rated"
+                className="text-xs sm:text-sm text-primary hover:text-primary/80 flex items-center gap-1 font-semibold transition-colors group cursor-pointer"
+              >
+                <span>View More</span>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
             </div>
 
             <AnimeGrid
@@ -372,6 +504,14 @@ export function SearchPage() {
                   </p>
                 </div>
               </div>
+
+              <Link
+                to="/search?category=top-airing"
+                className="text-xs sm:text-sm text-primary hover:text-primary/80 flex items-center gap-1 font-semibold transition-colors group cursor-pointer"
+              >
+                <span>View More</span>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
             </div>
 
             <AnimeGrid

@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Anime } from "@/types";
 import { AnimeCard } from "./AnimeCard";
@@ -8,9 +9,10 @@ interface AnimeCarouselProps {
   title: string;
   animeList: Anime[] | null;
   loading: boolean;
+  viewMoreLink?: string;
 }
 
-export function AnimeCarousel({ title, animeList, loading }: AnimeCarouselProps) {
+export function AnimeCarousel({ title, animeList, loading, viewMoreLink }: AnimeCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);
@@ -59,10 +61,21 @@ export function AnimeCarousel({ title, animeList, loading }: AnimeCarouselProps)
 
   return (
     <div className="relative group/carousel my-8">
-      {/* Title */}
-      <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-4 text-foreground flex justify-between items-center px-4 md:px-0">
-        {title}
-      </h2>
+      {/* Title & View More */}
+      <div className="flex items-center justify-between mb-4 px-4 md:px-0">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+          {title}
+        </h2>
+        {viewMoreLink && (
+          <Link
+            to={viewMoreLink}
+            className="text-xs sm:text-sm text-primary hover:text-primary/80 flex items-center gap-1 font-semibold transition-colors group cursor-pointer"
+          >
+            <span>View More</span>
+            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+        )}
+      </div>
 
       {/* Outer wrapper */}
       <div className="relative mx-0 md:-mx-4 px-4">

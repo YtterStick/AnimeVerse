@@ -38,6 +38,44 @@ function useAnimeQuery<T>(
   return { data, loading, error };
 }
 
+function usePaginatedAnimeQuery<T>(
+  fetcher: () => Promise<ApiResponse<T>>,
+  deps: unknown[] = []
+) {
+  const [data, setData] = useState<T | null>(null);
+  const [pagination, setPagination] = useState<ApiResponse<T>["pagination"] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetcher()
+      .then((res) => {
+        if (!cancelled) {
+          setData(res.data);
+          setPagination(res.pagination || null);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err.message);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return { data, pagination, loading, error };
+}
+
 export function useTrending() {
   return useAnimeQuery<Anime[]>(() => animeApi.trending(), []);
 }
@@ -58,10 +96,38 @@ export function useAnimeSchedule(day: string) {
   return useAnimeQuery<Anime[]>(() => animeApi.getSchedule(day), [day]);
 }
 
-export function useAnimeSearch(query: string, genres = "") {
-  return useAnimeQuery<Anime[]>(
-    () => animeApi.search(query, 1, genres),
-    [query, genres]
+export function useAnimeSearch(
+  query: string,
+  genres = "",
+  page = 1,
+  category = ""
+) {
+  return usePaginatedAnimeQuery<Anime[]>(
+    () => {
+      // If user selected a direct category without extra query or genres
+      if (category === "trending" && !query && !genres) {
+        return animeApi.trending(page);
+      }
+      if (category === "top-airing" && !query && !genres) {
+        return animeApi.topAiring(page);
+      }
+      if (category === "popular" && !query && !genres) {
+        return animeApi.popular(page);
+      }
+      if (category === "top-rated" && !query && !genres) {
+        return animeApi.topRated(page);
+      }
+
+      // If category has genres or custom filter
+      let orderBy = "";
+      let status = "";
+      if (category === "top-rated") orderBy = "score";
+      if (category === "trending") orderBy = "trending";
+      if (category === "top-airing") status = "airing";
+
+      return animeApi.search(query, page, genres, orderBy, status);
+    },
+    [query, genres, page, category]
   );
 }
 

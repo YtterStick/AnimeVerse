@@ -573,7 +573,13 @@ async function fetchAniListSchedule(day: string) {
 
 export const jikanService = {
   // Search for anime (supports text query and multi-genre filtering)
-  searchAnime: async (query: string, page = 1, genres = "") => {
+  searchAnime: async (
+    query: string,
+    page = 1,
+    genres = "",
+    orderBy = "",
+    status = ""
+  ) => {
     const trimmed = query.trim();
     const tokens = genres
       ? genres
@@ -601,9 +607,16 @@ export const jikanService = {
     const jikanParams: Record<string, any> = { page, limit: 25 };
     if (trimmed) {
       jikanParams.q = trimmed;
+    } else if (orderBy === "score") {
+      jikanParams.order_by = "score";
+      jikanParams.sort = "desc";
     } else {
       jikanParams.order_by = "popularity";
       jikanParams.sort = "desc";
+    }
+
+    if (status === "airing") {
+      jikanParams.status = "airing";
     }
 
     if (genreIds.length > 0) {
@@ -612,6 +625,7 @@ export const jikanService = {
 
     const extraVars: Record<string, any> = {};
     if (trimmed) extraVars.search = trimmed;
+    if (status === "airing") extraVars.status = "RELEASING";
 
     const anilistGenreIn: string[] = [];
     const anilistTagIn: string[] = [];
@@ -630,12 +644,19 @@ export const jikanService = {
     if (anilistGenreIn.length > 0) extraVars.genre_in = anilistGenreIn;
     if (anilistTagIn.length > 0) extraVars.tag_in = anilistTagIn;
 
+    const aniListSort =
+      orderBy === "score"
+        ? ["SCORE_DESC", "POPULARITY_DESC"]
+        : orderBy === "trending"
+        ? ["TRENDING_DESC", "POPULARITY_DESC"]
+        : ["POPULARITY_DESC", "SCORE_DESC"];
+
     return executeJikanRequest<any>(
       "/anime",
       jikanParams,
       () =>
         fetchAniListMediaList(
-          ["POPULARITY_DESC", "SCORE_DESC"],
+          aniListSort,
           page,
           25,
           extraVars

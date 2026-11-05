@@ -52,12 +52,21 @@ function withAuth(token: string | null): Record<string, string> {
 // ============================================
 
 export const animeApi = {
-  search: (query: string, page = 1, genres = "") =>
-    fetchApi<ApiResponse<Anime[]>>(
-      `/anime/search?q=${encodeURIComponent(query)}&page=${page}${
-        genres ? `&genres=${encodeURIComponent(genres)}` : ""
-      }`
-    ),
+  search: (
+    query: string,
+    page = 1,
+    genres = "",
+    orderBy = "",
+    status = ""
+  ) => {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    params.set("page", String(page));
+    if (genres) params.set("genres", genres);
+    if (orderBy) params.set("order_by", orderBy);
+    if (status) params.set("status", status);
+    return fetchApi<ApiResponse<Anime[]>>(`/anime/search?${params.toString()}`);
+  },
 
   trending: (page = 1) =>
     fetchApi<ApiResponse<Anime[]>>(`/anime/trending?page=${page}`),
