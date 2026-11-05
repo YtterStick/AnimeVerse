@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Search, Film, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2 } from "lucide-react";
+import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2 } from "lucide-react";
+import { Logo } from "@/components/shared/Logo";
 import { UserMenu } from "../auth/UserMenu";
 import { AuthModal } from "../auth/AuthModal";
 import { animeApi } from "@/lib/api";
@@ -167,7 +168,7 @@ export function Navbar() {
                       </p>
                       <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
                         {anime.type && <span>{anime.type}</span>}
-                        {anime.year && <span>• {anime.year}</span>}
+                        {anime.year && <span>â€¢ {anime.year}</span>}
                         {anime.score && (
                           <span className="flex items-center gap-0.5 text-amber-400 font-medium">
                             <Star className="w-2.5 h-2.5 fill-amber-400" />
@@ -207,13 +208,8 @@ export function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-4">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2 group">
-              <div className="relative w-9 h-9 rounded-lg bg-gradient-to-tr from-primary to-accent flex items-center justify-center shadow-lg group-hover:shadow-primary/30 transition-all duration-300">
-                <Film className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold tracking-wider text-white group-hover:gradient-text transition-all duration-300">
-                Ani<span className="text-primary transition-colors duration-300 group-hover:text-transparent">Verse</span>
-              </span>
+            <Link to="/" className="flex items-center group" aria-label="AniVerse home">
+              <Logo size={38} />
             </Link>
 
             {/* Desktop Navigation */}

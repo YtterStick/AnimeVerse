@@ -22,13 +22,15 @@ async function fetchApi<T>(
     ? window.setTimeout(() => controller.abort(), timeoutMs)
     : undefined;
 
+  const { timeoutMs: _omitTimeout, headers: extraHeaders, ...restOptions } = options || {};
   const res = await fetch(`${API_BASE}${endpoint}`, {
+    ...restOptions,
+    // Merge headers LAST so auth headers never wipe out Content-Type
     headers: {
       "Content-Type": "application/json",
-      ...options?.headers,
+      ...(extraHeaders as Record<string, string> | undefined),
     },
-    signal: controller?.signal,
-    ...options,
+    signal: controller?.signal ?? restOptions.signal,
   });
 
   if (timeoutId) {

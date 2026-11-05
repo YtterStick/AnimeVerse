@@ -77,15 +77,19 @@ export function HeroBanner({ trendingList, loading }: HeroBannerProps) {
   };
 
   const handleWatchlistClick = async () => {
-    if (isSaved) {
-      await removeFromWatchlist(currentAnime.mal_id);
-    } else {
-      await addToWatchlist({
-        anime_id: currentAnime.mal_id,
-        anime_title: currentAnime.title,
-        anime_image: currentAnime.images?.webp?.image_url || currentAnime.images?.jpg?.image_url,
-        anime_type: currentAnime.type,
-      });
+    try {
+      if (isSaved) {
+        await removeFromWatchlist(currentAnime.mal_id);
+      } else {
+        await addToWatchlist({
+          anime_id: currentAnime.mal_id,
+          anime_title: currentAnime.title,
+          anime_image: currentAnime.images?.webp?.image_url || currentAnime.images?.jpg?.image_url,
+          anime_type: currentAnime.type,
+        });
+      }
+    } catch {
+      window.alert("Couldn't update your watchlist. Please try again.");
     }
   };
 

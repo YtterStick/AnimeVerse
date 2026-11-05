@@ -181,20 +181,28 @@ export function useWatchlist() {
 
       if (session?.access_token) {
         try {
-          await watchlistApi.addToWatchlist(session.access_token, data);
-          await fetchWatchlist();
+          const saved = await watchlistApi.addToWatchlist(session.access_token, data);
+          // Replace optimistic entry with the persisted row
+          setWatchlist((prev) =>
+            prev.map((item) => (item.anime_id === data.anime_id ? saved : item))
+          );
         } catch (err) {
           console.error("Failed to add to watchlist:", err);
+          // Roll back so the UI never shows an item that wasn't saved
+          setWatchlist((prev) => prev.filter((item) => item.id !== newEntry.id));
+          throw err;
         }
       }
     },
-    [session?.access_token, session?.user?.id, fetchWatchlist]
+    [session?.access_token, session?.user?.id]
   );
 
   const removeFromWatchlist = useCallback(
     async (animeId: number) => {
+      let removed: WatchlistEntry | undefined;
       // Optimistic update
       setWatchlist((prev) => {
+        removed = prev.find((item) => item.anime_id === animeId);
         const next = prev.filter((item) => item.anime_id !== animeId);
         if (!session?.access_token) {
           saveLocalWatchlist(next);
@@ -207,6 +215,11 @@ export function useWatchlist() {
           await watchlistApi.removeFromWatchlist(session.access_token, animeId);
         } catch (err) {
           console.error("Failed to remove from watchlist:", err);
+          if (removed) {
+            const restore = removed;
+            setWatchlist((prev) => [restore, ...prev]);
+          }
+          throw err;
         }
       }
     },

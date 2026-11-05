@@ -1,5 +1,6 @@
-import { Link } from "react-router-dom";
-import { Film, ExternalLink, MessageSquare } from "lucide-react";
+﻿import { Link } from "react-router-dom";
+import { ExternalLink, MessageSquare } from "lucide-react";
+import { Logo } from "@/components/shared/Logo";
 
 export function Footer() {
   return (
@@ -8,13 +9,8 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand Column */}
           <div className="space-y-4 col-span-1 md:col-span-2">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-primary to-accent flex items-center justify-center">
-                <Film className="w-4 h-4 text-white" />
-              </div>
-              <span className="text-lg font-bold tracking-wider text-foreground">
-                Ani<span className="text-primary">Verse</span>
-              </span>
+            <Link to="/" className="flex items-center group w-fit" aria-label="AniVerse home">
+              <Logo size={36} />
             </Link>
             <p className="text-sm max-w-sm leading-relaxed">
               Explore and watch your favorite anime. Keep track of your progress, manage your watchlist, and stream seamless high-definition video.

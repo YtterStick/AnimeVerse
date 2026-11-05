@@ -91,20 +91,24 @@ export function AnimePage() {
   const isSaved = isInWatchlist(anime.mal_id);
 
   const handleWatchlistToggle = async () => {
-    if (isSaved) {
-      await removeFromWatchlist(anime.mal_id);
-    } else {
-      await addToWatchlist({
-        anime_id: anime.mal_id,
-        anime_title: anime.title_english || anime.title,
-        anime_image:
-          anime.images?.webp?.large_image_url ||
-          anime.images?.jpg?.large_image_url ||
-          anime.images?.webp?.image_url ||
-          anime.images?.jpg?.image_url ||
-          null,
-        anime_type: anime.type,
-      });
+    try {
+      if (isSaved) {
+        await removeFromWatchlist(anime.mal_id);
+      } else {
+        await addToWatchlist({
+          anime_id: anime.mal_id,
+          anime_title: anime.title_english || anime.title,
+          anime_image:
+            anime.images?.webp?.large_image_url ||
+            anime.images?.jpg?.large_image_url ||
+            anime.images?.webp?.image_url ||
+            anime.images?.jpg?.image_url ||
+            null,
+          anime_type: anime.type,
+        });
+      }
+    } catch {
+      window.alert("Couldn't update your watchlist. Please try again.");
     }
   };
 
