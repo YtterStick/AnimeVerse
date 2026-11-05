@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, CalendarDays } from "lucide-react";
+import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, CalendarDays, Home, Compass } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { TitleLanguageToggle } from "@/components/shared/TitleLanguageToggle";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
@@ -219,21 +219,23 @@ export function Navbar() {
             <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
               <Link
                 to="/"
-                className={`transition-colors duration-200 ${
+                className={`transition-colors duration-200 flex items-center gap-1.5 ${
                   isActive("/") ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Home
+                <Home className="w-4 h-4" />
+                <span>Home</span>
               </Link>
               <Link
                 to="/search"
-                className={`transition-colors duration-200 ${
+                className={`transition-colors duration-200 flex items-center gap-1.5 ${
                   isActive("/search") && !location.search.includes("category=upcoming")
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Discover
+                <Compass className="w-4 h-4" />
+                <span>Discover</span>
               </Link>
               <Link
                 to="/search?category=upcoming"
@@ -243,7 +245,7 @@ export function Navbar() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <CalendarDays className="w-3.5 h-3.5 text-primary" />
+                <CalendarDays className="w-4 h-4" />
                 <span>Upcoming</span>
               </Link>
               <Link
@@ -252,19 +254,19 @@ export function Navbar() {
                   isActive("/history") ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <History className="w-4 h-4" /> History
+                <History className="w-4 h-4" />
+                <span>History</span>
               </Link>
               {user && (
-                <>
-                  <Link
-                    to="/watchlist"
-                    className={`transition-colors duration-200 flex items-center gap-1.5 ${
-                      isActive("/watchlist") ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <Heart className="w-4 h-4" /> Watchlist
-                  </Link>
-                </>
+                <Link
+                  to="/watchlist"
+                  className={`transition-colors duration-200 flex items-center gap-1.5 ${
+                    isActive("/watchlist") ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Heart className="w-4 h-4" />
+                  <span>Watchlist</span>
+                </Link>
               )}
             </nav>
 
@@ -361,38 +363,42 @@ export function Navbar() {
               <Link
                 to="/"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`px-3 py-2 rounded-lg text-sm transition-all ${
-                  isActive("/") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2.5 ${
+                  isActive("/") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
                 }`}
               >
-                Home
+                <Home className="w-4 h-4" />
+                <span>Home</span>
               </Link>
               <Link
                 to="/search"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`px-3 py-2 rounded-lg text-sm transition-all ${
-                  isActive("/search") && !location.search.includes("category=upcoming") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2.5 ${
+                  isActive("/search") && !location.search.includes("category=upcoming") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
                 }`}
               >
-                Discover
+                <Compass className="w-4 h-4" />
+                <span>Discover</span>
               </Link>
               <Link
                 to="/search?category=upcoming"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
+                className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2.5 ${
                   location.search.includes("category=upcoming") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
                 }`}
               >
-                <CalendarDays className="w-4 h-4 text-primary" /> Upcoming Releases
+                <CalendarDays className="w-4 h-4" />
+                <span>Upcoming Releases</span>
               </Link>
               <Link
                 to="/history"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
-                  isActive("/history") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2.5 ${
+                  isActive("/history") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
                 }`}
               >
-                <History className="w-4 h-4" /> History
+                <History className="w-4 h-4" />
+                <span>History</span>
               </Link>
               {/* Title Language Selector (Mobile) */}
               <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-card/60 border border-border/40">
@@ -402,13 +408,14 @@ export function Navbar() {
 
               {user ? (
                 <Link
-                    to="/watchlist"
+                  to="/watchlist"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
-                    isActive("/watchlist") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                  className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2.5 ${
+                    isActive("/watchlist") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
                   }`}
                 >
-                  <Heart className="w-4 h-4" /> Watchlist
+                  <Heart className="w-4 h-4" />
+                  <span>Watchlist</span>
                 </Link>
               ) : (
                 <div className="pt-2 flex flex-col gap-2">
