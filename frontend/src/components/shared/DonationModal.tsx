@@ -36,18 +36,18 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
 
         <div className="space-y-4 pt-2">
           {/* QR Code Container */}
-          <div className="relative mx-auto w-64 bg-white p-3 rounded-2xl shadow-xl border-4 border-primary/20 flex flex-col items-center">
+          <div className="relative mx-auto w-64 bg-white p-3.5 rounded-2xl shadow-xl border-4 border-primary/20 flex flex-col items-center">
             <img
               src="/donation-qr.jpg"
-              alt="MariBank InstaPay Donation QR Code - Andrei Dilag"
-              className="w-full h-auto object-contain rounded-lg"
+              alt="InstaPay Donation QR Code"
+              className="w-full aspect-square object-contain rounded-lg"
             />
-            <div className="mt-2 text-center">
-              <p className="text-[11px] font-bold text-gray-900 tracking-wide uppercase">
-                ANDREI DILAG
+            <div className="mt-2.5 text-center">
+              <p className="text-xs font-bold text-gray-900 tracking-wide uppercase">
+                InstaPay QR Code
               </p>
-              <p className="text-[10px] text-gray-600 font-medium">
-                MariBank / InstaPay (****1496)
+              <p className="text-[10px] text-gray-500 font-medium">
+                Scan with GCash, Maya, ShopeePay &amp; Any Bank
               </p>
             </div>
           </div>
@@ -110,3 +110,4 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
 }
 
 export default DonationModal;
+
