@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bg-kodama" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#E8F5E9" />
+      <stop offset="100%" stop-color="#C8E6C9" />
+    </radialGradient>
+    <radialGradient id="glow-kodama" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#E0F2F1" />
+    </radialGradient>
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="url(#bg-kodama)" stroke="#A5D6A7" stroke-width="3" />
+
+  <!-- Forest Spores / Fireflies -->
+  <circle cx="28" cy="30" r="2.5" fill="#FFF9C4" opacity="0.9" />
+  <circle cx="92" cy="40" r="3" fill="#FFF9C4" opacity="0.8" />
+  <circle cx="34" cy="85" r="2" fill="#E8F5E9" opacity="0.7" />
+  <circle cx="86" cy="82" r="2.5" fill="#FFF9C4" opacity="0.9" />
+
+  <!-- Small Slender Tree-Spirit Body -->
+  <ellipse cx="60" cy="86" rx="12" ry="16" fill="url(#glow-kodama)" />
+  <path d="M52 82 Q46 90 48 96" stroke="#CFD8DC" stroke-width="2.5" stroke-linecap="round" fill="none" />
+  <path d="M68 82 Q74 90 72 96" stroke="#CFD8DC" stroke-width="2.5" stroke-linecap="round" fill="none" />
+
+  <!-- Tilted Bulbous Bobble Head -->
+  <g transform="rotate(-12 60 48)">
+    <ellipse cx="60" cy="48" rx="24" ry="21" fill="url(#glow-kodama)" stroke="#B0BEC5" stroke-width="1.2" />
+    <!-- Three Hollow Dark Circles (Curious Eyes & Mouth) -->
+    <ellipse cx="50" cy="44" rx="4.5" ry="6" fill="#263238" />
+    <ellipse cx="70" cy="44" rx="4.5" ry="6" fill="#263238" />
+    <ellipse cx="60" cy="56" rx="3.5" ry="4.5" fill="#263238" />
+  </g>
+</svg>

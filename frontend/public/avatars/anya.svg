@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bg-anya" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#FCE4EC" />
+      <stop offset="100%" stop-color="#F8BBD0" />
+    </radialGradient>
+    <linearGradient id="hair-anya" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF80AB" />
+      <stop offset="100%" stop-color="#FF4081" />
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="url(#bg-anya)" stroke="#F48FB1" stroke-width="3" />
+
+  <!-- Eden Academy Uniform Collar -->
+  <path d="M42 88 L48 102 L72 102 L78 88 Z" fill="#212121" />
+  <path d="M48 88 L60 96 L72 88 Z" fill="#FFFFFF" />
+  <path d="M58 92 L62 92 L60 98 Z" fill="#FFD700" />
+
+  <!-- Chibi Head -->
+  <ellipse cx="60" cy="58" rx="26" ry="24" fill="#FFF3E0" />
+
+  <!-- Anya Signature Pink Hair -->
+  <path d="M34 56 
+           C28 32, 40 22, 60 22 
+           C80 22, 92 32, 86 56 
+           C90 74, 86 86, 84 88 
+           C82 78, 80 66, 78 62 
+           C72 62, 70 42, 60 42 
+           C50 42, 48 62, 42 62 
+           C40 66, 38 78, 36 88 
+           C34 86, 30 74, 34 56 Z" fill="url(#hair-anya)" />
+
+  <!-- Bangs -->
+  <path d="M42 46 Q50 56 56 46 Q62 56 70 44 Q76 54 80 46" stroke="url(#hair-anya)" stroke-width="4" stroke-linecap="round" fill="none" />
+
+  <!-- Iconic Black & Gold Hair Horn Cones -->
+  <polygon points="34,36 40,24 44,38" fill="#212121" stroke="#FFD700" stroke-width="2" />
+  <polygon points="86,36 80,24 76,38" fill="#212121" stroke="#FFD700" stroke-width="2" />
+
+  <!-- Big Green Anime Eyes with Sparkle -->
+  <ellipse cx="47" cy="58" rx="6.5" ry="8.5" fill="#FFFFFF" />
+  <ellipse cx="73" cy="58" rx="6.5" ry="8.5" fill="#FFFFFF" />
+  <ellipse cx="47" cy="58" rx="4.5" ry="6.5" fill="#00C853" />
+  <ellipse cx="73" cy="58" rx="4.5" ry="6.5" fill="#00C853" />
+  <circle cx="48.5" cy="56" r="2.2" fill="#FFFFFF" />
+  <circle cx="74.5" cy="56" r="2.2" fill="#FFFFFF" />
+  <circle cx="46" cy="61" r="1.2" fill="#FFFFFF" />
+  <circle cx="72" cy="61" r="1.2" fill="#FFFFFF" />
+
+  <!-- Smug / Cute Smile -->
+  <path d="M54 70 Q60 76 66 70" stroke="#D81B60" stroke-width="2" stroke-linecap="round" fill="none" />
+
+  <!-- Blushing Cheeks -->
+  <ellipse cx="38" cy="65" rx="4" ry="2.5" fill="#FF4081" opacity="0.6" />
+  <ellipse cx="82" cy="65" rx="4" ry="2.5" fill="#FF4081" opacity="0.6" />
+</svg>

@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bg-calcifer" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#FFF3E0" />
+      <stop offset="100%" stop-color="#FFCC80" />
+    </radialGradient>
+    <linearGradient id="flame-outer" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF3D00" />
+      <stop offset="60%" stop-color="#FF6E40" />
+      <stop offset="100%" stop-color="#FF9100" />
+    </linearGradient>
+    <linearGradient id="flame-inner" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFD600" />
+      <stop offset="100%" stop-color="#FFAB00" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <circle cx="60" cy="60" r="56" fill="url(#bg-calcifer)" stroke="#FFA726" stroke-width="3" />
+
+  <!-- Sparkles -->
+  <circle cx="28" cy="30" r="2" fill="#FF6D00" opacity="0.7" />
+  <circle cx="92" cy="34" r="2.5" fill="#FF9100" opacity="0.8" />
+  <circle cx="34" cy="85" r="1.5" fill="#FFAB00" opacity="0.6" />
+  <circle cx="88" cy="82" r="2" fill="#FF6D00" opacity="0.7" />
+
+  <!-- Outer Flame Body -->
+  <path d="M60 16 
+           C68 28, 76 22, 82 32 
+           C90 42, 98 56, 94 74 
+           C90 92, 74 100, 60 100 
+           C46 100, 30 92, 26 74 
+           C22 56, 30 42, 38 32 
+           C44 22, 52 28, 60 16 Z" fill="url(#flame-outer)" />
+
+  <!-- Inner Warm Glow -->
+  <path d="M60 36 
+           C66 44, 72 40, 76 48 
+           C82 56, 86 68, 82 82 
+           C78 94, 68 96, 60 96 
+           C52 96, 42 94, 38 82 
+           C34 68, 38 56, 44 48 
+           C48 40, 54 44, 60 36 Z" fill="url(#flame-inner)" />
+
+  <!-- Little Flame Arms -->
+  <path d="M30 68 Q22 66 24 60" stroke="#FF5722" stroke-width="3.5" stroke-linecap="round" fill="none" />
+  <path d="M90 68 Q98 66 96 60" stroke="#FF5722" stroke-width="3.5" stroke-linecap="round" fill="none" />
+
+  <!-- Big Kawaii Eyes -->
+  <circle cx="48" cy="62" r="7.5" fill="#FFFFFF" />
+  <circle cx="72" cy="62" r="7.5" fill="#FFFFFF" />
+  <circle cx="49" cy="62" r="4.5" fill="#212121" />
+  <circle cx="71" cy="62" r="4.5" fill="#212121" />
+  <circle cx="51" cy="60" r="1.8" fill="#FFFFFF" />
+  <circle cx="73" cy="60" r="1.8" fill="#FFFFFF" />
+
+  <!-- Cute Smiling Mouth with White Fang -->
+  <path d="M50 75 Q60 86 70 75 Z" fill="#D50000" />
+  <path d="M56 75 L60 78 L64 75 Z" fill="#FFFFFF" />
+
+  <!-- Rosy Cheeks -->
+  <ellipse cx="40" cy="71" rx="4" ry="2.5" fill="#FF1744" opacity="0.6" />
+  <ellipse cx="80" cy="71" rx="4" ry="2.5" fill="#FF1744" opacity="0.6" />
+</svg>

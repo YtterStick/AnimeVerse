@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bg-gojo" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#E1F5FE" />
+      <stop offset="100%" stop-color="#B3E5FC" />
+    </radialGradient>
+    <linearGradient id="hair-gojo" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#ECEFF1" />
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="url(#bg-gojo)" stroke="#81D4FA" stroke-width="3" />
+
+  <!-- Blue Curse Sparkles -->
+  <polygon points="26,30 28,24 30,30 36,32 30,34 28,40 26,34 20,32" fill="#00E5FF" />
+  <polygon points="94,76 95.5,71 97,76 102,77.5 97,79 95.5,84 94,79 89,77.5" fill="#2979FF" />
+
+  <!-- High Dark Collar -->
+  <path d="M42 86 L48 102 L72 102 L78 86 Z" fill="#1A237E" />
+  <path d="M44 86 C54 84, 66 84, 76 86 L74 94 C64 92, 54 92, 46 94 Z" fill="#283593" />
+
+  <!-- Chibi Head -->
+  <ellipse cx="60" cy="58" rx="23" ry="21" fill="#FFF3E0" />
+
+  <!-- Spiky Snow-White Hair -->
+  <g fill="url(#hair-gojo)">
+    <polygon points="32,46 22,34 38,36" />
+    <polygon points="34,36 30,20 46,26" />
+    <polygon points="44,24 48,12 58,22" />
+    <polygon points="56,20 62,10 70,22" />
+    <polygon points="68,22 78,14 78,28" />
+    <polygon points="76,28 92,24 82,38" />
+    <polygon points="80,38 98,40 84,48" />
+    <!-- Hair Base -->
+    <ellipse cx="60" cy="40" rx="26" ry="18" />
+  </g>
+
+  <!-- Sleek Black Blindfold -->
+  <path d="M34 50 Q60 46 86 50 L86 64 Q60 68 34 64 Z" fill="#121212" stroke="#212121" stroke-width="1.5" />
+  <path d="M36 54 Q60 51 84 54" stroke="#424242" stroke-width="1.5" stroke-linecap="round" fill="none" />
+
+  <!-- Confident Smirk -->
+  <path d="M54 72 Q62 76 66 70" stroke="#D81B60" stroke-width="2" stroke-linecap="round" fill="none" />
+
+  <!-- Cheeks -->
+  <ellipse cx="40" cy="68" rx="4" ry="2" fill="#FF8A80" opacity="0.6" />
+  <ellipse cx="80" cy="68" rx="4" ry="2" fill="#FF8A80" opacity="0.6" />
+</svg>

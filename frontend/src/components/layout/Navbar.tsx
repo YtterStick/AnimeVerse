@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, CalendarDays, Home, Compass } from "lucide-react";
+import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, CalendarDays, Home, Compass, User } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { TitleLanguageToggle } from "@/components/shared/TitleLanguageToggle";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
@@ -268,6 +268,15 @@ export function Navbar() {
                   <span>Watchlist</span>
                 </Link>
               )}
+              <Link
+                to="/profile"
+                className={`transition-colors duration-200 flex items-center gap-1.5 ${
+                  isActive("/profile") ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <User className="w-4 h-4" />
+                <span>Profile</span>
+              </Link>
             </nav>
 
             {/* Search Input Box (Desktop) */}
@@ -399,6 +408,16 @@ export function Navbar() {
               >
                 <History className="w-4 h-4" />
                 <span>History</span>
+              </Link>
+              <Link
+                to="/profile"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2.5 ${
+                  isActive("/profile") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                }`}
+              >
+                <User className="w-4 h-4" />
+                <span>Profile &amp; Avatar</span>
               </Link>
               {/* Title Language Selector (Mobile) */}
               <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-card/60 border border-border/40">

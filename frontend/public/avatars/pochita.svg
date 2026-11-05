@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bg-pochita" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#FFF3E0" />
+      <stop offset="100%" stop-color="#FFE0B2" />
+    </radialGradient>
+    <linearGradient id="body-pochita" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF6D00" />
+      <stop offset="100%" stop-color="#E65100" />
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="url(#bg-pochita)" stroke="#FFB74D" stroke-width="3" />
+
+  <!-- Black Back Handle -->
+  <path d="M48 32 C48 18, 72 18, 72 32" stroke="#212121" stroke-width="4.5" stroke-linecap="round" fill="none" />
+
+  <!-- Chubby Orange Body -->
+  <ellipse cx="60" cy="66" rx="34" ry="28" fill="url(#body-pochita)" />
+
+  <!-- Chainsaw Blade on Nose -->
+  <rect x="56" y="24" width="8" height="28" rx="2" fill="#B0BEC5" stroke="#78909C" stroke-width="1.5" />
+  <!-- Saw Teeth -->
+  <path d="M56 26 L52 28 L56 30 M56 34 L52 36 L56 38 M56 42 L52 44 L56 46" stroke="#546E7A" stroke-width="1.5" />
+  <path d="M64 26 L68 28 L64 30 M64 34 L68 36 L64 38 M64 42 L68 44 L64 46" stroke="#546E7A" stroke-width="1.5" />
+
+  <!-- Huge Puppy Eyes -->
+  <circle cx="44" cy="64" r="9" fill="#FFFFFF" />
+  <circle cx="76" cy="64" r="9" fill="#FFFFFF" />
+  <circle cx="45" cy="64" r="6" fill="#212121" />
+  <circle cx="75" cy="64" r="6" fill="#212121" />
+  <circle cx="48" cy="62" r="2.5" fill="#FFFFFF" />
+  <circle cx="78" cy="62" r="2.5" fill="#FFFFFF" />
+  <circle cx="43" cy="67" r="1.2" fill="#FFFFFF" />
+  <circle cx="73" cy="67" r="1.2" fill="#FFFFFF" />
+
+  <!-- Cute Tongue sticking out -->
+  <path d="M57 76 Q60 84 63 76 Z" fill="#FF4081" />
+
+  <!-- Little Stumpy Paws -->
+  <ellipse cx="42" cy="92" rx="6" ry="4" fill="#E65100" />
+  <ellipse cx="78" cy="92" rx="6" ry="4" fill="#E65100" />
+
+  <!-- Cheeks -->
+  <ellipse cx="34" cy="72" rx="4" ry="2.5" fill="#FF1744" opacity="0.5" />
+  <ellipse cx="86" cy="72" rx="4" ry="2.5" fill="#FF1744" opacity="0.5" />
+</svg>

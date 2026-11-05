@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bg-ponyo" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#E1F5FE" />
+      <stop offset="100%" stop-color="#81D4FA" />
+    </radialGradient>
+    <linearGradient id="hair-ponyo" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF5252" />
+      <stop offset="100%" stop-color="#D50000" />
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="url(#bg-ponyo)" stroke="#4FC3F7" stroke-width="3" />
+
+  <!-- Water Bubbles -->
+  <circle cx="28" cy="34" r="5" fill="#FFFFFF" opacity="0.6" />
+  <circle cx="30" cy="32" r="1.5" fill="#FFFFFF" />
+  <circle cx="92" cy="40" r="4" fill="#FFFFFF" opacity="0.6" />
+  <circle cx="86" cy="80" r="6" fill="#FFFFFF" opacity="0.5" />
+
+  <!-- Cute Chubby Body & Red Dress -->
+  <ellipse cx="60" cy="86" rx="22" ry="16" fill="#FF5252" />
+  <ellipse cx="60" cy="84" rx="14" ry="10" fill="#FFFFFF" />
+
+  <!-- Tiny Fin Hands -->
+  <ellipse cx="38" cy="82" rx="4.5" ry="3" fill="#FFCDD2" transform="rotate(-20 38 82)" />
+  <ellipse cx="82" cy="82" rx="4.5" ry="3" fill="#FFCDD2" transform="rotate(20 82 82)" />
+
+  <!-- Round Cute Head -->
+  <ellipse cx="60" cy="56" rx="22" ry="20" fill="#FFEBEE" />
+
+  <!-- Ponyo Fluffy Red Hair -->
+  <path d="M38 52 
+           C32 36, 44 26, 60 26 
+           C76 26, 88 36, 82 52 
+           C86 52, 88 44, 84 38 
+           C80 24, 66 22, 60 22 
+           C48 22, 36 26, 34 40 
+           C32 46, 36 52, 38 52 Z" fill="url(#hair-ponyo)" />
+  <!-- Cute Hair Tufts -->
+  <path d="M42 42 Q48 34 54 44" fill="url(#hair-ponyo)" />
+  <path d="M52 40 Q60 32 68 42" fill="url(#hair-ponyo)" />
+
+  <!-- Big Innocent Anime Eyes -->
+  <ellipse cx="48" cy="56" rx="6" ry="8" fill="#FFFFFF" />
+  <ellipse cx="72" cy="56" rx="6" ry="8" fill="#FFFFFF" />
+  <circle cx="49" cy="56" r="4.5" fill="#3E2723" />
+  <circle cx="71" cy="56" r="4.5" fill="#3E2723" />
+  <circle cx="51" cy="54" r="1.8" fill="#FFFFFF" />
+  <circle cx="73" cy="54" r="1.8" fill="#FFFFFF" />
+
+  <!-- Tiny Open Happy Mouth -->
+  <path d="M56 66 Q60 72 64 66 Z" fill="#E91E63" />
+
+  <!-- Rosy Cute Cheeks -->
+  <ellipse cx="40" cy="62" rx="4" ry="2.5" fill="#FF4081" opacity="0.6" />
+  <ellipse cx="80" cy="62" rx="4" ry="2.5" fill="#FF4081" opacity="0.6" />
+</svg>

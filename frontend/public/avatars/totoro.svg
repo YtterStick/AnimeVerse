@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bg-totoro" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#E8F5E9" />
+      <stop offset="100%" stop-color="#A5D6A7" />
+    </radialGradient>
+    <linearGradient id="body-totoro" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8D99AE" />
+      <stop offset="100%" stop-color="#6C757D" />
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="60" cy="60" r="56" fill="url(#bg-totoro)" stroke="#81C784" stroke-width="3" />
+  
+  <!-- Ears -->
+  <path d="M42 42 C38 20, 44 14, 47 18 C50 22, 48 36, 46 44 Z" fill="url(#body-totoro)" />
+  <path d="M78 42 C82 20, 76 14, 73 18 C70 22, 72 36, 74 44 Z" fill="url(#body-totoro)" />
+  
+  <!-- Leaf on head -->
+  <path d="M56 28 C50 18, 68 16, 64 26 C62 30, 58 30, 56 28 Z" fill="#4CAF50" />
+  <path d="M59 28 L63 20" stroke="#2E7D32" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Body -->
+  <ellipse cx="60" cy="74" rx="42" ry="38" fill="url(#body-totoro)" />
+  <!-- White Belly -->
+  <ellipse cx="60" cy="78" rx="28" ry="24" fill="#FDFBF7" />
+  <!-- Belly Marks -->
+  <path d="M52 66 L55 69 L58 66" stroke="#6C757D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <path d="M62 66 L65 69 L68 66" stroke="#6C757D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <path d="M47 74 L50 77 L53 74" stroke="#6C757D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <path d="M57 74 L60 77 L63 74" stroke="#6C757D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <path d="M67 74 L70 77 L73 74" stroke="#6C757D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+
+  <!-- Eyes -->
+  <circle cx="45" cy="46" r="6" fill="#FFFFFF" />
+  <circle cx="75" cy="46" r="6" fill="#FFFFFF" />
+  <circle cx="46" cy="46" r="3" fill="#2B2D42" />
+  <circle cx="74" cy="46" r="3" fill="#2B2D42" />
+  <circle cx="47" cy="45" r="1.2" fill="#FFFFFF" />
+  <circle cx="75" cy="45" r="1.2" fill="#FFFFFF" />
+
+  <!-- Nose & Mouth -->
+  <ellipse cx="60" cy="48" rx="3.5" ry="2" fill="#2B2D42" />
+  <path d="M54 52 Q60 55 66 52" stroke="#2B2D42" stroke-width="1.5" stroke-linecap="round" fill="none" />
+
+  <!-- Cute Whiskers -->
+  <line x1="26" y1="48" x2="38" y2="49" stroke="#495057" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="24" y1="53" x2="37" y2="52" stroke="#495057" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="94" y1="48" x2="82" y2="49" stroke="#495057" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="96" y1="53" x2="83" y2="52" stroke="#495057" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Soft Pink Cheeks -->
+  <ellipse cx="38" cy="54" rx="4.5" ry="2.5" fill="#FF8A80" opacity="0.6" />
+  <ellipse cx="82" cy="54" rx="4.5" ry="2.5" fill="#FF8A80" opacity="0.6" />
+</svg>

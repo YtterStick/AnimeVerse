@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="bg-noface" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E8EAF6" />
+      <stop offset="100%" stop-color="#C5CAE9" />
+    </linearGradient>
+    <linearGradient id="cowl-noface" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#282828" />
+      <stop offset="100%" stop-color="#121212" />
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="url(#bg-noface)" stroke="#9FA8DA" stroke-width="3" />
+
+  <!-- Cherry blossom petals floating -->
+  <path d="M24 30 C20 26, 26 22, 28 26 C30 22, 36 26, 32 30 C36 34, 30 38, 28 34 C26 38, 20 34, 24 30 Z" fill="#F8BBD0" opacity="0.8" />
+  <circle cx="94" cy="34" r="2.5" fill="#F48FB1" opacity="0.7" />
+  <circle cx="88" cy="86" r="3" fill="#F8BBD0" opacity="0.8" />
+
+  <!-- Ghostly Black Cloak -->
+  <path d="M60 22 
+           C40 22, 32 40, 30 68 
+           C28 88, 32 102, 60 102 
+           C88 102, 92 88, 90 68 
+           C88 40, 80 22, 60 22 Z" fill="url(#cowl-noface)" />
+
+  <!-- White Ceramic Mask -->
+  <ellipse cx="60" cy="58" rx="19" ry="26" fill="#FDFEFE" stroke="#E0E0E0" stroke-width="1" />
+
+  <!-- Purple Markings Above Eyes -->
+  <path d="M50 42 L54 42 L52 48 Z" fill="#7E57C2" />
+  <path d="M70 42 L66 42 L68 48 Z" fill="#7E57C2" />
+
+  <!-- Slanted Calm Eyes -->
+  <ellipse cx="51" cy="53" rx="4" ry="2" fill="#212121" />
+  <ellipse cx="69" cy="53" rx="4" ry="2" fill="#212121" />
+
+  <!-- Purple Markings Below Eyes -->
+  <path d="M50 58 L54 58 L52 66 Z" fill="#7E57C2" />
+  <path d="M70 58 L66 58 L68 66 Z" fill="#7E57C2" />
+
+  <!-- Little Calm Mouth -->
+  <ellipse cx="60" cy="73" rx="3.5" ry="1.8" fill="#37474F" />
+
+  <!-- Tiny Cute Hands holding a flower -->
+  <ellipse cx="52" cy="88" rx="3" ry="2" fill="#424242" />
+  <ellipse cx="68" cy="88" rx="3" ry="2" fill="#424242" />
+  <!-- Small Flower -->
+  <circle cx="60" cy="86" r="4" fill="#FF80AB" />
+  <circle cx="60" cy="86" r="1.5" fill="#FFF59D" />
+</svg>

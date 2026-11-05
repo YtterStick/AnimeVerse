@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bg-pika" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#FFFDE7" />
+      <stop offset="100%" stop-color="#FFF59D" />
+    </radialGradient>
+    <linearGradient id="body-pika" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFEE58" />
+      <stop offset="100%" stop-color="#FDD835" />
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="url(#bg-pika)" stroke="#FBC02D" stroke-width="3" />
+
+  <!-- Long Yellow Ears with Black Tips -->
+  <path d="M38 42 L22 14 Q26 12 36 24 L46 38 Z" fill="url(#body-pika)" />
+  <path d="M22 14 L28 12 L33 19 L26 21 Z" fill="#212121" />
+  <path d="M82 42 L98 14 Q94 12 84 24 L74 38 Z" fill="url(#body-pika)" />
+  <path d="M98 14 L92 12 L87 19 L94 21 Z" fill="#212121" />
+
+  <!-- Chubby Round Face -->
+  <ellipse cx="60" cy="66" rx="30" ry="26" fill="url(#body-pika)" />
+
+  <!-- Eyes -->
+  <circle cx="46" cy="60" r="6" fill="#212121" />
+  <circle cx="74" cy="60" r="6" fill="#212121" />
+  <circle cx="48" cy="58" r="2.2" fill="#FFFFFF" />
+  <circle cx="76" cy="58" r="2.2" fill="#FFFFFF" />
+
+  <!-- Tiny Nose -->
+  <polygon points="60,65 58,63 62,63" fill="#212121" />
+
+  <!-- Iconic Happy W-Mouth -->
+  <path d="M52 69 Q56 73 60 70 Q64 73 68 69" stroke="#212121" stroke-width="2" stroke-linecap="round" fill="none" />
+  <path d="M56 71 Q60 78 64 71 Z" fill="#E53935" />
+
+  <!-- Big Red Cheeks -->
+  <circle cx="36" cy="70" r="7" fill="#FF1744" />
+  <circle cx="84" cy="70" r="7" fill="#FF1744" />
+</svg>

@@ -16,6 +16,7 @@ const WatchlistPage = lazy(() => import("@/pages/WatchlistPage"));
 const HistoryPage = lazy(() => import("@/pages/HistoryPage"));
 const TermsPage = lazy(() => import("@/pages/TermsPage"));
 const PrivacyPage = lazy(() => import("@/pages/PrivacyPage"));
+const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const AuthCallbackPage = lazy(() => import("@/pages/AuthCallbackPage"));
 
 // Minimal loading fallback – matches the dark theme
@@ -41,6 +42,7 @@ export function App() {
           <Route path="history" element={<Suspense fallback={<PageLoader />}><HistoryPage /></Suspense>} />
           <Route path="terms" element={<Suspense fallback={<PageLoader />}><TermsPage /></Suspense>} />
           <Route path="privacy" element={<Suspense fallback={<PageLoader />}><PrivacyPage /></Suspense>} />
+          <Route path="profile" element={<Suspense fallback={<PageLoader />}><ProfilePage /></Suspense>} />
           <Route path="auth/callback" element={<Suspense fallback={<PageLoader />}><AuthCallbackPage /></Suspense>} />
         </Route>
       </Routes>
