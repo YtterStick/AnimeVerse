@@ -18,29 +18,39 @@ export function Pagination({
   // If only 1 page and no next page, don't show pagination
   if (totalPages <= 1 && !hasNextPage) return null;
 
-  const maxPages = Math.max(totalPages, hasNextPage ? currentPage + 1 : currentPage);
+  const maxPages = hasNextPage
+    ? Math.max(totalPages, currentPage + 1)
+    : Math.max(totalPages, currentPage);
 
   const getPageNumbers = () => {
     const pages: (number | "...")[] = [];
     if (maxPages <= 7) {
       for (let i = 1; i <= maxPages; i++) pages.push(i);
     } else {
+      // Prevent phantom jumps to distant unverified pages:
+      const visibleMax =
+        hasNextPage && totalPages > currentPage + 5
+          ? currentPage + 2
+          : maxPages;
+
       pages.push(1);
       if (currentPage > 3) {
         pages.push("...");
       }
 
       const start = Math.max(2, currentPage - 1);
-      const end = Math.min(maxPages - 1, currentPage + 1);
+      const end = Math.min(visibleMax - 1, currentPage + 1);
 
       for (let i = start; i <= end; i++) {
         pages.push(i);
       }
 
-      if (currentPage < maxPages - 2) {
+      if (currentPage < visibleMax - 2) {
         pages.push("...");
       }
-      pages.push(maxPages);
+      if (visibleMax > 1 && !pages.includes(visibleMax)) {
+        pages.push(visibleMax);
+      }
     }
     return pages;
   };
@@ -56,8 +66,16 @@ export function Pagination({
       className={`flex flex-col sm:flex-row items-center justify-between gap-4 py-8 border-t border-border/30 w-full ${className}`}
     >
       <div className="text-xs text-muted-foreground order-2 sm:order-1">
-        Showing Page <span className="font-semibold text-white">{currentPage}</span> of{" "}
-        <span className="font-semibold text-white">{maxPages}</span>
+        Showing Page <span className="font-semibold text-white">{currentPage}</span>
+        {maxPages > 1 && (
+          <>
+            {" "}of{" "}
+            <span className="font-semibold text-white">
+              {maxPages}
+              {hasNextPage ? "+" : ""}
+            </span>
+          </>
+        )}
       </div>
 
       <div className="flex items-center gap-1.5 order-1 sm:order-2">

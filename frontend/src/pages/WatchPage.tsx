@@ -638,8 +638,8 @@ export function WatchPage() {
                   {activeServer?.category === "DUB"
                     ? "Playing English Dubbed audio."
                     : "Playing Japanese audio with English subtitles."}
-                </p>
-              </div>
+                  </p>
+                </div>
               <div className="flex flex-wrap items-center gap-2.5">
                 {firstSubIndex !== -1 && (
                   <Button

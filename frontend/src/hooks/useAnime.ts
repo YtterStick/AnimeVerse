@@ -123,6 +123,7 @@ export function useAnimeSearch(
       let status = "";
       if (category === "top-rated") orderBy = "score";
       if (category === "trending") orderBy = "trending";
+      if (category === "popular") orderBy = "popularity";
       if (category === "top-airing") status = "airing";
 
       return animeApi.search(query, page, genres, orderBy, status);

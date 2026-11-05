@@ -121,7 +121,8 @@ export function SearchPage() {
   const hasFilters =
     urlQuery.trim().length > 0 ||
     selectedGenres.length > 0 ||
-    Boolean(urlCategory);
+    Boolean(urlCategory) ||
+    urlPage > 1;
 
   // Paginated Search & Category Hook
   const {
@@ -192,7 +193,7 @@ export function SearchPage() {
   };
 
   const handlePageChange = (newPage: number) => {
-    updateSearch(searchTerm, selectedGenres, newPage, urlCategory);
+    updateSearch(urlQuery, selectedGenres, newPage, urlCategory);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 

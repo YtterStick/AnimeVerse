@@ -322,14 +322,15 @@ async function executeJikanRequest<T>(
     return cachedData;
   }
 
-  // If Jikan recently timed out or was rate limited, go straight to fallback to keep UI instant
-  if (Date.now() < jikanDownUntil && fallbackFn) {
+  // When an AniList fallback is provided, use it as primary to ensure instant ~250-400ms response
+  // and completely avoid Jikan 4000ms timeouts and 429 rate limits on Render cloud servers
+  if (fallbackFn) {
     try {
       const fbData = await fallbackFn();
       cache.set(cacheKey, fbData);
       return fbData;
     } catch (fbErr: any) {
-      console.warn(`[MetadataService] Instant fallback error:`, fbErr.message);
+      console.warn(`[MetadataService] Primary AniList fetch error for ${endpoint}, falling back to Jikan:`, fbErr.message);
     }
   }
 
@@ -462,17 +463,33 @@ async function fetchAniListMediaList(
   });
 
   const pageInfo = data?.Page?.pageInfo || {};
-  const mediaList = (data?.Page?.media || []).filter((m: any) => m.idMal);
+  const rawMedia = data?.Page?.media || [];
+  const mediaList = rawMedia.filter((m: any) => m && (m.idMal || m.id));
+
+  const itemsCount = mediaList.length;
+  // Next page is definitively present only when a full page of items was returned and AniList confirms hasNextPage
+  const hasNextPage = itemsCount === perPage && Boolean(pageInfo.hasNextPage);
+
+  let lastVisiblePage = page;
+  if (!hasNextPage) {
+    lastVisiblePage = Math.max(1, page);
+  } else if (pageInfo.total && pageInfo.total > 0 && pageInfo.total < 5000) {
+    // If exact total is known and under AniList's 5000 estimation ceiling
+    lastVisiblePage = Math.max(page, Math.ceil(pageInfo.total / perPage));
+  } else {
+    // For large collections or uncapped queries, expose page + 1 dynamically
+    lastVisiblePage = page + 1;
+  }
 
   return {
     data: mediaList.map(mapAniListMediaToJikan),
     pagination: {
-      last_visible_page: pageInfo.lastPage || 1,
-      has_next_page: Boolean(pageInfo.hasNextPage),
+      last_visible_page: lastVisiblePage,
+      has_next_page: hasNextPage,
       current_page: pageInfo.currentPage || page,
       items: {
-        count: mediaList.length,
-        total: pageInfo.total || mediaList.length,
+        count: itemsCount,
+        total: pageInfo.total && pageInfo.total < 5000 ? pageInfo.total : undefined,
         per_page: pageInfo.perPage || perPage,
       },
     },
