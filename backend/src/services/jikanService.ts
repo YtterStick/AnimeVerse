@@ -859,7 +859,7 @@ export const jikanService = {
 
   // Get all seasons and franchise entries for an anime, ordered chronologically
   getAnimeSeasons: async (id: number) => {
-    const cacheKey = `seasons:${id}`;
+    const cacheKey = `seasons:v3:${id}`;
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
@@ -917,13 +917,15 @@ export const jikanService = {
             const relNode = edge.node;
             if (!relNode || relNode.type !== "ANIME" || !relNode.idMal) continue;
 
+            // Immediately register related node so prequels, sequels, movies & spin-offs are guaranteed present
+            if (!mediaMap.has(relNode.idMal)) {
+              mediaMap.set(relNode.idMal, relNode);
+            }
+
+            // Follow PREQUEL and SEQUEL links to discover any further timeline chain
             if (["PREQUEL", "SEQUEL"].includes(edge.relationType)) {
-              if (!mediaMap.has(relNode.idMal) && !queue.includes(relNode.idMal)) {
+              if (!queue.includes(relNode.idMal)) {
                 queue.push(relNode.idMal);
-              }
-            } else if (["ALTERNATIVE", "SIDE_STORY", "SUMMARY"].includes(edge.relationType)) {
-              if (currentId === id && !mediaMap.has(relNode.idMal)) {
-                mediaMap.set(relNode.idMal, relNode);
               }
             }
           }
@@ -979,17 +981,19 @@ export const jikanService = {
         }
       }
 
-      const rawList = Array.from(mediaMap.values()).map((m) => ({
-        mal_id: m.idMal,
-        title: m.title?.romaji || m.title?.english || "Unknown Title",
-        title_english: m.title?.english || null,
-        title_japanese: m.title?.native || null,
-        image: m.coverImage?.large || m.coverImage?.medium || null,
-        year: m.seasonYear || m.startDate?.year || null,
-        format: m.format || "TV",
-        episodes: m.episodes || null,
-        status: m.status || null,
-      }));
+      const rawList = Array.from(mediaMap.values())
+        .filter((m) => m && m.format !== "MUSIC")
+        .map((m) => ({
+          mal_id: m.idMal,
+          title: m.title?.romaji || m.title?.english || "Unknown Title",
+          title_english: m.title?.english || null,
+          title_japanese: m.title?.native || null,
+          image: m.coverImage?.large || m.coverImage?.medium || null,
+          year: m.seasonYear || m.startDate?.year || null,
+          format: m.format || "TV",
+          episodes: m.episodes || null,
+          status: m.status || null,
+        }));
 
       rawList.sort((a, b) => {
         const yA = a.year || 0;
@@ -1004,41 +1008,62 @@ export const jikanService = {
         const checkTitle = (item.title_english || item.title || "").trim();
         const fmt = (item.format || "TV").toUpperCase();
 
-        const sMatch = checkTitle.match(/Seasons*(d+)/i) || checkTitle.match(/(d+)(?:nd|rd|th|st)s*Season/i);
-        const pMatch = checkTitle.match(/Parts*(d+)/i);
-        const finalMatch = /Finals*Season/i.test(checkTitle);
+        const isSpinOff = /squishy|petit|chibi|gekiju/i.test(checkTitle);
+        const sMatch = checkTitle.match(/Season\s*(\d+)/i) || checkTitle.match(/(\d+)(?:nd|rd|th|st)\s*Season/i);
+        const pMatch = checkTitle.match(/Part\s*(\d+)/i);
+        const finalMatch = /Final\s*Season/i.test(checkTitle);
 
         let label = "";
+        let priority = 1; // 1: Main Season, 2: Movie, 3: Special/OVA, 4: Spin-off
         let seasonNum: number | null = null;
 
-        if (fmt === "MOVIE") {
+        if (isSpinOff) {
+          label = "Spin-Off";
+          priority = 4;
+        } else if (fmt === "MOVIE") {
           label = "Movie";
+          priority = 2;
         } else if (fmt === "OVA" || fmt === "SPECIAL") {
-          label = fmt;
+          label = fmt === "OVA" ? "OVA" : "Special";
+          priority = 3;
         } else if (finalMatch) {
           label = pMatch ? `Final Season Part ${pMatch[1]}` : "Final Season";
+          priority = 1;
           seasonNum = 4;
         } else if (sMatch) {
           label = pMatch ? `Season ${sMatch[1]} Part ${pMatch[1]}` : `Season ${sMatch[1]}`;
+          priority = 1;
           seasonNum = parseInt(sMatch[1], 10);
         } else if (fmt === "TV" || fmt === "ONA") {
           tvCount++;
           label = `Season ${tvCount}`;
+          priority = 1;
           seasonNum = tvCount;
         } else {
           label = "Related";
+          priority = 3;
         }
 
         return {
           ...item,
           season_label: label,
           season_number: seasonNum,
+          priority,
           is_current: isCurrent,
         };
       });
 
+      // Priority sort: Main Seasons (Season 1, Season 2...) first, then Movies, then Specials/Spin-offs
+      formatted.sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        const yA = a.year || 0;
+        const yB = b.year || 0;
+        if (yA !== yB) return yA - yB;
+        return a.mal_id - b.mal_id;
+      });
+
       const result = { data: formatted };
-      cache.set(cacheKey, result, 86400); // Cache 24 hours
+      cache.set(cacheKey, result, 3600); // Cache 1 hour
       return result;
     } catch (err: any) {
       console.warn(`[jikanService] getAnimeSeasons for ${id} failed:`, err.message);

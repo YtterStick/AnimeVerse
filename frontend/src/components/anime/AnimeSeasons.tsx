@@ -121,6 +121,9 @@ export function AnimeSeasons({
             ))
           : seasons?.map((season: AnimeSeason) => {
               const isCurrent = season.is_current || season.mal_id === currentAnimeId;
+              const isUnreleased =
+                season.status === "NOT_YET_RELEASED" ||
+                (!season.episodes && season.year && season.year >= new Date().getFullYear());
               const title =
                 language === "en"
                   ? season.title_english || season.title
@@ -129,6 +132,8 @@ export function AnimeSeasons({
                 mode === "watch"
                   ? isCurrent
                     ? undefined
+                    : isUnreleased
+                    ? `/anime/${season.mal_id}`
                     : `/watch/${season.mal_id}/1`
                   : `/anime/${season.mal_id}`;
 
@@ -210,6 +215,11 @@ export function AnimeSeasons({
                           <Check className="w-3.5 h-3.5" />
                           {mode === "watch" ? "Now Watching" : "Viewing"}
                         </span>
+                      ) : isUnreleased ? (
+                        <span className="text-[10px] font-bold text-amber-300 group-hover:text-amber-200 flex items-center gap-0.5 transition-colors">
+                          Upcoming Details
+                          <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                        </span>
                       ) : (
                         <span className="text-[10px] font-bold text-muted-foreground group-hover:text-primary flex items-center gap-0.5 transition-colors">
                           {mode === "watch" ? "Play Season" : "View"}
@@ -242,3 +252,4 @@ export function AnimeSeasons({
 }
 
 export default AnimeSeasons;
+
