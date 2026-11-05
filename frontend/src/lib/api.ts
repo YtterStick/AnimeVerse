@@ -13,7 +13,8 @@ const API_BASE = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
 
 async function fetchApi<T>(
   endpoint: string,
-  options?: RequestInit & { timeoutMs?: number }
+  options?: RequestInit & { timeoutMs?: number },
+  attempt = 1
 ): Promise<T> {
   const timeoutMs = options?.timeoutMs;
   const controller = timeoutMs ? new AbortController() : undefined;
@@ -32,6 +33,18 @@ async function fetchApi<T>(
 
   if (timeoutId) {
     window.clearTimeout(timeoutId);
+  }
+
+  // Transparently retry idempotent GETs when the backend/upstream is briefly busy
+  const isGet = !options?.method || options.method.toUpperCase() === "GET";
+  const MAX_ATTEMPTS = 3;
+  if (isGet && [429, 502, 503].includes(res.status) && attempt < MAX_ATTEMPTS) {
+    const retryAfter = parseInt(res.headers.get("Retry-After") || "", 10);
+    const delayMs = Number.isFinite(retryAfter)
+      ? Math.min(retryAfter * 1000, 5000)
+      : 1500 * attempt;
+    await new Promise((r) => setTimeout(r, delayMs));
+    return fetchApi<T>(endpoint, options, attempt + 1);
   }
 
   if (!res.ok) {

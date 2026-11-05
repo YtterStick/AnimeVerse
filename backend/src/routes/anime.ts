@@ -117,8 +117,12 @@ router.get("/:id", async (req: Request, res: Response, next: NextFunction) => {
     }
     const data = await jikanService.getAnimeDetails(id);
     res.json(data);
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.warn(`[AnimeRoute] Details for ${req.params.id} failed:`, error.message);
+    res.setHeader("Retry-After", "3");
+    res.status(503).json({
+      message: "Anime data source is temporarily busy. Please try again in a few seconds.",
+    });
   }
 });
 

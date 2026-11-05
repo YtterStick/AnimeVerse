@@ -296,19 +296,66 @@ function normalizeJikanPayload<T>(raw: T): T {
   return anyRaw as T;
 }
 
+// Long-lived "last known good" cache (24h). Served when every upstream fails so users
+// never see raw network errors during short AniList/Jikan hiccups.
+const staleCache = new NodeCache({ stdTTL: 86_400, checkperiod: 600, maxKeys: 5000 });
+
+// De-duplicate identical concurrent requests (rapid clicks / reloads hit upstream only once)
+const inFlight = new Map<string, Promise<any>>();
+
+// When AniList returns 429, pause all AniList calls until this timestamp
+let aniListCooldownUntil = 0;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export class UpstreamUnavailableError extends Error {
+  status = 503;
+  constructor() {
+    super("Anime data source is temporarily busy. Please try again in a few seconds.");
+  }
+}
+
 async function queryAniList(query: string, variables: Record<string, any>): Promise<any> {
-  const response = await axios.post(
-    ANILIST_GRAPHQL_URL,
-    { query, variables },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      timeout: 7000,
+  const MAX_ATTEMPTS = 3;
+  let lastErr: any;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const wait = aniListCooldownUntil - Date.now();
+    if (wait > 0) await sleep(Math.min(wait, 4000));
+
+    try {
+      const response = await axios.post(
+        ANILIST_GRAPHQL_URL,
+        { query, variables },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          timeout: 7000,
+        }
+      );
+      return response.data?.data;
+    } catch (err: any) {
+      lastErr = err;
+      const status = err.response?.status;
+      if (status === 429) {
+        const retryAfter = parseInt(err.response?.headers?.["retry-after"] || "2", 10);
+        const backoffMs = Math.min(Math.max(retryAfter, 1) * 1000, 4000);
+        aniListCooldownUntil = Date.now() + backoffMs;
+        console.warn(`[AniList] 429 rate limited, retry ${attempt}/${MAX_ATTEMPTS} in ${backoffMs}ms`);
+        continue;
+      }
+      const transient =
+        !err.response || status >= 500 || err.code === "ECONNABORTED" || err.code === "ETIMEDOUT";
+      if (transient && attempt < MAX_ATTEMPTS) {
+        await sleep(400 * attempt);
+        continue;
+      }
+      throw err;
     }
-  );
-  return response.data?.data;
+  }
+  throw lastErr;
 }
 
 async function executeJikanRequest<T>(
@@ -322,52 +369,61 @@ async function executeJikanRequest<T>(
     return cachedData;
   }
 
-  // When an AniList fallback is provided, use it as primary to ensure instant ~250-400ms response
-  // and completely avoid Jikan 4000ms timeouts and 429 rate limits on Render cloud servers
-  if (fallbackFn) {
-    try {
-      const fbData = await fallbackFn();
-      cache.set(cacheKey, fbData);
-      return fbData;
-    } catch (fbErr: any) {
-      console.warn(`[MetadataService] Primary AniList fetch error for ${endpoint}, falling back to Jikan:`, fbErr.message);
-    }
-  }
+  const pending = inFlight.get(cacheKey);
+  if (pending) return pending as Promise<T>;
 
-  try {
-    const data = await jikanQueue.enqueue(async () => {
-      const doubleCheck = cache.get<T>(cacheKey);
-      if (doubleCheck) return doubleCheck;
+  const task = (async (): Promise<T> => {
+    const store = (data: T) => {
+      cache.set(cacheKey, data);
+      staleCache.set(cacheKey, data);
+      return data;
+    };
 
-      const response = await axios.get(`${JIKAN_BASE_URL}${endpoint}`, {
-        params,
-        timeout: 4000,
-      });
-      return normalizeJikanPayload(response.data as T);
-    });
-
-    cache.set(cacheKey, data);
-    return data;
-  } catch (error: any) {
-    const isRateLimited = error.response?.status === 429;
-    const isTimeout = error.code === "ETIMEDOUT" || error.code === "ECONNABORTED";
-    const isServerError = !error.response || error.response?.status >= 500;
-
-    if (isRateLimited || isTimeout || isServerError) {
-      // Mark Jikan as down/rate-limited for 5 minutes so all queries use instant AniList fallback
-      jikanDownUntil = Date.now() + 300_000;
-    }
+    // 1) AniList primary (fast, reachable from Render)
     if (fallbackFn) {
       try {
-        console.warn(`[MetadataService] Jikan returned ${error.response?.status || error.code} on ${endpoint}, using AniList fallback`);
-        const fbData = await fallbackFn();
-        cache.set(cacheKey, fbData);
-        return fbData;
+        return store(await fallbackFn());
       } catch (fbErr: any) {
-        console.error(`[MetadataService] AniList fallback also failed:`, fbErr.message);
+        console.warn(`[MetadataService] AniList failed for ${endpoint}:`, fbErr.message);
       }
     }
-    throw error;
+
+    // 2) Jikan secondary — skipped while it is known to be unreachable from this host
+    if (Date.now() >= jikanDownUntil) {
+      try {
+        const data = await jikanQueue.enqueue(async () => {
+          const response = await axios.get(`${JIKAN_BASE_URL}${endpoint}`, {
+            params,
+            timeout: 4000,
+          });
+          return normalizeJikanPayload(response.data as T);
+        });
+        return store(data);
+      } catch (error: any) {
+        const status = error.response?.status;
+        if (!error.response || status === 429 || status >= 500) {
+          // Mark Jikan as down for 5 minutes so we don't wait on it again
+          jikanDownUntil = Date.now() + 300_000;
+        }
+        console.warn(`[MetadataService] Jikan failed for ${endpoint}:`, error.code || status);
+      }
+    }
+
+    // 3) Last known good data
+    const stale = staleCache.get<T>(cacheKey);
+    if (stale) {
+      console.warn(`[MetadataService] Serving stale cache for ${endpoint}`);
+      return stale;
+    }
+
+    throw new UpstreamUnavailableError();
+  })();
+
+  inFlight.set(cacheKey, task);
+  try {
+    return await task;
+  } finally {
+    inFlight.delete(cacheKey);
   }
 }
 
@@ -797,7 +853,7 @@ export const jikanService = {
         // Parse titles from streamingEpisodes if available
         const titleMap = new Map<number, string>();
         for (const se of media.streamingEpisodes || []) {
-          const m = String(se.title || "").match(/Episode\s+(\d+)\s*[-–:]?\s*(.*)/i);
+          const m = String(se.title || "").match(/Episode\s+(\d+)\s*[-â€“:]?\s*(.*)/i);
           if (m) {
             const epNum = parseInt(m[1], 10);
             const epTitle = m[2]?.trim() || `Episode ${epNum}`;
