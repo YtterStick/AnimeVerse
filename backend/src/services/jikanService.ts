@@ -651,6 +651,95 @@ async function fetchAniListSchedule(day: string) {
   };
 }
 
+function formatAndSortSeasons(rawItems: any[], currentId: number): any[] {
+  const filtered = (rawItems || []).filter((m) => m && (m.format || "").toUpperCase() !== "MUSIC");
+
+  // Initial chronological sort by release year and mal_id
+  filtered.sort((a, b) => {
+    const yA = a.year || 0;
+    const yB = b.year || 0;
+    if (yA !== yB) return yA - yB;
+    return (a.mal_id || 0) - (b.mal_id || 0);
+  });
+
+  let tvCount = 0;
+  const formatted = filtered.map((item) => {
+    const isCurrent = Number(item.mal_id) === Number(currentId);
+    const checkTitle = (item.title_english || item.title || "").trim();
+    const fmt = (item.format || "TV").toUpperCase();
+
+    const isSpinOff = /squishy|petit|chibi|gekiju/i.test(checkTitle);
+    const sMatch = checkTitle.match(/Season\s*(\d+)/i) || checkTitle.match(/(\d+)(?:nd|rd|th|st)\s*Season/i);
+    const pMatch = checkTitle.match(/Part\s*(\d+)/i);
+    const finalMatch = /Final\s*Season/i.test(checkTitle);
+
+    let label = "";
+    let priority = 1; // 1: Main Season, 2: Movie, 3: Special/OVA, 4: Spin-off
+    let seasonNum: number | null = null;
+
+    if (isSpinOff) {
+      label = "Spin-Off";
+      priority = 4;
+    } else if (fmt === "MOVIE") {
+      label = "Movie";
+      priority = 2;
+    } else if (fmt === "OVA" || fmt === "SPECIAL") {
+      label = fmt === "OVA" ? "OVA" : "Special";
+      priority = 3;
+    } else if (finalMatch) {
+      label = pMatch ? `Final Season Part ${pMatch[1]}` : "Final Season";
+      priority = 1;
+      seasonNum = 99;
+    } else if (sMatch) {
+      const parsedNum = parseInt(sMatch[1], 10);
+      label = pMatch ? `Season ${parsedNum} Part ${pMatch[1]}` : `Season ${parsedNum}`;
+      priority = 1;
+      seasonNum = parsedNum;
+      tvCount = Math.max(tvCount, parsedNum);
+    } else if (fmt === "TV" || fmt === "ONA") {
+      tvCount++;
+      label = `Season ${tvCount}`;
+      priority = 1;
+      seasonNum = tvCount;
+    } else {
+      label = "Related";
+      priority = 3;
+    }
+
+    return {
+      mal_id: item.mal_id,
+      title: item.title,
+      title_english: item.title_english || null,
+      title_japanese: item.title_japanese || null,
+      image: item.image,
+      year: item.year || null,
+      format: item.format || "TV",
+      episodes: item.episodes || null,
+      status: item.status || null,
+      season_label: label,
+      season_number: seasonNum,
+      priority,
+      is_current: isCurrent,
+    };
+  });
+
+  // Priority sort: Main Seasons (Season 1, Season 2...) first in chronological/season order, then Movies, then Specials/Spin-offs
+  formatted.sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    if (a.priority === 1) {
+      const sA = a.season_number || 0;
+      const sB = b.season_number || 0;
+      if (sA !== sB && sA > 0 && sB > 0) return sA - sB;
+    }
+    const yA = a.year || 0;
+    const yB = b.year || 0;
+    if (yA !== yB) return yA - yB;
+    return (a.mal_id || 0) - (b.mal_id || 0);
+  });
+
+  return formatted;
+}
+
 export const jikanService = {
   // Search for anime (supports text query and multi-genre filtering)
   searchAnime: async (
@@ -857,20 +946,23 @@ export const jikanService = {
     );
   },
 
+  
   // Get all seasons and franchise entries for an anime, ordered chronologically
   getAnimeSeasons: async (id: number) => {
-    const cacheKey = `seasons:v3:${id}`;
+    const cacheKey = `seasons:v5:${id}`;
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
     try {
       const mediaMap = new Map<number, any>();
+      const visited = new Set<number>();
       const queue: number[] = [id];
       const maxHops = 10;
 
       while (queue.length > 0 && mediaMap.size < maxHops) {
         const currentId = queue.shift()!;
-        if (mediaMap.has(currentId)) continue;
+        if (visited.has(currentId)) continue;
+        visited.add(currentId);
 
         const query = `
           query ($malId: Int) {
@@ -924,7 +1016,7 @@ export const jikanService = {
 
             // Follow PREQUEL and SEQUEL links to discover any further timeline chain
             if (["PREQUEL", "SEQUEL"].includes(edge.relationType)) {
-              if (!queue.includes(relNode.idMal)) {
+              if (!visited.has(relNode.idMal) && !queue.includes(relNode.idMal)) {
                 queue.push(relNode.idMal);
               }
             }
@@ -939,7 +1031,7 @@ export const jikanService = {
         const details = await jikanService.getAnimeDetails(id);
         const cur = details?.data;
         if (cur) {
-          const fallbackList: any[] = [
+          const rawFallbackItems: any[] = [
             {
               mal_id: cur.mal_id,
               title: cur.title,
@@ -947,10 +1039,9 @@ export const jikanService = {
               title_japanese: cur.title_japanese,
               image: cur.images?.webp?.large_image_url || cur.images?.jpg?.large_image_url,
               year: cur.year,
-              format: cur.type,
+              format: cur.type || "TV",
               episodes: cur.episodes,
-              season_label: "Season 1",
-              is_current: true,
+              status: cur.status,
             },
           ];
           if (cur.relations && Array.isArray(cur.relations)) {
@@ -958,7 +1049,7 @@ export const jikanService = {
               if (r.entry && Array.isArray(r.entry)) {
                 for (const e of r.entry) {
                   if (e.type === "anime" && e.mal_id) {
-                    fallbackList.push({
+                    rawFallbackItems.push({
                       mal_id: e.mal_id,
                       title: e.name || "Related Anime",
                       title_english: e.title_english || e.name,
@@ -967,16 +1058,16 @@ export const jikanService = {
                       year: e.year || null,
                       format: e.format || "TV",
                       episodes: e.episodes || null,
-                      season_label: r.relation || "Related",
-                      is_current: false,
+                      status: e.status || null,
                     });
                   }
                 }
               }
             }
           }
-          const result = { data: fallbackList };
-          cache.set(cacheKey, result, 86400);
+          const formatted = formatAndSortSeasons(rawFallbackItems, id);
+          const result = { data: formatted };
+          cache.set(cacheKey, result, 3600);
           return result;
         }
       }
@@ -995,73 +1086,7 @@ export const jikanService = {
           status: m.status || null,
         }));
 
-      rawList.sort((a, b) => {
-        const yA = a.year || 0;
-        const yB = b.year || 0;
-        if (yA !== yB) return yA - yB;
-        return a.mal_id - b.mal_id;
-      });
-
-      let tvCount = 0;
-      const formatted = rawList.map((item) => {
-        const isCurrent = item.mal_id === id;
-        const checkTitle = (item.title_english || item.title || "").trim();
-        const fmt = (item.format || "TV").toUpperCase();
-
-        const isSpinOff = /squishy|petit|chibi|gekiju/i.test(checkTitle);
-        const sMatch = checkTitle.match(/Season\s*(\d+)/i) || checkTitle.match(/(\d+)(?:nd|rd|th|st)\s*Season/i);
-        const pMatch = checkTitle.match(/Part\s*(\d+)/i);
-        const finalMatch = /Final\s*Season/i.test(checkTitle);
-
-        let label = "";
-        let priority = 1; // 1: Main Season, 2: Movie, 3: Special/OVA, 4: Spin-off
-        let seasonNum: number | null = null;
-
-        if (isSpinOff) {
-          label = "Spin-Off";
-          priority = 4;
-        } else if (fmt === "MOVIE") {
-          label = "Movie";
-          priority = 2;
-        } else if (fmt === "OVA" || fmt === "SPECIAL") {
-          label = fmt === "OVA" ? "OVA" : "Special";
-          priority = 3;
-        } else if (finalMatch) {
-          label = pMatch ? `Final Season Part ${pMatch[1]}` : "Final Season";
-          priority = 1;
-          seasonNum = 4;
-        } else if (sMatch) {
-          label = pMatch ? `Season ${sMatch[1]} Part ${pMatch[1]}` : `Season ${sMatch[1]}`;
-          priority = 1;
-          seasonNum = parseInt(sMatch[1], 10);
-        } else if (fmt === "TV" || fmt === "ONA") {
-          tvCount++;
-          label = `Season ${tvCount}`;
-          priority = 1;
-          seasonNum = tvCount;
-        } else {
-          label = "Related";
-          priority = 3;
-        }
-
-        return {
-          ...item,
-          season_label: label,
-          season_number: seasonNum,
-          priority,
-          is_current: isCurrent,
-        };
-      });
-
-      // Priority sort: Main Seasons (Season 1, Season 2...) first, then Movies, then Specials/Spin-offs
-      formatted.sort((a, b) => {
-        if (a.priority !== b.priority) return a.priority - b.priority;
-        const yA = a.year || 0;
-        const yB = b.year || 0;
-        if (yA !== yB) return yA - yB;
-        return a.mal_id - b.mal_id;
-      });
-
+      const formatted = formatAndSortSeasons(rawList, id);
       const result = { data: formatted };
       cache.set(cacheKey, result, 3600); // Cache 1 hour
       return result;

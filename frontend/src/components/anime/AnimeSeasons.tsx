@@ -124,6 +124,14 @@ export function AnimeSeasons({
               const isUnreleased =
                 season.status === "NOT_YET_RELEASED" ||
                 (!season.episodes && season.year && season.year >= new Date().getFullYear());
+              const rawLabel = (season.season_label || "Season 1").trim();
+              const cleanLabel =
+                rawLabel.toLowerCase() === "prequel"
+                  ? "Season 1"
+                  : rawLabel.toLowerCase() === "sequel"
+                  ? "Season 2"
+                  : rawLabel;
+
               const title =
                 language === "en"
                   ? season.title_english || season.title
@@ -159,11 +167,11 @@ export function AnimeSeasons({
                       {isCurrent ? (
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1.5 bg-primary text-white border border-white/20 shadow-md shadow-primary/30 ring-1 ring-primary/40 backdrop-blur-sm">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          {season.season_label} (Current)
+                          {cleanLabel} (Current)
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/80 text-white border border-white/10 backdrop-blur-sm">
-                          {season.season_label}
+                          {cleanLabel}
                         </span>
                       )}
 
