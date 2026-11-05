@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Heart, Shield, FileText, Sparkles, Coffee, History } from "lucide-react";
+import { Home, Compass, CalendarDays, History, Bookmark, FileText, Shield, Heart } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { Button } from "@/components/ui/button";
 import { DonationModal } from "@/components/shared/DonationModal";
@@ -12,62 +12,66 @@ export function Footer() {
     <>
       <footer className="bg-background/95 border-t border-border/40 text-muted-foreground transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-10">
-            {/* Brand Column (2 cols on large screens) */}
-            <div className="space-y-4 lg:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10">
+            {/* Brand Column */}
+            <div className="space-y-4">
               <Link to="/" className="flex items-center group w-fit" aria-label="AniVerse home">
                 <Logo size={36} />
               </Link>
-              <p className="text-xs sm:text-sm max-w-sm leading-relaxed text-muted-foreground/90">
-                Explore, stream, and track your favorite anime with lightning-fast playback, multi-server fallback, and synchronized cross-device watch history.
+              <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground/90">
+                Explore, stream, and track your favorite anime with fast playback, multi-server fallback, and synchronized cross-device watch history.
               </p>
-
-              {/* Support pill button */}
-              <div className="pt-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setIsDonationOpen(true)}
-                  className="rounded-full bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-primary/20 hover:from-pink-500/30 hover:to-primary/30 text-white border border-pink-500/30 text-xs font-bold px-4 py-2 shadow-sm hover:shadow-pink-500/10 transition-all cursor-pointer group"
-                >
-                  <Heart className="w-3.5 h-3.5 text-pink-400 fill-pink-400 mr-2 group-hover:scale-110 transition-transform" />
-                  <span>Support AniVerse</span>
-                  <Sparkles className="w-3 h-3 text-amber-300 ml-1.5" />
-                </Button>
-              </div>
             </div>
 
-            {/* Navigation Column */}
+            {/* Navigation Column - with icons for all links */}
             <div>
               <h3 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3.5 flex items-center gap-1.5">
                 <span>Navigation</span>
               </h3>
               <ul className="space-y-2.5 text-xs sm:text-sm">
                 <li>
-                  <Link to="/" className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-block">
-                    Home
+                  <Link
+                    to="/"
+                    className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-2"
+                  >
+                    <Home className="w-3.5 h-3.5 text-primary" />
+                    <span>Home</span>
                   </Link>
                 </li>
                 <li>
-                  <Link to="/search" className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-block">
-                    Discover Anime
+                  <Link
+                    to="/search"
+                    className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-2"
+                  >
+                    <Compass className="w-3.5 h-3.5 text-primary" />
+                    <span>Discover Anime</span>
                   </Link>
                 </li>
                 <li>
-                  <Link to="/search?category=upcoming" className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <Link
+                    to="/search?category=upcoming"
+                    className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-2"
+                  >
+                    <CalendarDays className="w-3.5 h-3.5 text-primary" />
                     <span>Upcoming Releases</span>
                   </Link>
                 </li>
                 <li>
-                  <Link to="/history" className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-1.5">
+                  <Link
+                    to="/history"
+                    className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-2"
+                  >
                     <History className="w-3.5 h-3.5 text-primary" />
                     <span>Watch History</span>
                   </Link>
                 </li>
                 <li>
-                  <Link to="/watchlist" className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-block">
-                    Watchlist
+                  <Link
+                    to="/watchlist"
+                    className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-2"
+                  >
+                    <Bookmark className="w-3.5 h-3.5 text-primary" />
+                    <span>Watchlist</span>
                   </Link>
                 </li>
               </ul>
@@ -80,13 +84,19 @@ export function Footer() {
               </h3>
               <ul className="space-y-2.5 text-xs sm:text-sm">
                 <li>
-                  <Link to="/terms" className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-1.5">
+                  <Link
+                    to="/terms"
+                    className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-2"
+                  >
                     <FileText className="w-3.5 h-3.5 text-muted-foreground/70" />
                     <span>Terms of Service</span>
                   </Link>
                 </li>
                 <li>
-                  <Link to="/privacy" className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-1.5">
+                  <Link
+                    to="/privacy"
+                    className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-2"
+                  >
                     <Shield className="w-3.5 h-3.5 text-muted-foreground/70" />
                     <span>Privacy Policy</span>
                   </Link>
@@ -99,11 +109,11 @@ export function Footer() {
               </ul>
             </div>
 
-            {/* Donation / Support Column */}
+            {/* Single Unified Support Column (No redundancy) */}
             <div>
               <h3 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3.5 flex items-center gap-1.5">
-                <Coffee className="w-3.5 h-3.5 text-amber-400" />
-                <span>Support the Dev</span>
+                <Heart className="w-3.5 h-3.5 text-pink-400 fill-pink-400/30" />
+                <span>Support AniVerse</span>
               </h3>
               <div className="bg-card/60 border border-border/60 rounded-xl p-3.5 space-y-2.5 backdrop-blur-sm">
                 <p className="text-xs text-muted-foreground leading-snug">
@@ -111,13 +121,12 @@ export function Footer() {
                 </p>
                 <Button
                   type="button"
-                  variant="outline"
                   size="sm"
                   onClick={() => setIsDonationOpen(true)}
-                  className="w-full text-xs font-bold border-primary/40 text-primary hover:bg-primary/10 hover:text-white cursor-pointer h-8 rounded-lg"
+                  className="w-full text-xs font-bold bg-primary hover:bg-primary/90 text-white cursor-pointer h-8 rounded-lg shadow-sm"
                 >
-                  <Heart className="w-3.5 h-3.5 mr-1.5 text-pink-400 fill-pink-400/40" />
-                  MariBank QR
+                  <Heart className="w-3.5 h-3.5 mr-1.5 text-pink-300 fill-pink-300" />
+                  Support AniVerse
                 </Button>
               </div>
             </div>

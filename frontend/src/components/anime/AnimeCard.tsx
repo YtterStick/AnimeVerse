@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Star, Play, Sparkles } from "lucide-react";
+import { Star, Play, CalendarDays } from "lucide-react";
 import type { Anime } from "@/types";
 import { formatScore } from "@/lib/utils";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
@@ -54,7 +54,7 @@ export function AnimeCard({ anime }: AnimeCardProps) {
             </span>
           ) : isUpcoming ? (
             <span className="px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 bg-amber-500/90 text-black border border-amber-400/40 shadow-md backdrop-blur-sm">
-              <Sparkles className="w-3 h-3 fill-black text-black" />
+              <CalendarDays className="w-3 h-3 text-black" />
               {anime.year ? `${anime.season ? `${anime.season} ` : ""}${anime.year}` : "Upcoming"}
             </span>
           ) : null}

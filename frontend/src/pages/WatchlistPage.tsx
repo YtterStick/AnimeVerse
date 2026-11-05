@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWatchlist } from "@/hooks/useWatchHistory";
 import { AnimeGrid } from "@/components/anime/AnimeGrid";
 import { Button } from "@/components/ui/button";
-import { Heart, Compass, Sparkles } from "lucide-react";
+import { Heart, Compass, Bookmark } from "lucide-react";
 import type { Anime } from "@/types";
 import { SkeletonCard } from "@/components/shared/SkeletonCard";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -83,7 +83,7 @@ export function WatchlistPage() {
 
         {!user && watchlist.length > 0 && (
           <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-secondary/50 border border-border/60 rounded-full px-3 py-1 self-start sm:self-auto">
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <Bookmark className="w-3.5 h-3.5 text-primary" />
             <span>Saved on this device. Sign in to sync across devices.</span>
           </div>
         )}

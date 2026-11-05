@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import { Star, Clock, Calendar, Heart, Play, AlertCircle, Sparkles } from "lucide-react";
+import { Star, Clock, Calendar, Heart, Play, AlertCircle } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes } from "@/hooks/useAnime";
 import { useWatchlist } from "@/hooks/useWatchHistory";
 import { EpisodeList } from "@/components/anime/EpisodeList";
@@ -204,7 +204,7 @@ export function AnimePage() {
                 )}
                 {isUpcoming && (
                   <span className="px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <Calendar className="w-3.5 h-3.5 text-amber-400" />
                     Upcoming Release
                   </span>
                 )}
@@ -273,7 +273,7 @@ export function AnimePage() {
               {/* Upcoming Notice Card */}
               {isUpcoming && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3 text-amber-200">
-                  <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <Calendar className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                   <div className="space-y-0.5">
                     <p className="text-sm font-bold text-amber-300">Scheduled Upcoming Release</p>
                     <p className="text-xs text-amber-200/80 leading-relaxed">

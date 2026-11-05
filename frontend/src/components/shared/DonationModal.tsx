@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Heart, Copy, Check, Gift, ShieldCheck, Sparkles } from "lucide-react";
+import { Heart, Copy, Check, Gift, ShieldCheck } from "lucide-react";
 
 interface DonationModalProps {
   isOpen: boolean;
@@ -27,7 +27,6 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
           </div>
           <DialogTitle className="text-xl sm:text-2xl font-black text-white flex items-center justify-center gap-2">
             Support AniVerse
-            <Sparkles className="w-5 h-5 text-amber-400" />
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm text-muted-foreground max-w-xs mx-auto">
             Help keep AniVerse fast, ad-free, and running smoothly. 100% of donations fund server and database maintenance.

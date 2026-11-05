@@ -16,7 +16,7 @@ import {
   Flame,
   Star,
   Radio,
-  Sparkles,
+  Wand2,
   Check,
   RotateCcw,
   ChevronRight,
@@ -43,7 +43,7 @@ export const POPULAR_GENRES = [
   { id: 2, name: "Adventure", icon: Compass },
   { id: 4, name: "Comedy", icon: Laugh },
   { id: 8, name: "Drama", icon: Film },
-  { id: 10, name: "Fantasy", icon: Sparkles },
+  { id: 10, name: "Fantasy", icon: Wand2 },
   { id: 14, name: "Horror", icon: Skull },
   { id: 7, name: "Mystery", icon: Search },
   { id: 22, name: "Romance", icon: Heart },
@@ -212,7 +212,7 @@ export function SearchPage() {
       <div className="flex flex-col items-center text-center space-y-5 max-w-3xl mx-auto w-full pt-2">
         <div className="space-y-1.5">
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white flex items-center justify-center gap-3">
-            <Sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-primary animate-pulse" />
+            <Compass className="w-7 h-7 sm:w-8 sm:h-8 text-primary" />
             Discover & Search Anime
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground/80 max-w-xl mx-auto">
