@@ -164,7 +164,14 @@ function mapAniListMediaToJikan(media: any): any {
         mal_id: edge.node.idMal,
         type: (edge.node.type || "anime").toLowerCase(),
         name: edge.node.title?.english || edge.node.title?.romaji || "Related Anime",
+        title_english: edge.node.title?.english || null,
+        title_japanese: edge.node.title?.native || null,
         url: "",
+        image: edge.node.coverImage?.large || edge.node.coverImage?.medium || null,
+        format: edge.node.format || null,
+        episodes: edge.node.episodes || null,
+        year: edge.node.seasonYear || edge.node.startDate?.year || null,
+        status: mapAniListStatus(edge.node.status),
       });
     }
     for (const [relation, entry] of Object.entries(grouped)) {
@@ -821,9 +828,19 @@ export const jikanService = {
                     id
                     idMal
                     type
+                    format
+                    status
+                    episodes
+                    seasonYear
+                    startDate { year }
+                    coverImage {
+                      large
+                      medium
+                    }
                     title {
                       romaji
                       english
+                      native
                     }
                   }
                 }
@@ -838,6 +855,195 @@ export const jikanService = {
         return { data: mapAniListMediaToJikan(data.Media) };
       }
     );
+  },
+
+  // Get all seasons and franchise entries for an anime, ordered chronologically
+  getAnimeSeasons: async (id: number) => {
+    const cacheKey = `seasons:${id}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const mediaMap = new Map<number, any>();
+      const queue: number[] = [id];
+      const maxHops = 10;
+
+      while (queue.length > 0 && mediaMap.size < maxHops) {
+        const currentId = queue.shift()!;
+        if (mediaMap.has(currentId)) continue;
+
+        const query = `
+          query ($malId: Int) {
+            Media(idMal: $malId, type: ANIME) {
+              id
+              idMal
+              format
+              status
+              episodes
+              seasonYear
+              startDate { year }
+              coverImage { large medium }
+              title { english romaji native }
+              relations {
+                edges {
+                  relationType(version: 2)
+                  node {
+                    id
+                    idMal
+                    type
+                    format
+                    status
+                    episodes
+                    seasonYear
+                    startDate { year }
+                    coverImage { large medium }
+                    title { english romaji native }
+                  }
+                }
+              }
+            }
+          }
+        `;
+
+        try {
+          const res = await queryAniList(query, { malId: currentId });
+          const media = res?.Media;
+          if (!media || !media.idMal) continue;
+
+          mediaMap.set(media.idMal, media);
+
+          const edges = media.relations?.edges || [];
+          for (const edge of edges) {
+            const relNode = edge.node;
+            if (!relNode || relNode.type !== "ANIME" || !relNode.idMal) continue;
+
+            if (["PREQUEL", "SEQUEL"].includes(edge.relationType)) {
+              if (!mediaMap.has(relNode.idMal) && !queue.includes(relNode.idMal)) {
+                queue.push(relNode.idMal);
+              }
+            } else if (["ALTERNATIVE", "SIDE_STORY", "SUMMARY"].includes(edge.relationType)) {
+              if (currentId === id && !mediaMap.has(relNode.idMal)) {
+                mediaMap.set(relNode.idMal, relNode);
+              }
+            }
+          }
+        } catch {
+          // Continue with gathered entries if a node fails
+        }
+      }
+
+      // If AniList had no records (e.g. timeout), fallback to Jikan details
+      if (mediaMap.size === 0) {
+        const details = await jikanService.getAnimeDetails(id);
+        const cur = details?.data;
+        if (cur) {
+          const fallbackList: any[] = [
+            {
+              mal_id: cur.mal_id,
+              title: cur.title,
+              title_english: cur.title_english,
+              title_japanese: cur.title_japanese,
+              image: cur.images?.webp?.large_image_url || cur.images?.jpg?.large_image_url,
+              year: cur.year,
+              format: cur.type,
+              episodes: cur.episodes,
+              season_label: "Season 1",
+              is_current: true,
+            },
+          ];
+          if (cur.relations && Array.isArray(cur.relations)) {
+            for (const r of cur.relations) {
+              if (r.entry && Array.isArray(r.entry)) {
+                for (const e of r.entry) {
+                  if (e.type === "anime" && e.mal_id) {
+                    fallbackList.push({
+                      mal_id: e.mal_id,
+                      title: e.name || "Related Anime",
+                      title_english: e.title_english || e.name,
+                      title_japanese: e.title_japanese || null,
+                      image: e.image || cur.images?.webp?.large_image_url || cur.images?.jpg?.large_image_url,
+                      year: e.year || null,
+                      format: e.format || "TV",
+                      episodes: e.episodes || null,
+                      season_label: r.relation || "Related",
+                      is_current: false,
+                    });
+                  }
+                }
+              }
+            }
+          }
+          const result = { data: fallbackList };
+          cache.set(cacheKey, result, 86400);
+          return result;
+        }
+      }
+
+      const rawList = Array.from(mediaMap.values()).map((m) => ({
+        mal_id: m.idMal,
+        title: m.title?.romaji || m.title?.english || "Unknown Title",
+        title_english: m.title?.english || null,
+        title_japanese: m.title?.native || null,
+        image: m.coverImage?.large || m.coverImage?.medium || null,
+        year: m.seasonYear || m.startDate?.year || null,
+        format: m.format || "TV",
+        episodes: m.episodes || null,
+        status: m.status || null,
+      }));
+
+      rawList.sort((a, b) => {
+        const yA = a.year || 0;
+        const yB = b.year || 0;
+        if (yA !== yB) return yA - yB;
+        return a.mal_id - b.mal_id;
+      });
+
+      let tvCount = 0;
+      const formatted = rawList.map((item) => {
+        const isCurrent = item.mal_id === id;
+        const checkTitle = (item.title_english || item.title || "").trim();
+        const fmt = (item.format || "TV").toUpperCase();
+
+        const sMatch = checkTitle.match(/Seasons*(d+)/i) || checkTitle.match(/(d+)(?:nd|rd|th|st)s*Season/i);
+        const pMatch = checkTitle.match(/Parts*(d+)/i);
+        const finalMatch = /Finals*Season/i.test(checkTitle);
+
+        let label = "";
+        let seasonNum: number | null = null;
+
+        if (fmt === "MOVIE") {
+          label = "Movie";
+        } else if (fmt === "OVA" || fmt === "SPECIAL") {
+          label = fmt;
+        } else if (finalMatch) {
+          label = pMatch ? `Final Season Part ${pMatch[1]}` : "Final Season";
+          seasonNum = 4;
+        } else if (sMatch) {
+          label = pMatch ? `Season ${sMatch[1]} Part ${pMatch[1]}` : `Season ${sMatch[1]}`;
+          seasonNum = parseInt(sMatch[1], 10);
+        } else if (fmt === "TV" || fmt === "ONA") {
+          tvCount++;
+          label = `Season ${tvCount}`;
+          seasonNum = tvCount;
+        } else {
+          label = "Related";
+        }
+
+        return {
+          ...item,
+          season_label: label,
+          season_number: seasonNum,
+          is_current: isCurrent,
+        };
+      });
+
+      const result = { data: formatted };
+      cache.set(cacheKey, result, 86400); // Cache 24 hours
+      return result;
+    } catch (err: any) {
+      console.warn(`[jikanService] getAnimeSeasons for ${id} failed:`, err.message);
+      return { data: [] };
+    }
   },
 
   // Get episode list for an anime

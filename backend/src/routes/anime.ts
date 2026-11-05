@@ -160,6 +160,21 @@ router.get("/:id/episodes", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/anime/:id/seasons
+router.get("/:id/seasons", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid Anime ID" });
+    }
+    const data = await jikanService.getAnimeSeasons(id);
+    res.json(data);
+  } catch (error: any) {
+    console.warn(`[AnimeRoute] Seasons for ${req.params.id} failed:`, error.message);
+    res.json({ data: [] });
+  }
+});
+
 // GET /api/anime/:id/recommendations
 router.get("/:id/recommendations", async (req: Request, res: Response) => {
   try {

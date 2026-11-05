@@ -3,6 +3,7 @@ import { Star, Clock, Calendar, Heart, Play, AlertCircle, Sparkles } from "lucid
 import { useAnimeDetail, useAnimeEpisodes } from "@/hooks/useAnime";
 import { useWatchlist } from "@/hooks/useWatchHistory";
 import { EpisodeList } from "@/components/anime/EpisodeList";
+import { AnimeSeasons } from "@/components/anime/AnimeSeasons";
 import { GenreBadge } from "@/components/anime/GenreBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -329,6 +330,9 @@ export function AnimePage() {
                 />
               )}
             </div>
+
+            {/* Seasons & Franchise (Season 1, Season 2, Sequels & Movies) */}
+            <AnimeSeasons currentAnimeId={anime.mal_id} mode="detail" />
 
           </div>
         </div>

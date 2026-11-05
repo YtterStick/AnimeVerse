@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { animeApi } from "@/lib/api";
-import type { Anime, Episode, ApiResponse } from "@/types";
+import type { Anime, Episode, ApiResponse, AnimeSeason } from "@/types";
 
 function useAnimeQuery<T>(
   fetcher: () => Promise<ApiResponse<T>>,
@@ -309,4 +309,8 @@ export function useAnimeRecommendations(id: number) {
   }, [id]);
 
   return { recommendations, loading, error, refetch };
+}
+
+export function useAnimeSeasons(id: number) {
+  return useAnimeQuery<AnimeSeason[]>(() => animeApi.getSeasons(id), [id]);
 }

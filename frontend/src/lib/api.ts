@@ -1,5 +1,6 @@
 import type {
   Anime,
+  AnimeSeason,
   ApiResponse,
   Episode,
   MultiStreamResult,
@@ -112,6 +113,11 @@ export const animeApi = {
 
   getRecommendations: (id: number) =>
     fetchApi<ApiResponse<any[]>>(`/anime/${id}/recommendations`, {
+      timeoutMs: 12000,
+    }),
+
+  getSeasons: (id: number) =>
+    fetchApi<ApiResponse<AnimeSeason[]>>(`/anime/${id}/seasons`, {
       timeoutMs: 12000,
     }),
 };

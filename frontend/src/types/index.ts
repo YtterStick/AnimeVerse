@@ -67,6 +67,21 @@ export interface Studio {
   type: string;
 }
 
+export interface AnimeSeason {
+  mal_id: number;
+  title: string;
+  title_english: string | null;
+  title_japanese: string | null;
+  image: string | null;
+  year: number | null;
+  format: string | null;
+  episodes: number | null;
+  status: string | null;
+  season_label: string;
+  season_number: number | null;
+  is_current: boolean;
+}
+
 export interface Episode {
   mal_id: number;
   title: string | null;

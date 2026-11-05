@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Layers, Compass, FastForward, Check, X, Search, LayoutGrid } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Compass, FastForward, Check, X, Search, LayoutGrid } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
@@ -10,6 +10,7 @@ import { ServerSelector } from "@/components/player/ServerSelector";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AnimeSeasons } from "@/components/anime/AnimeSeasons";
 import type { MultiStreamResult } from "@/types";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 
@@ -938,45 +939,8 @@ export function WatchPage() {
           </p>
         </div>
 
-        {/* Related Seasons Section */}
-        {anime.relations && anime.relations.some((rel: any) => rel.entry.some((e: any) => e.type === "anime")) && (
-          <div className="space-y-4 pt-6 border-t border-border/20">
-            <h3 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
-              <Layers className="w-5 h-5 text-primary" />
-              Related Content
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {anime.relations
-                .filter((rel: any) => rel.entry.some((e: any) => e.type === "anime"))
-                .flatMap((rel: any) =>
-                  rel.entry
-                    .filter((entry: any) => entry.type === "anime")
-                    .map((entry: any) => ({
-                      ...entry,
-                      relation: rel.relation,
-                    }))
-                )
-                .slice(0, 9)
-                .map((relEntry: any, idx: number) => (
-                  <Link
-                    key={`${relEntry.mal_id}-${idx}`}
-                    to={`/anime/${relEntry.mal_id}`}
-                    className="group flex items-center justify-between p-3.5 rounded-xl border border-border/40 bg-card/45 hover:bg-secondary/40 hover:border-border/80 transition-all duration-200"
-                  >
-                    <div className="min-w-0 pr-2">
-                      <span className="text-[10px] font-extrabold text-primary uppercase tracking-wider block mb-0.5">
-                        {relEntry.relation}
-                      </span>
-                      <h4 className="text-xs font-bold text-white group-hover:text-primary transition-colors truncate">
-                        {relEntry.name}
-                      </h4>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
-                  </Link>
-                ))}
-            </div>
-          </div>
-        )}
+        {/* Seasons & Franchise Section (Season 1, Season 2, Sequels & Movies) */}
+        <AnimeSeasons currentAnimeId={animeId} mode="watch" />
 
         {/* Recommended / Similar Section */}
         <div className="space-y-4 pt-6 border-t border-border/20 min-w-0">
