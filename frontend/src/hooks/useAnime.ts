@@ -1,30 +1,68 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { animeApi } from "@/lib/api";
 import type { Anime, Episode, ApiResponse, AnimeSeason } from "@/types";
 
+// ─── Client-Side SWR Cache ───────────────────────────────────────────────────
+// In-memory cache with 10-minute TTL. Provides instant page loads when
+// revisiting anime that were already fetched, without hitting the backend.
+const swrCache = new Map<string, { data: unknown; ts: number }>();
+const SWR_TTL = 10 * 60 * 1000; // 10 minutes
+
+function getCached<T>(key: string): T | undefined {
+  const entry = swrCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() - entry.ts > SWR_TTL) {
+    swrCache.delete(key);
+    return undefined;
+  }
+  return entry.data as T;
+}
+
+function setCache(key: string, data: unknown) {
+  swrCache.set(key, { data, ts: Date.now() });
+}
+
 function useAnimeQuery<T>(
   fetcher: () => Promise<ApiResponse<T>>,
-  deps: unknown[] = []
+  deps: unknown[] = [],
+  cacheKey?: string
 ) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cached = cacheKey ? getCached<T>(cacheKey) : undefined;
+  const [data, setData] = useState<T | null>(cached ?? null);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+
+    // If we have a cache hit, show it instantly but still revalidate in background
+    if (cacheKey) {
+      const hit = getCached<T>(cacheKey);
+      if (hit) {
+        setData(hit);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    } else {
+      setLoading(true);
+    }
     setError(null);
 
     fetcher()
       .then((res) => {
         if (!cancelled) {
           setData(res.data);
+          if (cacheKey) setCache(cacheKey, res.data);
           setLoading(false);
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err.message);
+          // Only show error if we don't have cached data to show
+          if (!getCached<T>(cacheKey || "")) {
+            setError(err.message);
+          }
           setLoading(false);
         }
       });
@@ -77,27 +115,27 @@ function usePaginatedAnimeQuery<T>(
 }
 
 export function useTrending() {
-  return useAnimeQuery<Anime[]>(() => animeApi.trending(), []);
+  return useAnimeQuery<Anime[]>(() => animeApi.trending(), [], "trending");
 }
 
 export function useTopAiring() {
-  return useAnimeQuery<Anime[]>(() => animeApi.topAiring(), []);
+  return useAnimeQuery<Anime[]>(() => animeApi.topAiring(), [], "top-airing");
 }
 
 export function useUpcoming() {
-  return useAnimeQuery<Anime[]>(() => animeApi.upcoming(), []);
+  return useAnimeQuery<Anime[]>(() => animeApi.upcoming(), [], "upcoming");
 }
 
 export function usePopular() {
-  return useAnimeQuery<Anime[]>(() => animeApi.popular(), []);
+  return useAnimeQuery<Anime[]>(() => animeApi.popular(), [], "popular");
 }
 
 export function useTopRated() {
-  return useAnimeQuery<Anime[]>(() => animeApi.topRated(), []);
+  return useAnimeQuery<Anime[]>(() => animeApi.topRated(), [], "top-rated");
 }
 
 export function useAnimeSchedule(day: string) {
-  return useAnimeQuery<Anime[]>(() => animeApi.getSchedule(day), [day]);
+  return useAnimeQuery<Anime[]>(() => animeApi.getSchedule(day), [day], `schedule:${day}`);
 }
 
 export function useAnimeSearch(
@@ -141,13 +179,29 @@ export function useAnimeSearch(
 }
 
 export function useAnimeDetail(id: number) {
-  const [anime, setAnime] = useState<Anime | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `anime-detail:${id}`;
+  const cached = getCached<Anime>(cacheKey);
+  const [anime, setAnime] = useState<Anime | null>(cached ?? null);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const retryTimerRef = useRef<number | undefined>(undefined);
+
+  const retry = useCallback(() => {
+    setRetryCount((c) => c + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+
+    // Show cached data instantly if available
+    const hit = getCached<Anime>(cacheKey);
+    if (hit) {
+      setAnime(hit);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError(null);
 
     animeApi
@@ -155,22 +209,41 @@ export function useAnimeDetail(id: number) {
       .then((res) => {
         if (!cancelled) {
           setAnime(res.data);
+          setCache(cacheKey, res.data);
           setLoading(false);
+          setError(null);
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err.message);
+          // Auto-retry up to 2 times with exponential backoff before showing error
+          if (retryCount < 2) {
+            const delay = 1500 * (retryCount + 1);
+            retryTimerRef.current = window.setTimeout(() => {
+              if (!cancelled) setRetryCount((c) => c + 1);
+            }, delay);
+            return;
+          }
+          // Only show error if we don't have cached data to fall back on
+          if (!getCached<Anime>(cacheKey)) {
+            setError(err.message);
+          }
           setLoading(false);
         }
       });
 
     return () => {
       cancelled = true;
+      if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
     };
+  }, [id, retryCount]);
+
+  // Reset retry count when anime id changes
+  useEffect(() => {
+    setRetryCount(0);
   }, [id]);
 
-  return { anime, loading, error };
+  return { anime, loading, error, retry };
 }
 
 export function useAnimeEpisodes(id: number) {
@@ -312,5 +385,5 @@ export function useAnimeRecommendations(id: number) {
 }
 
 export function useAnimeSeasons(id: number) {
-  return useAnimeQuery<AnimeSeason[]>(() => animeApi.getSeasons(id), [id]);
+  return useAnimeQuery<AnimeSeason[]>(() => animeApi.getSeasons(id), [id], `seasons:${id}`);
 }

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Star, Clock, Calendar, Heart, Play, AlertCircle } from "lucide-react";
+import { Star, Clock, Calendar, Heart, Play, AlertCircle, RefreshCw } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes } from "@/hooks/useAnime";
 import { useWatchlist } from "@/hooks/useWatchHistory";
 import { EpisodeList } from "@/components/anime/EpisodeList";
@@ -19,7 +19,7 @@ export function AnimePage() {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [animeId]);
 
-  const { anime, loading: detailLoading, error: detailError } = useAnimeDetail(animeId);
+  const { anime, loading: detailLoading, error: detailError, retry } = useAnimeDetail(animeId);
   const { episodes, loading: episodesLoading } = useAnimeEpisodes(animeId);
   const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
   const { formatTitle, language } = useTitleLanguage();
@@ -88,9 +88,18 @@ export function AnimePage() {
         <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
         <h2 className="text-xl font-bold text-foreground">Failed to load anime details</h2>
         <p className="text-sm text-muted-foreground">{detailError || "Anime not found."}</p>
-        <Button asChild className="bg-primary hover:bg-primary/90 text-white rounded-full">
-          <Link to="/">Back to Home</Link>
-        </Button>
+        <div className="flex justify-center gap-3">
+          <Button
+            onClick={retry}
+            className="bg-primary hover:bg-primary/90 text-white rounded-full"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Try Again
+          </Button>
+          <Button asChild variant="outline" className="rounded-full border-border/60">
+            <Link to="/">Back to Home</Link>
+          </Button>
+        </div>
       </div>
     );
   }

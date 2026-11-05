@@ -11,7 +11,9 @@ interface AnimeCardProps {
 export function AnimeCard({ anime }: AnimeCardProps) {
   const { formatTitle } = useTitleLanguage();
   const title = formatTitle(anime);
-  const image = anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url;
+  // Use the smaller image_url (~30KB WebP) for carousel cards instead of
+  // large_image_url (~300KB). Cards are only 180–220px wide, so 225×350px is plenty.
+  const image = anime.images?.webp?.image_url || anime.images?.jpg?.image_url || anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url;
   const score = anime.score;
   const type = anime.type;
   const isUpcoming =
@@ -30,6 +32,7 @@ export function AnimeCard({ anime }: AnimeCardProps) {
           src={image}
           alt={title}
           loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
 

@@ -120,10 +120,10 @@ export function EstimatedSchedule() {
           {animeList.map((anime: Anime, idx: number) => {
             const title = formatTitle(anime);
             const image =
-              anime.images?.webp?.large_image_url ||
-              anime.images?.jpg?.large_image_url ||
               anime.images?.webp?.image_url ||
               anime.images?.jpg?.image_url ||
+              anime.images?.webp?.large_image_url ||
+              anime.images?.jpg?.large_image_url ||
               "/placeholder-anime.jpg";
 
             const broadcastTime = anime.broadcast?.time || "TBA";
