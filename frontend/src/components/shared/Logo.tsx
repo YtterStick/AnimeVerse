@@ -84,13 +84,21 @@ export function LogoMark({ size = 36, className = "" }: LogoMarkProps) {
   );
 }
 
+// AniVerse in katakana: written as Unicode escapes (\u30A2\u30CB\u30D0\u30FC\u30B9)
+// so the source file stays pure ASCII and can never be corrupted by editor/tool encodings.
+const KATAKANA_TAGLINE = "\u30A2\u30CB\u30D0\u30FC\u30B9";
+
+const JP_FONT_STACK =
+  '"Noto Sans JP", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, "MS Gothic", sans-serif';
+
 interface LogoProps {
   size?: number;
+  showTagline?: boolean;
   className?: string;
 }
 
-/** Full lockup: mark + wordmark. */
-export function Logo({ size = 36, className = "" }: LogoProps) {
+/** Full lockup: mark + wordmark (+ katakana tagline). */
+export function Logo({ size = 36, showTagline = true, className = "" }: LogoProps) {
   return (
     <span className={`inline-flex items-center gap-2.5 select-none ${className}`}>
       <LogoMark
@@ -104,6 +112,15 @@ export function Logo({ size = 36, className = "" }: LogoProps) {
             Verse
           </span>
         </span>
+        {showTagline && (
+          <span
+            lang="ja"
+            className="mt-1 text-[9px] font-bold tracking-[0.45em] text-muted-foreground/70"
+            style={{ fontFamily: JP_FONT_STACK }}
+          >
+            {KATAKANA_TAGLINE}
+          </span>
+        )}
       </span>
     </span>
   );
