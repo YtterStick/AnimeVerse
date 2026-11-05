@@ -662,13 +662,33 @@ function formatAndSortSeasons(rawItems: any[], currentId: number): any[] {
     return (a.mal_id || 0) - (b.mal_id || 0);
   });
 
+  // Identify mainline TV timeline entries: ROOT, direct PREQUEL, or direct SEQUEL, or explicit "Season X" in title
+  const isMainlineTV = (item: any) => {
+    const fmt = (item.format || "TV").toUpperCase();
+    if (fmt !== "TV" && fmt !== "ONA" && fmt !== "OVA") return false;
+    const title = (item.title_english || item.title || "").trim();
+    if (/Season\s*\d+|Part\s*\d+|Final\s*Season/i.test(title)) return true;
+    const rel = (item.relationType || "").toUpperCase();
+    if (["ROOT", "PREQUEL", "SEQUEL"].includes(rel)) {
+      if ((fmt === "ONA" || fmt === "OVA") && item.episodes && item.episodes <= 2) {
+        return false;
+      }
+      return true;
+    }
+    return false;
+  };
+
+  const mainlineItems = filtered.filter(isMainlineTV);
+  const hasMultipleSeasons = mainlineItems.length > 1;
+
   let tvCount = 0;
   const formatted = filtered.map((item) => {
     const isCurrent = Number(item.mal_id) === Number(currentId);
     const checkTitle = (item.title_english || item.title || "").trim();
     const fmt = (item.format || "TV").toUpperCase();
+    const rel = (item.relationType || "").toUpperCase();
 
-    const isSpinOff = /squishy|petit|chibi|gekiju/i.test(checkTitle);
+    const isSpinOff = rel === "SPIN_OFF" || /squishy|petit|chibi|gekiju/i.test(checkTitle);
     const sMatch = checkTitle.match(/Season\s*(\d+)/i) || checkTitle.match(/(\d+)(?:nd|rd|th|st)\s*Season/i);
     const pMatch = checkTitle.match(/Part\s*(\d+)/i);
     const finalMatch = /Final\s*Season/i.test(checkTitle);
@@ -683,8 +703,14 @@ function formatAndSortSeasons(rawItems: any[], currentId: number): any[] {
     } else if (fmt === "MOVIE") {
       label = "Movie";
       priority = 2;
-    } else if (fmt === "OVA" || fmt === "SPECIAL") {
-      label = fmt === "OVA" ? "OVA" : "Special";
+    } else if (rel === "SUMMARY" || /recap|summary|remaster|loguetown/i.test(checkTitle)) {
+      label = "Recap";
+      priority = 3;
+    } else if (fmt === "OVA") {
+      label = "OVA";
+      priority = 3;
+    } else if (fmt === "SPECIAL" || ((fmt === "ONA" || fmt === "TV_SHORT") && item.episodes && item.episodes <= 2)) {
+      label = "Special";
       priority = 3;
     } else if (finalMatch) {
       label = pMatch ? `Final Season Part ${pMatch[1]}` : "Final Season";
@@ -696,13 +722,13 @@ function formatAndSortSeasons(rawItems: any[], currentId: number): any[] {
       priority = 1;
       seasonNum = parsedNum;
       tvCount = Math.max(tvCount, parsedNum);
-    } else if (fmt === "TV" || fmt === "ONA") {
+    } else if (isMainlineTV(item)) {
       tvCount++;
-      label = `Season ${tvCount}`;
+      label = hasMultipleSeasons ? `Season ${tvCount}` : "Main Series";
       priority = 1;
       seasonNum = tvCount;
     } else {
-      label = "Related";
+      label = fmt === "ONA" ? "ONA" : "Side Story";
       priority = 3;
     }
 
@@ -949,7 +975,7 @@ export const jikanService = {
   
   // Get all seasons and franchise entries for an anime, ordered chronologically
   getAnimeSeasons: async (id: number) => {
-    const cacheKey = `seasons:v5:${id}`;
+    const cacheKey = `seasons:v6:${id}`;
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
@@ -958,6 +984,7 @@ export const jikanService = {
       const visited = new Set<number>();
       const queue: number[] = [id];
       const maxHops = 10;
+      let rootWords: string[] = [];
 
       while (queue.length > 0 && mediaMap.size < maxHops) {
         const currentId = queue.shift()!;
@@ -1002,16 +1029,36 @@ export const jikanService = {
           const media = res?.Media;
           if (!media || !media.idMal) continue;
 
-          mediaMap.set(media.idMal, media);
+          if (currentId === id) {
+            const rootTitle = (media.title?.english || media.title?.romaji || "").toLowerCase();
+            rootWords = rootTitle
+              .replace(/[^a-z0-9\s]/g, " ")
+              .split(/\s+/)
+              .filter((w: string) => w.length >= 3 && !["season", "part", "the", "final", "act"].includes(w));
+            mediaMap.set(media.idMal, { ...media, relationType: "ROOT" });
+          } else if (!mediaMap.has(media.idMal)) {
+            mediaMap.set(media.idMal, { ...media, relationType: "SEQUEL" });
+          }
 
           const edges = media.relations?.edges || [];
           for (const edge of edges) {
             const relNode = edge.node;
             if (!relNode || relNode.type !== "ANIME" || !relNode.idMal) continue;
 
-            // Immediately register related node so prequels, sequels, movies & spin-offs are guaranteed present
+            // Never include character cameos / external IP crossovers (e.g. Dragon Ball Z or Toriko in One Piece)
+            if (edge.relationType === "CHARACTER") continue;
+
+            // For non-prequel/sequel links, ensure the title belongs to the same franchise
+            if (!["PREQUEL", "SEQUEL"].includes(edge.relationType) && rootWords.length > 0) {
+              const relTitle = (relNode.title?.english || relNode.title?.romaji || "").toLowerCase();
+              const relWords = relTitle.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w: string) => w.length >= 3);
+              const hasWordOverlap = rootWords.some((w: string) => relWords.includes(w));
+              if (!hasWordOverlap) continue;
+            }
+
+            // Immediately register related node so prequels, sequels, movies & spin-offs are present
             if (!mediaMap.has(relNode.idMal)) {
-              mediaMap.set(relNode.idMal, relNode);
+              mediaMap.set(relNode.idMal, { ...relNode, relationType: edge.relationType });
             }
 
             // Follow PREQUEL and SEQUEL links to discover any further timeline chain
@@ -1042,10 +1089,13 @@ export const jikanService = {
               format: cur.type || "TV",
               episodes: cur.episodes,
               status: cur.status,
+              relationType: "ROOT",
             },
           ];
           if (cur.relations && Array.isArray(cur.relations)) {
             for (const r of cur.relations) {
+              const relType = String(r.relation || "").toUpperCase();
+              if (relType === "CHARACTER") continue;
               if (r.entry && Array.isArray(r.entry)) {
                 for (const e of r.entry) {
                   if (e.type === "anime" && e.mal_id) {
@@ -1059,6 +1109,7 @@ export const jikanService = {
                       format: e.format || "TV",
                       episodes: e.episodes || null,
                       status: e.status || null,
+                      relationType: relType,
                     });
                   }
                 }
@@ -1084,6 +1135,7 @@ export const jikanService = {
           format: m.format || "TV",
           episodes: m.episodes || null,
           status: m.status || null,
+          relationType: m.relationType || (Number(m.idMal) === Number(id) ? "ROOT" : "RELATED"),
         }));
 
       const formatted = formatAndSortSeasons(rawList, id);
