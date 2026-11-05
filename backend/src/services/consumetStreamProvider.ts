@@ -411,6 +411,7 @@ export class ConsumetStreamProvider implements StreamProvider {
   ): Promise<{
     manifestUrl: string | null;
     subtitles: Array<{ url: string; lang: string; label: string }>;
+    thumbnails: string | null;
   }> {
     const cleanServerUrl = this.sanitizeUrl(serverUrl);
 
@@ -436,7 +437,7 @@ export class ConsumetStreamProvider implements StreamProvider {
 
       // Ignore DASH (.mpd) manifests since we want HLS (.m3u8) or MP4
       if (manifestUrl && /\.mpd(?:[?#]|$)/i.test(manifestUrl)) {
-        return { manifestUrl: null, subtitles: [] };
+        return { manifestUrl: null, subtitles: [], thumbnails: null };
       }
 
       const subtitles: Array<{ url: string; lang: string; label: string }> = [];
@@ -457,11 +458,14 @@ export class ConsumetStreamProvider implements StreamProvider {
         }
       }
 
-      return { manifestUrl, subtitles };
+      const rawThumbnails = jsonData?.thumbnails?.[1] ? String(jsonData.thumbnails[1]) : null;
+      const thumbnails = rawThumbnails ? this.sanitizeUrl(rawThumbnails) : null;
+
+      return { manifestUrl, subtitles, thumbnails };
     }
 
     // Fallback for non-cat-player servers
-    return { manifestUrl: cleanServerUrl, subtitles: [] };
+    return { manifestUrl: cleanServerUrl, subtitles: [], thumbnails: null };
   }
 
   /**
@@ -579,6 +583,7 @@ export class ConsumetStreamProvider implements StreamProvider {
         serverName: string;
         subtitles: SubtitleTrack[];
         quality?: string;
+        thumbnails?: string;
       } | null = null;
 
       await Promise.all(
@@ -620,11 +625,15 @@ export class ConsumetStreamProvider implements StreamProvider {
               })
             );
 
-            // Collect all subtitles across servers for this episode (so even BirdStream's extra subtitle tracks can enrich VidStreaming!)
+            // Collect all subtitles and thumbnails across servers for this episode (so all servers share storyboards and subs!)
             const combinedRawSubs: Array<{ url: string; lang: string; label: string }> = [];
+            let episodeThumbnails: string | null = null;
             for (const item of extractedList) {
               if (item?.extracted?.subtitles?.length) {
                 combinedRawSubs.push(...item.extracted.subtitles);
+              }
+              if (!episodeThumbnails && item?.extracted?.thumbnails) {
+                episodeThumbnails = item.extracted.thumbnails;
               }
             }
             const normalizedSubs = this.normalizeSubtitles(combinedRawSubs);
@@ -640,6 +649,9 @@ export class ConsumetStreamProvider implements StreamProvider {
                 extracted.subtitles.length > 0
                   ? this.normalizeSubtitles([...extracted.subtitles, ...combinedRawSubs])
                   : normalizedSubs;
+
+              const rawThumb = extracted.thumbnails || episodeThumbnails;
+              const serverThumbnails = rawThumb ? this.proxyUrl(rawThumb) : undefined;
 
               const m3u8Info = isHls
                 ? await this.inspectMasterM3U8(manifestUrl)
@@ -664,6 +676,7 @@ export class ConsumetStreamProvider implements StreamProvider {
                   type: isHls ? "hls" : "mp4",
                   quality: detectedQuality,
                   subtitles: serverSubs,
+                  thumbnails: serverThumbnails,
                 });
 
                 // Remember if the SUB master playlist also embeds an English Dub audio track
@@ -673,6 +686,7 @@ export class ConsumetStreamProvider implements StreamProvider {
                     serverName: srv.name,
                     subtitles: serverSubs,
                     quality: detectedQuality,
+                    thumbnails: serverThumbnails,
                   };
                 }
               } else {
@@ -686,6 +700,7 @@ export class ConsumetStreamProvider implements StreamProvider {
                   type: isHls ? "hls" : "mp4",
                   quality: detectedQuality,
                   subtitles: serverSubs,
+                  thumbnails: serverThumbnails,
                 });
               }
             }
@@ -702,6 +717,7 @@ export class ConsumetStreamProvider implements StreamProvider {
           serverName: string;
           subtitles: SubtitleTrack[];
           quality?: string;
+          thumbnails?: string;
         };
         servers.push({
           id: `kaa-dub-multiaudio-0`,
@@ -711,6 +727,7 @@ export class ConsumetStreamProvider implements StreamProvider {
           type: "hls",
           quality: master.quality || "1080p",
           subtitles: master.subtitles,
+          thumbnails: master.thumbnails,
         });
       }
     } catch (err) {

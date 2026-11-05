@@ -625,6 +625,7 @@ export function WatchPage() {
             onProgress={handleProgress}
             initialTime={initialTime}
             subtitles={activeServer.subtitles}
+            thumbnails={activeServer.thumbnails}
             skips={skips}
             autoSkip={autoSkip}
             episodeNumber={episodeNum}

@@ -73,6 +73,30 @@ function ensureWebVtt(content: string): string {
 }
 
 /**
+ * Rewrite image URLs in WebVTT storyboard files so images are routed through
+ * our backend proxy with the correct Referer and CORS headers.
+ */
+function rewriteThumbnailVtt(
+  content: string,
+  parentUrl: string,
+  proxyBaseUrl: string,
+  referer?: string
+): string {
+  const parentBase = parentUrl.substring(0, parentUrl.lastIndexOf("/") + 1);
+  return content.replace(/^([^\r\n]*?\.(?:jpg|jpeg|png|webp)[^\r\n]*?)$/gim, (line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("WEBVTT") || trimmed.startsWith("NOTE")) return line;
+    const [imgPart, hash] = trimmed.split("#");
+    const absoluteImgUrl = imgPart.startsWith("http") ? imgPart : new URL(imgPart, parentBase).toString();
+    let proxied = `${proxyBaseUrl}?url=${encodeURIComponent(absoluteImgUrl)}`;
+    if (referer) {
+      proxied += `&referer=${encodeURIComponent(referer)}`;
+    }
+    return hash ? `${proxied}#${hash}` : proxied;
+  });
+}
+
+/**
  * Rewrite ALL URLs in .m3u8 playlists to go through our backend proxy,
  * and optionally pin the desired audio track ("jpn" for SUB, "eng" for DUB)
  * and/or pin a specific resolution (e.g. "1080p", "720p", "360p").
@@ -301,7 +325,13 @@ router.get("/proxy", async (req: Request, res: Response) => {
           res.setHeader("Content-Type", "text/vtt; charset=utf-8");
           res.setHeader("Access-Control-Allow-Origin", "*");
           res.setHeader("Cache-Control", "public, max-age=86400");
-          res.send(ensureWebVtt(String(response.data || "")));
+          const rawText = String(response.data || "");
+          const isThumbnailVtt = /#xywh=|\.(?:jpg|jpeg|png|webp)/i.test(rawText);
+          if (isThumbnailVtt) {
+            res.send(rewriteThumbnailVtt(rawText, url, "/api/stream/proxy", referer));
+          } else {
+            res.send(ensureWebVtt(rawText));
+          }
           return;
         }
 
@@ -339,8 +369,11 @@ router.get("/proxy", async (req: Request, res: Response) => {
         res.status(response.status);
 
         const upstreamType = String(response.headers["content-type"] || "");
+        const isImage = /\.(jpg|jpeg|png|webp)(?:[?#]|$)/i.test(url) || upstreamType.startsWith("image/");
         const contentType = isMp4
           ? "video/mp4"
+          : isImage
+          ? (upstreamType.startsWith("image/") ? upstreamType : "image/jpeg")
           : upstreamType && !upstreamType.includes("image/")
           ? upstreamType
           : "video/mp2t";

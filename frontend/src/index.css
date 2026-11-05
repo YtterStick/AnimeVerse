@@ -373,4 +373,21 @@
   box-shadow: 0 0 8px rgba(250, 204, 21, 0.8);
 }
 
+/* Vidstack Seekbar Hover Preview Thumbnail */
+:where(.vds-slider-thumbnail) {
+  border-radius: 8px !important;
+  border: 2px solid rgba(255, 255, 255, 0.45) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.85) !important;
+  overflow: hidden !important;
+  background-color: #000 !important;
+}
+
+:where(.vds-slider-preview) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+
 

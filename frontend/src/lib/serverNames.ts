@@ -53,3 +53,4 @@ export function getCleanServerName(rawName: string | undefined | null, index = 0
 }
 
 export default getCleanServerName;
+

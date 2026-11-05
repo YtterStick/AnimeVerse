@@ -4,6 +4,7 @@ export interface StreamResult {
   quality?: string;
   headers?: Record<string, string>;
   subtitles?: SubtitleTrack[];
+  thumbnails?: string;
 }
 
 export interface SubtitleTrack {
@@ -23,6 +24,7 @@ export interface StreamServer {
   quality?: string;
   headers?: Record<string, string>;
   subtitles?: SubtitleTrack[];
+  thumbnails?: string;
 }
 
 export interface MultiStreamResult {

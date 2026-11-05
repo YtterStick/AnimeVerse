@@ -21,6 +21,8 @@ interface VideoPlayerProps {
   onProgress?: (currentTime: number, duration: number) => void;
   initialTime?: number;
   subtitles?: SubtitleTrack[];
+  /** WebVTT storyboard thumbnail URL for scrubbing/hovering preview */
+  thumbnails?: string;
   /** Intro/outro/recap intervals in seconds */
   skips?: SkipInterval[];
   /** Automatically jump past intros/outros when playback enters them */
@@ -50,6 +52,7 @@ export function VideoPlayer({
   onProgress,
   initialTime = 0,
   subtitles = [],
+  thumbnails,
   skips = [],
   autoSkip = false,
   episodeNumber,
@@ -350,7 +353,7 @@ export function VideoPlayer({
             />
           )}
         </MediaProvider>
-        <DefaultVideoLayout icons={defaultLayoutIcons} />
+        <DefaultVideoLayout icons={defaultLayoutIcons} thumbnails={thumbnails} />
 
         {/* Yellow Intro & Outro Timeline Highlights rendered right on the seekbar */}
         {sliderEl && duration > 0 && refinedSkips.length > 0 && createPortal(

@@ -96,6 +96,8 @@ export async function resolveKaaClient(
         if (!rawManifest) continue;
 
         const manifestUrl = sanitizeUrl(String(rawManifest));
+        const rawThumbnails = jsonData?.thumbnails?.[1];
+        const thumbnailsUrl = rawThumbnails ? buildProxyUrl(sanitizeUrl(String(rawThumbnails))) : undefined;
         const rawSubs = jsonData?.subtitles?.[1] || [];
 
         const subtitles: SubtitleTrack[] = [];
@@ -124,6 +126,7 @@ export async function resolveKaaClient(
           type: "hls",
           quality: "1080p",
           subtitles,
+          thumbnails: thumbnailsUrl,
         });
       } catch (err: any) {
         console.warn(`[KaaDirectResolver] Failed to parse player for ${srv.name}:`, err.message);
@@ -163,6 +166,8 @@ export async function resolveKaaClient(
             const rawManifest = jsonData?.manifest?.[1];
             if (!rawManifest) continue;
             const manifestUrl = sanitizeUrl(String(rawManifest));
+            const rawThumbnails = jsonData?.thumbnails?.[1];
+            const thumbnailsUrl = rawThumbnails ? buildProxyUrl(sanitizeUrl(String(rawThumbnails))) : undefined;
 
             servers.push({
               id: `kaa-dub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
@@ -172,6 +177,7 @@ export async function resolveKaaClient(
               type: "hls",
               quality: "1080p",
               subtitles: [],
+              thumbnails: thumbnailsUrl,
             });
           } catch {
             // Ignore individual server error
