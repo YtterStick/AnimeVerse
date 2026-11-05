@@ -6,6 +6,7 @@ import streamRoutes from "./routes/stream";
 import historyRoutes from "./routes/history";
 import watchlistRoutes from "./routes/watchlist";
 import errorHandler from "./middleware/errorHandler";
+import { jikanService } from "./services/jikanService";
 
 const app = express();
 
@@ -36,8 +37,39 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ─── Cache Warmup ───────────────────────────────────────────────────────────
+// Pre-fetches the most visited endpoints so the first real user gets instant
+// cached responses instead of waiting 2-4s for upstream APIs.
+let lastWarmup = 0;
+const WARMUP_INTERVAL = 12 * 60 * 1000; // 12 minutes (cache TTL is 15min)
+
+async function warmupCache() {
+  const now = Date.now();
+  if (now - lastWarmup < WARMUP_INTERVAL) return; // still warm
+  lastWarmup = now;
+
+  console.log("[Warmup] Pre-fetching homepage data...");
+  const endpoints = [
+    jikanService.getTrending(1),
+    jikanService.getTopAiring(1),
+    jikanService.getUpcoming(1),
+    jikanService.getPopular(1),
+  ];
+
+  try {
+    await Promise.allSettled(endpoints);
+    console.log("[Warmup] Cache warmed successfully.");
+  } catch (err: any) {
+    console.warn("[Warmup] Partial failure:", err.message);
+  }
+}
+
 // Health Check (supports both GET and HEAD on /health and /api/health for cron pingers)
-const healthHandler = (_req: express.Request, res: express.Response) => {
+// Now also triggers cache warmup so the API data is always pre-loaded
+const healthHandler = async (_req: express.Request, res: express.Response) => {
+  // Fire warmup in background — don't block the health response
+  warmupCache().catch(() => {});
+
   res.status(200).json({
     status: "ok",
     uptime: Math.floor(process.uptime()),
@@ -64,4 +96,7 @@ const PORT = env.PORT;
 app.listen(PORT, () => {
   console.log(`🚀 AniVerse Backend Server running on http://localhost:${PORT}`);
   console.log(`🏥 Health check available at http://localhost:${PORT}/health`);
+
+  // Warm the cache immediately on startup so even the very first visitor gets fast responses
+  warmupCache().catch(() => {});
 });
