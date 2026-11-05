@@ -31,13 +31,27 @@ export function HomePage() {
     setLocalHistory(getRecentLocalHistory());
   }, []);
 
-  // Merge local instant progress and cloud history into a unified continue-watching list
+  // Merge local instant progress and cloud history into an accurate continue-watching list
   const continueWatchingItems = useMemo<ContinueItem[]>(() => {
-    const map = new Map<number, ContinueItem>();
+    interface MergedEntry {
+      id: string | number;
+      anime_id: number;
+      anime_title: string;
+      anime_image: string | null;
+      episode_number: number;
+      episode_title?: string;
+      progress_seconds: number;
+      duration_seconds: number;
+      updated_at: number;
+    }
 
-    // 1. Local progress (instant real-time updates across page reloads & guest users)
+    const map = new Map<number, MergedEntry>();
+
+    // 1. Process local progress entries
     for (const item of localHistory) {
-      if (item.durationSeconds > 0 && !isEpisodeFinished(item.progressSeconds, item.durationSeconds)) {
+      if (!item || !item.animeId || !item.durationSeconds) continue;
+      const existing = map.get(item.animeId);
+      if (!existing || item.updatedAt > existing.updated_at || item.episodeNumber > existing.episode_number) {
         map.set(item.animeId, {
           id: `local-${item.animeId}-${item.episodeNumber}`,
           anime_id: item.animeId,
@@ -47,27 +61,62 @@ export function HomePage() {
           episode_title: `Episode ${item.episodeNumber}`,
           progress_seconds: item.progressSeconds,
           duration_seconds: item.durationSeconds,
+          updated_at: item.updatedAt || 0,
         });
       }
     }
 
-    // 2. Cloud database history (for logged in accounts)
+    // 2. Process cloud database history entries (for authenticated users)
     for (const h of history) {
-      if (!map.has(h.anime_id) && h.duration_seconds > 0 && !isEpisodeFinished(h.progress_seconds, h.duration_seconds)) {
+      if (!h || !h.anime_id || !h.duration_seconds) continue;
+      const hTime = h.watched_at ? new Date(h.watched_at).getTime() : 0;
+      const existing = map.get(h.anime_id);
+
+      // Cloud entry wins if there's no existing local entry, or cloud has newer timestamp, or cloud is further in episodes
+      if (!existing || hTime > existing.updated_at || h.episode_number > existing.episode_number) {
         map.set(h.anime_id, {
           id: h.id,
           anime_id: h.anime_id,
           anime_title: h.anime_title,
-          anime_image: h.anime_image,
+          anime_image: h.anime_image || existing?.anime_image || null,
           episode_number: h.episode_number,
           episode_title: h.episode_title || `Episode ${h.episode_number}`,
           progress_seconds: h.progress_seconds,
           duration_seconds: h.duration_seconds,
+          updated_at: hTime,
         });
       }
     }
 
-    return Array.from(map.values()).slice(0, 8);
+    // Sort by latest watched timestamp (most recently watched first)
+    const sorted = Array.from(map.values()).sort((a, b) => b.updated_at - a.updated_at);
+
+    return sorted.slice(0, 8).map((item) => {
+      // If the latest episode was finished (>95% or within 30s of end), prompt to continue with next episode
+      const finished = isEpisodeFinished(item.progress_seconds, item.duration_seconds);
+      if (finished) {
+        return {
+          id: `${item.id}-next`,
+          anime_id: item.anime_id,
+          anime_title: item.anime_title,
+          anime_image: item.anime_image,
+          episode_number: item.episode_number + 1,
+          episode_title: `Episode ${item.episode_number + 1}`,
+          progress_seconds: 0,
+          duration_seconds: item.duration_seconds,
+        };
+      }
+      return {
+        id: item.id,
+        anime_id: item.anime_id,
+        anime_title: item.anime_title,
+        anime_image: item.anime_image,
+        episode_number: item.episode_number,
+        episode_title: item.episode_title,
+        progress_seconds: item.progress_seconds,
+        duration_seconds: item.duration_seconds,
+      };
+    });
   }, [history, localHistory]);
 
   return (

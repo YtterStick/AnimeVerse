@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Calendar, Clock, Play, Star, ChevronRight } from "lucide-react";
 import { useAnimeSchedule } from "@/hooks/useAnime";
 import { formatScore } from "@/lib/utils";
+import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 import type { Anime } from "@/types";
 
 const DAYS = [
@@ -22,6 +23,7 @@ function getTodayDayId(): string {
 }
 
 export function EstimatedSchedule() {
+  const { formatTitle } = useTitleLanguage();
   const todayId = getTodayDayId();
   const [selectedDay, setSelectedDay] = useState<string>(todayId);
   const { data: animeList, loading } = useAnimeSchedule(selectedDay);
@@ -116,7 +118,7 @@ export function EstimatedSchedule() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
           {animeList.map((anime: Anime, idx: number) => {
-            const title = anime.title_english || anime.title;
+            const title = formatTitle(anime);
             const image =
               anime.images?.webp?.large_image_url ||
               anime.images?.jpg?.large_image_url ||

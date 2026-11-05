@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MultiStreamResult } from "@/types";
+import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 
 export function WatchPage() {
   const { id, episode } = useParams<{ id: string; episode: string }>();
@@ -22,6 +23,7 @@ export function WatchPage() {
   const { episodes, loading: episodesLoading } = useAnimeEpisodes(animeId);
   const { saveProgress, isAuthenticated } = useSaveProgress();
   const { history } = useWatchHistory();
+  const { formatTitle } = useTitleLanguage();
   const { recommendations, loading: recommendationsLoading, error: recommendationsError, refetch: refetchRecommendations } = useAnimeRecommendations(animeId);
 
   const [multiStream, setMultiStream] = useState<MultiStreamResult | null>(null);
@@ -483,7 +485,7 @@ export function WatchPage() {
     );
   }   
 
-  const title = anime.title_english || anime.title;
+  const title = formatTitle(anime);
   const hasNext = episodes.some((ep) => ep.episode_number === episodeNum + 1) || (anime.episodes ? episodeNum < anime.episodes : true);
 
   const handleVideoEnded = () => {

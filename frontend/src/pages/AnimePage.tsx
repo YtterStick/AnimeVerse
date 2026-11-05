@@ -7,6 +7,7 @@ import { GenreBadge } from "@/components/anime/GenreBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { formatScore } from "@/lib/utils";
+import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 
 export function AnimePage() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +16,7 @@ export function AnimePage() {
   const { anime, loading: detailLoading, error: detailError } = useAnimeDetail(animeId);
   const { episodes, loading: episodesLoading } = useAnimeEpisodes(animeId);
   const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
+  const { formatTitle, language } = useTitleLanguage();
 
   if (detailLoading) {
     return (
@@ -82,7 +84,7 @@ export function AnimePage() {
     );
   }
 
-  const title = anime.title_english || anime.title;
+  const title = formatTitle(anime);
   const image = anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url;
   const bannerImage = anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url;
   const synopsis = anime.synopsis || "No synopsis available.";
@@ -168,11 +170,20 @@ export function AnimePage() {
           <div className="lg:col-span-3 space-y-8 pt-4 lg:pt-0">
             {/* Headers */}
             <div className="space-y-4">
-              {anime.title_japanese && (
-                <p className="text-sm font-semibold tracking-wider text-primary uppercase">
-                  {anime.title_japanese}
-                </p>
-              )}
+              {/* Secondary Alternate Title Header */}
+              {(() => {
+                const altTitle =
+                  language === "en"
+                    ? anime.title_japanese || anime.title
+                    : anime.title_japanese || anime.title_english;
+                return (
+                  altTitle && altTitle !== title && (
+                    <p className="text-xs sm:text-sm font-semibold tracking-wider text-primary uppercase line-clamp-1">
+                      {altTitle}
+                    </p>
+                  )
+                );
+              })()}
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-white leading-none">
                 {title}
               </h1>

@@ -93,9 +93,10 @@ export function saveLocalEpisodeProgress(data: {
     );
 
     // 3. Maintain global recent watch list (capped at 30 items)
+    // Filter by animeId so each anime only holds its most recently watched episode
     const rawList = localStorage.getItem(RECENT_LIST_KEY);
     let list: LocalWatchProgress[] = rawList ? JSON.parse(rawList) : [];
-    list = list.filter((item) => !(item.animeId === animeId && item.episodeNumber === episodeNumber));
+    list = list.filter((item) => item.animeId !== animeId);
     list.unshift(entry);
     if (list.length > 30) list = list.slice(0, 30);
     localStorage.setItem(RECENT_LIST_KEY, JSON.stringify(list));
@@ -123,7 +124,24 @@ export function getLocalLastWatched(animeId: number): LocalWatchProgress | null 
 export function getRecentLocalHistory(): LocalWatchProgress[] {
   try {
     const raw = localStorage.getItem(RECENT_LIST_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const list: LocalWatchProgress[] = JSON.parse(raw);
+    // Deduplicate by animeId, keeping only the most recently updated or highest episode
+    const map = new Map<number, LocalWatchProgress>();
+    for (const item of list) {
+      if (!item || !item.animeId) continue;
+      const existing = map.get(item.animeId);
+      if (!existing) {
+        map.set(item.animeId, item);
+      } else {
+        const itemTime = item.updatedAt || 0;
+        const existingTime = existing.updatedAt || 0;
+        if (itemTime > existingTime || item.episodeNumber > existing.episodeNumber) {
+          map.set(item.animeId, item);
+        }
+      }
+    }
+    return Array.from(map.values());
   } catch {
     return [];
   }

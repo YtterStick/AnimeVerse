@@ -6,6 +6,7 @@ import type { Anime } from "@/types";
 import { useWatchlist } from "@/hooks/useWatchHistory";
 import { truncateText, formatScore } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 
 interface HeroBannerProps {
   trendingList: Anime[] | null;
@@ -15,6 +16,7 @@ interface HeroBannerProps {
 export function HeroBanner({ trendingList, loading }: HeroBannerProps) {
   const navigate = useNavigate();
   const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
+  const { formatTitle } = useTitleLanguage();
   const [activeIndex, setActiveIndex] = useState(0);
 
   const bannerList = trendingList?.slice(0, 5) || [];
@@ -64,7 +66,7 @@ export function HeroBanner({ trendingList, loading }: HeroBannerProps) {
   }
 
   const currentAnime = bannerList[activeIndex];
-  const title = currentAnime.title_english || currentAnime.title;
+  const title = formatTitle(currentAnime);
   const bannerImage = currentAnime.images?.webp?.large_image_url || currentAnime.images?.jpg?.large_image_url;
   const synopsis = currentAnime.synopsis || "No synopsis available.";
   const rating = currentAnime.rating;

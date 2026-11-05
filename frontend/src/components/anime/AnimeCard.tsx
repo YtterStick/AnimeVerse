@@ -2,13 +2,15 @@ import { Link } from "react-router-dom";
 import { Star, Play } from "lucide-react";
 import type { Anime } from "@/types";
 import { formatScore } from "@/lib/utils";
+import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 
 interface AnimeCardProps {
   anime: Anime;
 }
 
 export function AnimeCard({ anime }: AnimeCardProps) {
-  const title = anime.title_english || anime.title;
+  const { formatTitle } = useTitleLanguage();
+  const title = formatTitle(anime);
   const image = anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url;
   const score = anime.score;
   const type = anime.type;

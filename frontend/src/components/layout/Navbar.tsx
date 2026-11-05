@@ -4,6 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2 } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
+import { TitleLanguageToggle } from "@/components/shared/TitleLanguageToggle";
+import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 import { UserMenu } from "../auth/UserMenu";
 import { AuthModal } from "../auth/AuthModal";
 import { animeApi } from "@/lib/api";
@@ -11,6 +13,7 @@ import type { Anime } from "@/types";
 
 export function Navbar() {
   const { user } = useAuth();
+  const { formatTitle } = useTitleLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
@@ -164,7 +167,7 @@ export function Navbar() {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-white truncate group-hover:text-primary transition-colors">
-                        {anime.title}
+                        {formatTitle(anime)}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
                         {anime.type && <span>{anime.type}</span>}
@@ -278,7 +281,9 @@ export function Navbar() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <TitleLanguageToggle />
+
               {user ? (
                 <UserMenu />
               ) : (
@@ -367,6 +372,12 @@ export function Navbar() {
               >
                 <History className="w-4 h-4" /> History
               </Link>
+              {/* Title Language Selector (Mobile) */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-card/60 border border-border/40">
+                <span className="text-xs font-semibold text-muted-foreground">Title Language</span>
+                <TitleLanguageToggle size="sm" />
+              </div>
+
               {user ? (
                 <Link
                     to="/watchlist"
