@@ -7,6 +7,8 @@ import { SearchPage } from "@/pages/SearchPage";
 import { WatchPage } from "@/pages/WatchPage";
 import { WatchlistPage } from "@/pages/WatchlistPage";
 import { HistoryPage } from "@/pages/HistoryPage";
+import { TermsPage } from "@/pages/TermsPage";
+import { PrivacyPage } from "@/pages/PrivacyPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 
 export function App() {
@@ -20,6 +22,8 @@ export function App() {
           <Route path="watch/:id/:episode" element={<WatchPage />} />
           <Route path="watchlist" element={<WatchlistPage />} />
           <Route path="history" element={<HistoryPage />} />
+          <Route path="terms" element={<TermsPage />} />
+          <Route path="privacy" element={<PrivacyPage />} />
           <Route path="auth/callback" element={<AuthCallbackPage />} />
         </Route>
       </Routes>
