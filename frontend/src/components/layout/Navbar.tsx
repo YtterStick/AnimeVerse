@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -168,7 +168,7 @@ export function Navbar() {
                       </p>
                       <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
                         {anime.type && <span>{anime.type}</span>}
-                        {anime.year && <span>â€¢ {anime.year}</span>}
+                        {anime.year && <span>• {anime.year}</span>}
                         {anime.score && (
                           <span className="flex items-center gap-0.5 text-amber-400 font-medium">
                             <Star className="w-2.5 h-2.5 fill-amber-400" />

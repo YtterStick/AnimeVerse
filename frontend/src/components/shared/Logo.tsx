@@ -1,4 +1,4 @@
-﻿import { useId } from "react";
+import { useId } from "react";
 
 interface LogoMarkProps {
   size?: number;
@@ -86,12 +86,11 @@ export function LogoMark({ size = 36, className = "" }: LogoMarkProps) {
 
 interface LogoProps {
   size?: number;
-  showTagline?: boolean;
   className?: string;
 }
 
-/** Full lockup: mark + wordmark (+ optional katakana tagline). */
-export function Logo({ size = 36, showTagline = true, className = "" }: LogoProps) {
+/** Full lockup: mark + wordmark. */
+export function Logo({ size = 36, className = "" }: LogoProps) {
   return (
     <span className={`inline-flex items-center gap-2.5 select-none ${className}`}>
       <LogoMark
@@ -105,11 +104,6 @@ export function Logo({ size = 36, showTagline = true, className = "" }: LogoProp
             Verse
           </span>
         </span>
-        {showTagline && (
-          <span className="mt-1 text-[9px] font-semibold tracking-[0.35em] text-muted-foreground/70">
-            ã‚¢ãƒ‹ãƒãƒ¼ã‚¹
-          </span>
-        )}
       </span>
     </span>
   );
