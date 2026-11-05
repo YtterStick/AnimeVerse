@@ -86,16 +86,60 @@ export function useSaveProgress() {
   return { saveProgress, isAuthenticated: !!session };
 }
 
+const LOCAL_WATCHLIST_KEY = "aniverse:watchlist";
+
+function getLocalWatchlist(): WatchlistEntry[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_WATCHLIST_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalWatchlist(items: WatchlistEntry[]) {
+  try {
+    localStorage.setItem(LOCAL_WATCHLIST_KEY, JSON.stringify(items));
+  } catch {
+    // quota exceeded or private mode
+  }
+}
+
 export function useWatchlist() {
   const { session } = useAuth();
-  const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([]);
+  const [watchlist, setWatchlist] = useState<WatchlistEntry[]>(() => getLocalWatchlist());
   const [loading, setLoading] = useState(false);
 
   const fetchWatchlist = useCallback(async () => {
-    if (!session?.access_token) return;
+    if (!session?.access_token) {
+      setWatchlist(getLocalWatchlist());
+      return;
+    }
     setLoading(true);
     try {
-      const data = await watchlistApi.getWatchlist(session.access_token);
+      let data = await watchlistApi.getWatchlist(session.access_token);
+
+      // Auto-sync guest items from localStorage if user recently logged in
+      const local = getLocalWatchlist();
+      if (local.length > 0) {
+        for (const localItem of local) {
+          if (!data.some((r) => r.anime_id === localItem.anime_id)) {
+            try {
+              const synced = await watchlistApi.addToWatchlist(session.access_token, {
+                anime_id: localItem.anime_id,
+                anime_title: localItem.anime_title,
+                anime_image: localItem.anime_image,
+                anime_type: localItem.anime_type,
+              });
+              data = [synced, ...data];
+            } catch (syncErr) {
+              console.warn("Failed to sync guest watchlist item:", syncErr);
+            }
+          }
+        }
+        localStorage.removeItem(LOCAL_WATCHLIST_KEY);
+      }
+
       setWatchlist(data);
     } catch (err) {
       console.error("Failed to fetch watchlist:", err);
@@ -115,25 +159,55 @@ export function useWatchlist() {
       anime_image: string | null;
       anime_type: string | null;
     }) => {
-      if (!session?.access_token) return;
-      try {
-        await watchlistApi.addToWatchlist(session.access_token, data);
-        await fetchWatchlist();
-      } catch (err) {
-        console.error("Failed to add to watchlist:", err);
+      const newEntry: WatchlistEntry = {
+        id: `local_${data.anime_id}`,
+        user_id: session?.user?.id || "guest",
+        anime_id: data.anime_id,
+        anime_title: data.anime_title,
+        anime_image: data.anime_image,
+        anime_type: data.anime_type,
+        added_at: new Date().toISOString(),
+      };
+
+      // Optimistic update
+      setWatchlist((prev) => {
+        if (prev.some((item) => item.anime_id === data.anime_id)) return prev;
+        const next = [newEntry, ...prev];
+        if (!session?.access_token) {
+          saveLocalWatchlist(next);
+        }
+        return next;
+      });
+
+      if (session?.access_token) {
+        try {
+          await watchlistApi.addToWatchlist(session.access_token, data);
+          await fetchWatchlist();
+        } catch (err) {
+          console.error("Failed to add to watchlist:", err);
+        }
       }
     },
-    [session?.access_token, fetchWatchlist]
+    [session?.access_token, session?.user?.id, fetchWatchlist]
   );
 
   const removeFromWatchlist = useCallback(
     async (animeId: number) => {
-      if (!session?.access_token) return;
-      try {
-        await watchlistApi.removeFromWatchlist(session.access_token, animeId);
-        setWatchlist((prev) => prev.filter((item) => item.anime_id !== animeId));
-      } catch (err) {
-        console.error("Failed to remove from watchlist:", err);
+      // Optimistic update
+      setWatchlist((prev) => {
+        const next = prev.filter((item) => item.anime_id !== animeId);
+        if (!session?.access_token) {
+          saveLocalWatchlist(next);
+        }
+        return next;
+      });
+
+      if (session?.access_token) {
+        try {
+          await watchlistApi.removeFromWatchlist(session.access_token, animeId);
+        } catch (err) {
+          console.error("Failed to remove from watchlist:", err);
+        }
       }
     },
     [session?.access_token]

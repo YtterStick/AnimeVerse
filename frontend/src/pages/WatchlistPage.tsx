@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWatchlist } from "@/hooks/useWatchHistory";
 import { AnimeGrid } from "@/components/anime/AnimeGrid";
 import { Button } from "@/components/ui/button";
-import { Heart, Lock } from "lucide-react";
+import { Heart, Compass, Sparkles } from "lucide-react";
 import type { Anime } from "@/types";
 import { SkeletonCard } from "@/components/shared/SkeletonCard";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,27 +25,7 @@ export function WatchlistPage() {
     );
   }
 
-  // 1. Guard check for unauthenticated users
-  if (!user) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-16 w-full flex-1 flex flex-col items-center justify-center text-center space-y-5 page-enter">
-        <div className="w-16 h-16 rounded-full bg-secondary/80 flex items-center justify-center border border-border">
-          <Lock className="w-6 h-6 text-muted-foreground" />
-        </div>
-        <div className="space-y-1">
-          <h1 className="text-xl font-bold text-white">Watchlist Private</h1>
-          <p className="text-sm text-muted-foreground/80 max-w-sm">
-            Please sign in to your account to view or add series to your personal watchlist database.
-          </p>
-        </div>
-        <Button asChild className="rounded-full bg-primary hover:bg-primary/95 text-white font-semibold px-6 shadow-lg shadow-primary/10">
-          <Link to="/">Back to Home</Link>
-        </Button>
-      </div>
-    );
-  }
-
-  // 2. Normalize database watchlists records to Anime cards type layout
+  // Normalize watchlist records to Anime cards type layout
   const normalizedAnimeList: Anime[] = watchlist.map((item) => ({
     mal_id: item.anime_id,
     title: item.anime_title,
@@ -85,14 +65,28 @@ export function WatchlistPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 w-full space-y-6 flex-1 flex flex-col page-enter">
-      <div className="border-b border-border/20 pb-4">
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
-          <Heart className="w-7 h-7 text-primary fill-primary" />
-          My Watchlist
-        </h1>
-        <p className="text-xs text-muted-foreground mt-1">
-          Your bookmarked anime series, movies, and upcoming airings.
-        </p>
+      <div className="border-b border-border/20 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
+            <Heart className="w-7 h-7 text-primary fill-primary" />
+            My Watchlist
+            {watchlist.length > 0 && (
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30">
+                {watchlist.length} {watchlist.length === 1 ? "anime" : "titles"}
+              </span>
+            )}
+          </h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            Your saved anime series, movies, and upcoming airings.
+          </p>
+        </div>
+
+        {!user && watchlist.length > 0 && (
+          <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-secondary/50 border border-border/60 rounded-full px-3 py-1 self-start sm:self-auto">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <span>Saved on this device. Sign in to sync across devices.</span>
+          </div>
+        )}
       </div>
 
       <div className="flex-1">
@@ -101,6 +95,24 @@ export function WatchlistPage() {
             {Array.from({ length: 6 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
+          </div>
+        ) : normalizedAnimeList.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 px-4 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-secondary/60 flex items-center justify-center border border-border/40">
+              <Heart className="w-8 h-8 text-muted-foreground/60" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-lg font-bold text-white">Your Watchlist is Empty</p>
+              <p className="text-sm text-muted-foreground max-w-sm">
+                Explore anime series in Discover or Search and click &ldquo;Add to Watchlist&rdquo; to save them here.
+              </p>
+            </div>
+            <Button asChild className="rounded-full bg-primary hover:bg-primary/90 text-white font-semibold px-6 shadow-md shadow-primary/20">
+              <Link to="/search" className="flex items-center gap-2">
+                <Compass className="w-4 h-4" />
+                <span>Discover Anime</span>
+              </Link>
+            </Button>
           </div>
         ) : (
           <AnimeGrid animeList={normalizedAnimeList} loading={false} />

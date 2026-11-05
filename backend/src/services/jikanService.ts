@@ -79,6 +79,11 @@ const ANILIST_MEDIA_FIELDS = `
   source
   genres
   isAdult
+  tags {
+    name
+    rank
+    isMediaSpoiler
+  }
   startDate {
     year
     month
@@ -191,11 +196,47 @@ function mapAniListMediaToJikan(media: any): any {
       name: s.name,
       type: "anime",
     })),
-    genres: (media.genres || []).map((g: string, idx: number) => ({
-      mal_id: idx + 1,
-      name: g,
-      type: "anime",
-    })),
+    genres: (() => {
+      const rawGenres = (media.genres || []).map((g: string, idx: number) => ({
+        mal_id: idx + 1,
+        name: g,
+        type: "anime",
+      }));
+      const notableThemes = new Set([
+        "isekai",
+        "reincarnation",
+        "time travel",
+        "cyberpunk",
+        "post-apocalyptic",
+        "supernatural",
+        "military",
+        "magic",
+        "school",
+        "martial arts",
+        "survival",
+      ]);
+      const tagGenres = (media.tags || [])
+        .filter(
+          (t: any) =>
+            !t.isMediaSpoiler &&
+            (t.rank >= 60 || notableThemes.has((t.name || "").toLowerCase()))
+        )
+        .map((t: any, idx: number) => ({
+          mal_id: 1000 + idx,
+          name: t.name,
+          type: "anime",
+        }));
+      const merged: any[] = [];
+      const seen = new Set<string>();
+      for (const g of [...rawGenres, ...tagGenres]) {
+        const key = (g.name || "").toLowerCase();
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          merged.push(g);
+        }
+      }
+      return merged;
+    })(),
     images: {
       jpg: {
         image_url: medImg,
@@ -224,6 +265,35 @@ function mapAniListMediaToJikan(media: any): any {
     },
     relations,
   };
+}
+
+function normalizeJikanAnime(item: any): any {
+  if (!item || typeof item !== "object") return item;
+  if (Array.isArray(item.themes) || Array.isArray(item.demographics)) {
+    const existing = new Set((item.genres || []).map((g: any) => (g.name || "").toLowerCase()));
+    const extras = [...(item.themes || []), ...(item.demographics || [])];
+    const combined = [...(item.genres || [])];
+    for (const extra of extras) {
+      const nameKey = (extra.name || "").toLowerCase();
+      if (nameKey && !existing.has(nameKey)) {
+        existing.add(nameKey);
+        combined.push(extra);
+      }
+    }
+    item.genres = combined;
+  }
+  return item;
+}
+
+function normalizeJikanPayload<T>(raw: T): T {
+  if (!raw || typeof raw !== "object") return raw;
+  const anyRaw = raw as any;
+  if (Array.isArray(anyRaw.data)) {
+    anyRaw.data = anyRaw.data.map(normalizeJikanAnime);
+  } else if (anyRaw.data && typeof anyRaw.data === "object") {
+    anyRaw.data = normalizeJikanAnime(anyRaw.data);
+  }
+  return anyRaw as T;
 }
 
 async function queryAniList(query: string, variables: Record<string, any>): Promise<any> {
@@ -272,7 +342,7 @@ async function executeJikanRequest<T>(
         params,
         timeout: 4000,
       });
-      return response.data as T;
+      return normalizeJikanPayload(response.data as T);
     });
 
     cache.set(cacheKey, data);
@@ -340,6 +410,27 @@ export const ID_TO_GENRE: Record<number, string> = {
   62: "Isekai",
 };
 
+export const ANILIST_BASE_GENRES = new Set([
+  "Action",
+  "Adventure",
+  "Comedy",
+  "Drama",
+  "Ecchi",
+  "Fantasy",
+  "Horror",
+  "Mahou Shoujo",
+  "Mecha",
+  "Music",
+  "Mystery",
+  "Psychological",
+  "Romance",
+  "Sci-Fi",
+  "Slice of Life",
+  "Sports",
+  "Supernatural",
+  "Thriller",
+]);
+
 async function fetchAniListMediaList(
   sort: string[],
   page: number,
@@ -347,7 +438,7 @@ async function fetchAniListMediaList(
   extraVars: Record<string, any> = {}
 ) {
   const query = `
-    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $search: String, $genre_in: [String]) {
+    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $search: String, $genre_in: [String], $tag_in: [String]) {
       Page(page: $page, perPage: $perPage) {
         pageInfo {
           total
@@ -356,7 +447,7 @@ async function fetchAniListMediaList(
           lastPage
           hasNextPage
         }
-        media(type: ANIME, isAdult: false, sort: $sort, status: $status, search: $search, genre_in: $genre_in) {
+        media(type: ANIME, isAdult: false, sort: $sort, status: $status, search: $search, genre_in: $genre_in, tag_in: $tag_in) {
           ${ANILIST_MEDIA_FIELDS}
         }
       }
@@ -521,7 +612,23 @@ export const jikanService = {
 
     const extraVars: Record<string, any> = {};
     if (trimmed) extraVars.search = trimmed;
-    if (genreNames.length > 0) extraVars.genre_in = genreNames;
+
+    const anilistGenreIn: string[] = [];
+    const anilistTagIn: string[] = [];
+
+    for (const name of genreNames) {
+      if (ANILIST_BASE_GENRES.has(name)) {
+        anilistGenreIn.push(name);
+      } else if (name.toLowerCase() === "suspense") {
+        anilistGenreIn.push("Thriller");
+      } else {
+        // Tag/theme on AniList (e.g. "Isekai")
+        anilistTagIn.push(name);
+      }
+    }
+
+    if (anilistGenreIn.length > 0) extraVars.genre_in = anilistGenreIn;
+    if (anilistTagIn.length > 0) extraVars.tag_in = anilistTagIn;
 
     return executeJikanRequest<any>(
       "/anime",

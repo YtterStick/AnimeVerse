@@ -17,26 +17,40 @@ import {
   Sparkles,
   Check,
   RotateCcw,
+  Swords,
+  Compass,
+  Laugh,
+  Film,
+  Skull,
+  Heart,
+  Rocket,
+  Coffee,
+  Trophy,
+  Eye,
+  Zap,
+  Brain,
+  Bot,
+  DoorOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const POPULAR_GENRES = [
-  { id: 1, name: "Action", icon: "⚔️" },
-  { id: 2, name: "Adventure", icon: "🗺️" },
-  { id: 4, name: "Comedy", icon: "😂" },
-  { id: 8, name: "Drama", icon: "🎭" },
-  { id: 10, name: "Fantasy", icon: "✨" },
-  { id: 14, name: "Horror", icon: "👻" },
-  { id: 7, name: "Mystery", icon: "🔍" },
-  { id: 22, name: "Romance", icon: "💖" },
-  { id: 24, name: "Sci-Fi", icon: "🚀" },
-  { id: 36, name: "Slice of Life", icon: "☕" },
-  { id: 30, name: "Sports", icon: "⚽" },
-  { id: 37, name: "Supernatural", icon: "🔮" },
-  { id: 41, name: "Suspense", icon: "⚡" },
-  { id: 40, name: "Psychological", icon: "🧠" },
-  { id: 18, name: "Mecha", icon: "🤖" },
-  { id: 62, name: "Isekai", icon: "🌀" },
+  { id: 1, name: "Action", icon: Swords },
+  { id: 2, name: "Adventure", icon: Compass },
+  { id: 4, name: "Comedy", icon: Laugh },
+  { id: 8, name: "Drama", icon: Film },
+  { id: 10, name: "Fantasy", icon: Sparkles },
+  { id: 14, name: "Horror", icon: Skull },
+  { id: 7, name: "Mystery", icon: Search },
+  { id: 22, name: "Romance", icon: Heart },
+  { id: 24, name: "Sci-Fi", icon: Rocket },
+  { id: 36, name: "Slice of Life", icon: Coffee },
+  { id: 30, name: "Sports", icon: Trophy },
+  { id: 37, name: "Supernatural", icon: Eye },
+  { id: 41, name: "Suspense", icon: Zap },
+  { id: 40, name: "Psychological", icon: Brain },
+  { id: 18, name: "Mecha", icon: Bot },
+  { id: 62, name: "Isekai", icon: DoorOpen },
 ];
 
 export function SearchPage() {
@@ -202,6 +216,7 @@ export function SearchPage() {
             <div className="flex flex-wrap gap-1.5 sm:gap-2 pt-1 animate-fade-in">
               {POPULAR_GENRES.map((genre) => {
                 const isSelected = selectedGenres.includes(genre.name);
+                const Icon = genre.icon;
                 return (
                   <button
                     key={genre.id}
@@ -213,7 +228,7 @@ export function SearchPage() {
                         : "bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground border-border/40 hover:border-border/80"
                     }`}
                   >
-                    <span className="text-xs leading-none">{genre.icon}</span>
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
                     <span>{genre.name}</span>
                     {isSelected && <Check className="w-3 h-3 ml-0.5" />}
                   </button>

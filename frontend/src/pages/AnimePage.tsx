@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import { Star, Clock, Calendar, Heart, Check, Play, AlertCircle } from "lucide-react";
+import { Star, Clock, Calendar, Heart, Play, AlertCircle } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes } from "@/hooks/useAnime";
 import { useWatchlist } from "@/hooks/useWatchHistory";
 import { EpisodeList } from "@/components/anime/EpisodeList";
@@ -96,8 +96,13 @@ export function AnimePage() {
     } else {
       await addToWatchlist({
         anime_id: anime.mal_id,
-        anime_title: anime.title,
-        anime_image: anime.images?.webp?.image_url || anime.images?.jpg?.image_url,
+        anime_title: anime.title_english || anime.title,
+        anime_image:
+          anime.images?.webp?.large_image_url ||
+          anime.images?.jpg?.large_image_url ||
+          anime.images?.webp?.image_url ||
+          anime.images?.jpg?.image_url ||
+          null,
         anime_type: anime.type,
       });
     }
@@ -204,17 +209,21 @@ export function AnimePage() {
                 <Button
                   variant="outline"
                   onClick={handleWatchlistToggle}
-                  className="rounded-full px-6 py-5 border-border/60 hover:bg-secondary text-foreground flex items-center gap-2 transition-all"
+                  className={`rounded-full px-6 py-5 border flex items-center gap-2 transition-all cursor-pointer ${
+                    isSaved
+                      ? "bg-primary/15 border-primary/40 text-primary hover:bg-primary/25 shadow-sm shadow-primary/20"
+                      : "border-border/60 hover:bg-secondary text-foreground"
+                  }`}
                 >
                   {isSaved ? (
                     <>
-                      <Check className="w-4 h-4 text-primary" />
-                      In Watchlist
+                      <Heart className="w-4 h-4 fill-primary text-primary" />
+                      <span className="font-semibold text-primary">In Watchlist</span>
                     </>
                   ) : (
                     <>
                       <Heart className="w-4 h-4" />
-                      Add to Watchlist
+                      <span>Add to Watchlist</span>
                     </>
                   )}
                 </Button>
