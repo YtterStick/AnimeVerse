@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Heart, History, LogOut, User as UserIcon, Sparkles } from "lucide-react";
+import { Heart, History, LogOut, User as UserIcon } from "lucide-react";
 
 export function UserMenu() {
   const { user, signOut, displayName, avatarUrl } = useAuth();
@@ -56,9 +56,8 @@ export function UserMenu() {
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col space-y-0.5 min-w-0">
-              <p className="text-xs font-bold text-white leading-tight truncate flex items-center gap-1">
-                <span>{name}</span>
-                <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+              <p className="text-xs font-semibold text-white leading-tight truncate">
+                {name}
               </p>
               <p className="text-[10px] text-muted-foreground leading-tight truncate">
                 {email}
