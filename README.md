@@ -63,8 +63,17 @@ AnimeVerse is a modern, dark-themed anime streaming web application inspired by 
    PORT=3001
    SUPABASE_URL=https://your-project.supabase.co
    SUPABASE_SERVICE_KEY=your-supabase-service-role-key
+
+   # Optional; only needed when running the one-time schema initializer
+   PGHOST=db.your-project-ref.supabase.co
+   PGPORT=5432
+   PGUSER=postgres
+   PGPASSWORD=your-database-password
+   PGDATABASE=postgres
    ```
-3. Run the backend development server:
+   Use the database connection values shown in your Supabase project's **Connect** panel. Keep the database password in this local, Git-ignored file; it is separate from your Supabase account login.
+3. To apply the schema with the initializer instead of the SQL Editor, run `node dbInit.js` from the `backend` directory after setting the `PG*` values above.
+4. Run the backend development server:
    ```bash
    npm run dev
    ```
