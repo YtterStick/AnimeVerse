@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Star, Clock, Calendar, Heart, Play, AlertCircle } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes } from "@/hooks/useAnime";
@@ -13,6 +14,10 @@ import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 export function AnimePage() {
   const { id } = useParams<{ id: string }>();
   const animeId = parseInt(id || "", 10);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [animeId]);
 
   const { anime, loading: detailLoading, error: detailError } = useAnimeDetail(animeId);
   const { episodes, loading: episodesLoading } = useAnimeEpisodes(animeId);

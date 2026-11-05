@@ -88,6 +88,11 @@ export function WatchPage() {
     });
   };
 
+  // Scroll window to top when watching a new anime or episode
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [animeId, episodeNum]);
+
   // Fetch intro/outro timestamps (AniSkip) for this episode
   useEffect(() => {
     let cancelled = false;

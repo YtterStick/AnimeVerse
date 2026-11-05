@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
+import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { Layout } from "@/components/layout/Layout";
 import { HomePage } from "@/pages/HomePage";
 import { AnimePage } from "@/pages/AnimePage";
@@ -14,6 +15,7 @@ import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 export function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
