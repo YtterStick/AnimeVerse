@@ -108,7 +108,7 @@ export const animeApi = {
   getById: (id: number) =>
     fetchApi<{ data: Anime }>(`/anime/${id}`),
 
-  getEpisodes: (id: number, page = 1) =>
+  getEpisodes: (id: number, page: number | string = "all") =>
     fetchApi<ApiResponse<Episode[]>>(`/anime/${id}/episodes?page=${page}`),
 
   getRecommendations: (id: number) =>

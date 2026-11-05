@@ -145,7 +145,8 @@ router.get("/:id", async (req: Request, res: Response, next: NextFunction) => {
 router.get("/:id/episodes", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const page = parseInt(req.query.page as string, 10) || 1;
+    const pageParam = req.query.page;
+    const page = pageParam === "all" ? "all" : parseInt(pageParam as string, 10) || 1;
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid Anime ID" });
     }

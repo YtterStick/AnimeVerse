@@ -69,6 +69,10 @@ const ANILIST_MEDIA_FIELDS = `
   description(asHtml: false)
   format
   episodes
+  nextAiringEpisode {
+    episode
+    airingAt
+  }
   status
   averageScore
   popularity
@@ -188,7 +192,7 @@ function mapAniListMediaToJikan(media: any): any {
     title_synonyms: Array.isArray(media.synonyms) ? media.synonyms : [],
     synopsis: stripHtml(media.description),
     type: media.format || "TV",
-    episodes: media.episodes || null,
+    episodes: media.episodes || (media.nextAiringEpisode?.episode && media.nextAiringEpisode.episode > 1 ? media.nextAiringEpisode.episode - 1 : null),
     status: mapAniListStatus(media.status),
     score: media.averageScore ? Number((media.averageScore / 10).toFixed(2)) : null,
     scored_by: media.popularity || null,
@@ -1148,8 +1152,8 @@ export const jikanService = {
     }
   },
 
-  // Get episode list for an anime
-  getAnimeEpisodes: async (id: number, page = 1) => {
+  // Get episode list for an anime (supports page number or page="all")
+  getAnimeEpisodes: async (id: number, page: number | string = 1) => {
     return executeJikanRequest<any>(
       `/anime/${id}/episodes`,
       { page },
@@ -1172,17 +1176,20 @@ export const jikanService = {
         `;
         const data = await queryAniList(query, { idMal: id });
         const media = data?.Media;
+        const isAll = page === "all";
+        const pageNum = isAll ? 1 : Math.max(1, Number(page) || 1);
+
         if (!media) {
           return {
             data: [],
-            pagination: { last_visible_page: 1, has_next_page: false, current_page: page },
+            pagination: { last_visible_page: 1, has_next_page: false, current_page: pageNum },
           };
         }
 
         // Parse titles from streamingEpisodes if available
         const titleMap = new Map<number, string>();
         for (const se of media.streamingEpisodes || []) {
-          const m = String(se.title || "").match(/Episode\s+(\d+)\s*[-â€“:]?\s*(.*)/i);
+          const m = String(se.title || "").match(/Episode\s+(\d+)\s*[-–:]?\s*(.*)/i);
           if (m) {
             const epNum = parseInt(m[1], 10);
             const epTitle = m[2]?.trim() || `Episode ${epNum}`;
@@ -1196,11 +1203,11 @@ export const jikanService = {
           ? Math.max(1, media.nextAiringEpisode.episode - 1)
           : media.episodes || titleMap.size || 12;
 
-        const totalEpisodes = Math.min(Math.max(airedCount, titleMap.size), 1200);
-        const perPage = 100;
-        const startEp = (page - 1) * perPage + 1;
-        const endEp = Math.min(page * perPage, totalEpisodes);
-        const lastPage = Math.max(1, Math.ceil(totalEpisodes / perPage));
+        const totalEpisodes = Math.max(airedCount, titleMap.size, 1);
+        const perPage = isAll ? totalEpisodes : 100;
+        const startEp = isAll ? 1 : (pageNum - 1) * perPage + 1;
+        const endEp = isAll ? totalEpisodes : Math.min(pageNum * perPage, totalEpisodes);
+        const lastPage = isAll ? 1 : Math.max(1, Math.ceil(totalEpisodes / perPage));
 
         const episodes: any[] = [];
         for (let epNum = startEp; epNum <= endEp; epNum++) {
@@ -1220,8 +1227,8 @@ export const jikanService = {
           data: episodes,
           pagination: {
             last_visible_page: lastPage,
-            has_next_page: page < lastPage,
-            current_page: page,
+            has_next_page: isAll ? false : pageNum < lastPage,
+            current_page: pageNum,
           },
         };
       }

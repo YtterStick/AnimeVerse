@@ -246,20 +246,49 @@ export function useAnimeDetail(id: number) {
   return { anime, loading, error, retry };
 }
 
+const episodesCache = new Map<number, Episode[]>();
+
 export function useAnimeEpisodes(id: number) {
-  const [episodes, setEpisodes] = useState<Episode[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [episodes, setEpisodes] = useState<Episode[]>(() => episodesCache.get(id) || []);
+  const [loading, setLoading] = useState(() => !episodesCache.has(id));
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
     let active = true;
+
+    // SWR / Instant Cache: If already cached in memory, use it immediately
+    if (episodesCache.has(id)) {
+      setEpisodes(episodesCache.get(id)!);
+      setLoading(false);
+      return;
+    }
+
     setEpisodes([]);
     setLoading(true);
     setError(null);
     setHasMore(false);
 
     async function loadAll() {
+      // Step 1: Fast single-request fetch for all episodes (0ms sequential delay)
+      try {
+        const res = await animeApi.getEpisodes(id, "all");
+        if (!active) return;
+        if (Array.isArray(res?.data) && res.data.length > 0) {
+          const sorted = res.data.map((ep, idx) => ({
+            ...ep,
+            episode_number: ep.mal_id || idx + 1,
+          }));
+          episodesCache.set(id, sorted);
+          setEpisodes(sorted);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // Fallback to paginated loop below if page=all fails
+      }
+
+      // Step 2: Fallback paginated loop with retry so transient drops don't truncate episodes
       let pageNum = 1;
       let hasNext = true;
       const all: Episode[] = [];
@@ -275,39 +304,54 @@ export function useAnimeEpisodes(id: number) {
       };
 
       while (hasNext && active) {
-        try {
-          const res = await animeApi.getEpisodes(id, pageNum);
-          if (!active) break;
+        let success = false;
+        let retries = 0;
+        let res: any = null;
 
-          const eps = res.data.map((ep, idx) => ({
-            ...ep,
-            episode_number: ep.mal_id || (pageNum - 1) * 100 + idx + 1,
-          }));
-
-          if (eps.length === 0) {
-            hasNext = false;
-            break;
-          }
-
-          addUniqueEpisodes(eps);
-          setEpisodes([...all]);
-
-          hasNext = (res.pagination?.has_next_page ?? false) && eps.length > 0;
-          setHasMore(hasNext);
-
-          if (hasNext) {
-            pageNum++;
-            // Throttled delay to respect Jikan's rate limit of 3 requests per second
-            await new Promise((resolve) => setTimeout(resolve, 450));
-          }
-        } catch (err) {
-          if (active) {
-            setError(null);
-            hasNext = false;
+        while (!success && retries < 2 && active) {
+          try {
+            res = await animeApi.getEpisodes(id, pageNum);
+            success = true;
+          } catch {
+            retries++;
+            if (retries < 2) {
+              await new Promise((resolve) => setTimeout(resolve, 800));
+            }
           }
         }
+
+        if (!active) break;
+        if (!success || !res?.data) {
+          hasNext = false;
+          break;
+        }
+
+        const eps = res.data.map((ep: any, idx: number) => ({
+          ...ep,
+          episode_number: ep.mal_id || (pageNum - 1) * 100 + idx + 1,
+        }));
+
+        if (eps.length === 0) {
+          hasNext = false;
+          break;
+        }
+
+        addUniqueEpisodes(eps);
+        setEpisodes([...all]);
+
+        hasNext = (res.pagination?.has_next_page ?? false) && eps.length > 0;
+        setHasMore(hasNext);
+
+        if (hasNext) {
+          pageNum++;
+          await new Promise((resolve) => setTimeout(resolve, 350));
+        }
       }
+
       if (active) {
+        if (all.length > 0) {
+          episodesCache.set(id, all);
+        }
         setLoading(false);
       }
     }
@@ -320,7 +364,7 @@ export function useAnimeEpisodes(id: number) {
   }, [id]);
 
   const loadMore = useCallback(() => {
-    // Dummy handler since everything is auto-loaded in background
+    // Handled automatically
   }, []);
 
   return { episodes, loading, error, hasMore, loadMore };

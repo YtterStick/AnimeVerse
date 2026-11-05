@@ -165,7 +165,13 @@ export function AnimePage() {
               </div>
               <div className="flex items-center justify-between py-1 border-b border-border/20">
                 <span className="text-muted-foreground">Episodes</span>
-                <span className="font-semibold text-foreground">{anime.episodes || "Unknown"}</span>
+                <span className="font-semibold text-foreground">
+                  {anime.episodes
+                    ? `${anime.episodes}${anime.status === "Currently Airing" ? " (Airing)" : ""}`
+                    : episodes.length > 0
+                    ? `${episodes.length}${anime.status === "Currently Airing" ? " (Airing)" : ""}`
+                    : "Unknown"}
+                </span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-border/20">
                 <span className="text-muted-foreground">Studio</span>
