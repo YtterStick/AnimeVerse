@@ -49,13 +49,15 @@ const KAA_HEADERS: Record<string, string> = {
  */
 export class ConsumetStreamProvider implements StreamProvider {
   private kaa: any;
+  private animeUnity: any;
   private readonly providerTimeoutMs = 15000;
 
   constructor() {
     this.kaa = new ANIME.KickAssAnime();
     this.kaa.baseUrl = "https://kaa.lt";
+    this.animeUnity = new ANIME.AnimeUnity();
     console.log(
-      `[StreamProvider] Initialized English SUB/DUB providers: KickAssAnime (SUB & DUB) + AnimeHeaven (English Hard-Sub)`
+      `[StreamProvider] Initialized providers: KickAssAnime (SUB & DUB) + AnimeHeaven (Hard-Sub) + AnimeUnity (SUB)`
     );
   }
 
@@ -737,6 +739,116 @@ export class ConsumetStreamProvider implements StreamProvider {
     return servers;
   }
 
+  // ─── AnimeUnity (animeunity.to) SUB Resolver ─────────────────
+
+  private async fetchAnimeUnityServers(meta: AnimeMetadata, episode: number): Promise<StreamServer[]> {
+    const servers: StreamServer[] = [];
+
+    try {
+      // Search AnimeUnity using candidate title queries
+      const queries = [meta.titleEnglish, meta.title]
+        .filter((q, idx, arr): q is string => Boolean(q && arr.indexOf(q) === idx));
+
+      let bestResult: any = null;
+      let bestScore = -Infinity;
+
+      for (const q of queries) {
+        try {
+          const results = await this.animeUnity.search(q);
+          for (const r of results?.results || []) {
+            // Skip ITA (Italian dub) entries — we want Japanese audio
+            if (/\(ITA\)/i.test(r.title || "")) continue;
+
+            const score = this.scoreCandidate(
+              meta,
+              [r.title, r.id?.replace(/^\d+-/, "").replace(/-/g, " ")],
+              null,
+              null
+            );
+            if (score > bestScore) {
+              bestScore = score;
+              bestResult = r;
+            }
+          }
+          if (bestScore >= 120) break; // High-confidence match, stop searching
+        } catch {
+          continue;
+        }
+      }
+
+      if (!bestResult || bestScore < 40) return servers;
+
+      console.log(
+        `[AnimeUnity] Matched "${meta.title}" → "${bestResult.title}" (id=${bestResult.id}, score=${bestScore})`
+      );
+
+      // Fetch anime info to get episode list
+      const info = await this.animeUnity.fetchAnimeInfo(bestResult.id);
+      const episodes = info?.episodes || [];
+
+      // Find the target episode by number
+      const targetEp = episodes.find((ep: any) => ep.number === episode);
+      if (!targetEp?.id) return servers;
+
+      // Extract streaming sources
+      const sources = await this.animeUnity.fetchEpisodeSources(targetEp.id);
+      const validSources = (sources?.sources || []).filter(
+        (s: any) => s?.url && s.isM3U8 !== false
+      );
+
+      if (validSources.length === 0) return servers;
+
+      // Pick the best quality source (prefer 1080p, then default/highest)
+      const sorted = [...validSources].sort((a: any, b: any) => {
+        const aq = parseInt(a.quality, 10) || 0;
+        const bq = parseInt(b.quality, 10) || 0;
+        return bq - aq;
+      });
+
+      // Use the highest-quality source as an HLS master
+      const best = sorted[0];
+      const isHls = best.url?.includes(".m3u8") || best.isM3U8;
+      const detectedQuality = best.quality && best.quality !== "default"
+        ? best.quality
+        : "1080p";
+
+      servers.push({
+        id: `animeunity-sub-0`,
+        name: "Stellar HD",
+        category: "SUB",
+        url: isHls
+          ? this.proxyUrl(best.url, undefined, "https://www.animeunity.to/")
+          : best.url,
+        type: isHls ? "hls" : "mp4",
+        quality: detectedQuality,
+        subtitles: [],
+      });
+
+      // If there are multiple different quality sources, add a backup
+      if (sorted.length > 1 && sorted[1].url !== sorted[0].url) {
+        const backup = sorted[1];
+        const backupIsHls = backup.url?.includes(".m3u8") || backup.isM3U8;
+        servers.push({
+          id: `animeunity-sub-1`,
+          name: "Stellar HD (Backup)",
+          category: "SUB",
+          url: backupIsHls
+            ? this.proxyUrl(backup.url, undefined, "https://www.animeunity.to/")
+            : backup.url,
+          type: backupIsHls ? "hls" : "mp4",
+          quality: backup.quality && backup.quality !== "default"
+            ? backup.quality
+            : "720p",
+          subtitles: [],
+        });
+      }
+    } catch (err) {
+      console.warn(`[AnimeUnity] Failed:`, (err as Error).message);
+    }
+
+    return servers;
+  }
+
   // ─── AnimeHeaven (animeheaven.me) English Hard-Sub Resolver ─
 
   private async fetchAnimeHeavenServers(meta: AnimeMetadata, episode: number): Promise<StreamServer[]> {
@@ -1024,14 +1136,16 @@ export class ConsumetStreamProvider implements StreamProvider {
       `[StreamProvider] Resolved Metadata: "${meta.title}" | EN: "${meta.titleEnglish}" (${meta.year})`
     );
 
-    const [kaaServers, ahServers] = await Promise.all([
+    const [kaaServers, ahServers, auServers] = await Promise.all([
       this.withProviderTimeout("KAA", this.fetchKAAServers(meta, episode)),
       this.withProviderTimeout("AnimeHeaven", this.fetchAnimeHeavenServers(meta, episode)),
+      this.withProviderTimeout("AnimeUnity", this.fetchAnimeUnityServers(meta, episode)),
     ]);
 
     const subServers = [
       ...(kaaServers || []).filter((s) => s.category === "SUB"),
       ...(ahServers || []).filter((s) => s.category === "SUB"),
+      ...(auServers || []).filter((s) => s.category === "SUB"),
     ];
     const dubServers = [...(kaaServers || []).filter((s) => s.category === "DUB")];
 

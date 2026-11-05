@@ -44,22 +44,29 @@ export function parseCues(text: string): Cue[] {
 /**
  * Checks if a given time range contains spoken character dialogue rather than a song.
  *
- * Spoken anime scenes have rapid back-and-forth lines (short cues <= 2.2s) and conversational words.
- * An OP/ED song has long sustained musical phrasing (avg display duration >= 2.4s) or silence.
+ * Spoken anime scenes have rapid back-and-forth lines (short cues <= 2.5s) and conversational words.
+ * An OP/ED song has long sustained musical phrasing (avg display duration >= 2.4s), music symbols (♪, ♫), or silence.
  */
 export function isHighDensityDialogue(cues: Cue[], start: number, end: number): boolean {
   const inRange = cues.filter((c) => c.start >= start - 1.5 && c.end <= end + 1.5);
-  if (inRange.length < 5) return false;
+  if (inRange.length < 3) return false;
 
-  const shortCues = inRange.filter((c) => c.end - c.start <= 2.2);
+  // If there are explicit song/music markers, it's definitely a song, not dialogue
+  const hasMusicMarkers = inRange.some((c) =>
+    /[♪♫♬♩]|\b(?:music|song|opening|ending|theme)\b/i.test(c.text || "")
+  );
+  if (hasMusicMarkers) return false;
+
+  const shortCues = inRange.filter((c) => c.end - c.start <= 2.4);
   const conversationalCues = inRange.filter(
     (c) =>
-      /\b(aye|sir|mister|hey|get up|okay|look|what|yes|no|let's|wait|stop|please|thanks|sorry|wizards?|magic|train|guild)\b/i.test(
+      /\b(i|you|he|she|we|they|my|your|what|why|how|who|where|when|is|are|was|were|don't|can't|won't|no|yes|please|look|wait|stop|listen|hey|tanjiro|nezuko|asta|luffy|goku)\b/i.test(
         c.text || ""
-      ) || /\?/.test(c.text || "")
+      ) || /[?!]/.test(c.text || "")
   );
 
-  if (shortCues.length >= 7 || (shortCues.length >= 5 && conversationalCues.length >= 3)) {
+  // If there are many short back-and-forth lines or conversational words without music symbols
+  if (shortCues.length >= 5 || (shortCues.length >= 3 && conversationalCues.length >= 2)) {
     return true;
   }
   return false;

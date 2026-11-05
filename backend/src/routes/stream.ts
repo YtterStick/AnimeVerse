@@ -282,6 +282,8 @@ router.get("/proxy", async (req: Request, res: Response) => {
       "babybayw.xyz": "https://krussdomi.com/",
       "narutokun.xyz": "https://krussdomi.com/",
       "animeheaven.me": "https://animeheaven.me/",
+      "vixcloud.cc": "https://www.animeunity.to/",
+      "animeunity.to": "https://www.animeunity.to/",
     };
 
     let referer = customReferer || `${targetUrl.origin}/`;
@@ -486,7 +488,8 @@ router.get("/skip-times/:animeId/:episode", async (req: Request, res: Response) 
     return res.status(400).json({ message: "Invalid parameters" });
   }
 
-  const cacheKey = `${animeId}:${episode}`;
+  // Include duration in cache key so actual video duration query updates the initial estimate
+  const cacheKey = `${animeId}:${episode}:${duration > 0 ? duration : "initial"}`;
   const cached = skipCache.get(cacheKey);
   if (cached && Date.now() - cached.at < 6 * 60 * 60 * 1000) {
     return res.json(cached.data);
@@ -494,21 +497,65 @@ router.get("/skip-times/:animeId/:episode", async (req: Request, res: Response) 
 
   try {
     const types = ["op", "ed", "mixed-op", "mixed-ed", "recap"].map((t) => `types=${t}`).join("&");
-    const response = await axios.get(
+    
+    // First query with the specified duration
+    let response = await axios.get(
       `https://api.aniskip.com/v2/skip-times/${animeId}/${episode}?${types}&episodeLength=${duration}`,
       { timeout: 6000, validateStatus: (s) => s === 200 || s === 404 }
     );
 
-    const results: any[] = response.data?.found ? response.data.results || [] : [];
+    // If not found with exact duration or duration was 0, fallback to standard episode search (0)
+    if ((!response.data?.found || !response.data?.results?.length) && duration > 0) {
+      response = await axios.get(
+        `https://api.aniskip.com/v2/skip-times/${animeId}/${episode}?${types}&episodeLength=0`,
+        { timeout: 5000, validateStatus: (s) => s === 200 || s === 404 }
+      );
+    }
+
+    const rawResults: any[] = response.data?.found ? response.data.results || [] : [];
+    
+    // Discard duplicates or bad entries (e.g. Episode 1 OP starting at < 30s is almost always dialogue/prologue)
+    const bestByType = new Map<string, any>();
+    for (const r of rawResults) {
+      const type = String(r.skipType || "").replace("mixed-", "");
+      const start = Number(r.interval?.startTime) || 0;
+      const end = Number(r.interval?.endTime) || 0;
+      const span = end - start;
+
+      // Theme songs are standard ~90 seconds (80s - 105s)
+      if (type === "op" || type === "ed") {
+        if (span < 45 || span > 130) continue; // Not a valid theme song length
+      }
+
+      // In Episode 1, openings starting before 30 seconds are universally story prologues, not songs
+      if (type === "op" && episode === 1 && start < 30) {
+        continue;
+      }
+
+      const current = bestByType.get(type);
+      if (!current) {
+        bestByType.set(type, r);
+      } else {
+        // Pick the interval closer to standard 90s OP/ED duration
+        const curSpan = (Number(current.interval?.endTime) || 0) - (Number(current.interval?.startTime) || 0);
+        if (Math.abs(span - 89.5) < Math.abs(curSpan - 89.5)) {
+          bestByType.set(type, r);
+        }
+      }
+    }
+
+    const cleanSkips = Array.from(bestByType.values()).map((r) => ({
+      type: String(r.skipType).replace("mixed-", ""),
+      start: Number(r.interval?.startTime) || 0,
+      end: Number(r.interval?.endTime) || 0,
+      episodeLength: Number(r.episodeLength) || 0,
+    }));
+
     const data = {
-      found: results.length > 0,
-      skips: results.map((r) => ({
-        type: String(r.skipType).replace("mixed-", ""),
-        start: Number(r.interval?.startTime) || 0,
-        end: Number(r.interval?.endTime) || 0,
-        episodeLength: Number(r.episodeLength) || 0,
-      })),
+      found: cleanSkips.length > 0,
+      skips: cleanSkips,
     };
+
     skipCache.set(cacheKey, { at: Date.now(), data });
     res.json(data);
   } catch (error: any) {

@@ -95,17 +95,19 @@ export function WatchPage() {
   }, [animeId, episodeNum]);
 
   // Fetch intro/outro timestamps (AniSkip) for this episode
+  // Re-fetch with actual duration once known for more accurate timestamps
+  const [videoDurationForSkips, setVideoDurationForSkips] = useState(0);
   useEffect(() => {
     let cancelled = false;
     setSkips([]);
     if (!animeId || !episodeNum) return;
-    streamApi.getSkipTimes(animeId, episodeNum).then((res) => {
+    streamApi.getSkipTimes(animeId, episodeNum, videoDurationForSkips).then((res) => {
       if (!cancelled) setSkips(res.skips || []);
     });
     return () => {
       cancelled = true;
     };
-  }, [animeId, episodeNum]);
+  }, [animeId, episodeNum, videoDurationForSkips]);
 
   const updateRecommendationsScrollState = useCallback(() => {
     const el = recommendationsScrollRef.current;
@@ -325,6 +327,11 @@ export function WatchPage() {
     const currentRounded = Math.floor(currentTime);
     const durationRounded = Math.floor(duration);
     if (currentRounded <= 0 || durationRounded <= 0) return;
+
+    // Update duration for AniSkip if duration became available
+    if (durationRounded > 60 && Math.abs(durationRounded - videoDurationForSkips) > 5) {
+      setVideoDurationForSkips(durationRounded);
+    }
 
     const now = Date.now();
 
