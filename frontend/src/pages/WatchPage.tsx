@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AnimeSeasons } from "@/components/anime/AnimeSeasons";
 import type { MultiStreamResult } from "@/types";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
+import { getCleanServerName } from "@/lib/serverNames";
 
 export function WatchPage() {
   const { id, episode } = useParams<{ id: string; episode: string }>();
@@ -394,7 +395,7 @@ export function WatchPage() {
         if (curTime > 0) setInitialTime(curTime);
 
         setServerToast(
-          `Server "${currentServer?.name || "Server"}" is unavailable for this episode. Switched to "${nextServer.name}".`
+          `Server "${getCleanServerName(currentServer?.name, selectedServer)}" is unavailable for this episode. Switched to "${getCleanServerName(nextServer.name, nextIndex)}".`
         );
         setSelectedServer(nextIndex);
       } else {
@@ -502,9 +503,10 @@ export function WatchPage() {
 
   // Get the current active server's stream URL
   const activeServer = multiStream?.servers?.[selectedServer] ?? null;
-  const activeServerLabel = activeServer
-    ? `${activeServer.name}${activeServer.quality ? ` • ${activeServer.quality}` : ""} (${activeServer.category || "SUB"})`
-    : "";
+  const cleanActiveServerName = activeServer ? getCleanServerName(activeServer.name, selectedServer) : "";
+  const is4K = activeServer?.quality?.includes("2160") || false;
+  const is1440p = activeServer?.quality?.includes("1440") || false;
+  const activeQualityBadge = is4K ? "4K UHD (2160p)" : is1440p ? "2K QHD (1440p)" : (activeServer?.quality || "1080p FHD");
 
   const firstSubIndex = multiStream?.servers.findIndex((s) => (s.category || "SUB") === "SUB") ?? -1;
   const firstDubIndex = multiStream?.servers.findIndex((s) => s.category === "DUB") ?? -1;
@@ -629,7 +631,7 @@ export function WatchPage() {
             onError={handleStreamError}
             onRetry={handleRetry}
             onEnded={handleVideoEnded}
-            serverName={activeServer.name}
+            serverName={cleanActiveServerName}
             availableServers={multiStream?.servers || []}
             onSelectServer={handleServerChange}
           />
@@ -639,15 +641,28 @@ export function WatchPage() {
         {multiStream && multiStream.servers.length > 0 && (
           <div className="space-y-3">
             <div className="flex flex-col gap-3 rounded-xl border border-border/20 bg-card/20 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
+              <div className="min-w-0 space-y-1">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-primary">Current Server</p>
-                <p className="truncate text-sm font-semibold text-white">{activeServerLabel}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-bold text-white tracking-wide">{cleanActiveServerName}</p>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                    is4K 
+                      ? "bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/40 shadow-sm" 
+                      : "bg-primary/15 text-primary border border-primary/30"
+                  }`}>
+                    {activeQualityBadge}
+                  </span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-secondary/80 text-foreground border border-border/40">
+                    {activeServer?.category === "DUB" ? "English Dub" : "English Sub"}
+                  </span>
+                </div>
                 <p className="text-[11px] text-muted-foreground">
                   {activeServer?.category === "DUB"
                     ? "Playing English Dubbed audio."
                     : "Playing Japanese audio with English subtitles."}
-                  </p>
-                </div>
+                  {" Adaptive stream up to 2160p (4K) / 1080p. Quality can also be selected in player settings (⚙️)."}
+                </p>
+              </div>
               <div className="flex flex-wrap items-center gap-2.5">
                 {firstSubIndex !== -1 && (
                   <Button

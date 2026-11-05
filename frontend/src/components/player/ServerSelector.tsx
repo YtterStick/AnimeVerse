@@ -1,5 +1,6 @@
 import { Captions, Mic } from "lucide-react";
 import type { StreamServer } from "@/types";
+import { getCleanServerName } from "@/lib/serverNames";
 
 interface ServerSelectorProps {
   servers: StreamServer[];
@@ -50,7 +51,7 @@ export function ServerSelector({ servers, activeIndex, onSelect }: ServerSelecto
                   className={`server-btn ${index === activeIndex ? "server-btn-active" : ""}`}
                 >
                   <span className="server-btn-dot" />
-                  {server.name}
+                  {getCleanServerName(server.name, index)}
                 </button>
               ))}
             </div>

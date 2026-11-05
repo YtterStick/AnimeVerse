@@ -10,6 +10,7 @@ import "@vidstack/react/player/styles/default/layouts/video.css";
 import type { SubtitleTrack } from "@/types";
 import type { SkipInterval } from "@/lib/api";
 import { parseCues, refineSkips, buildChaptersVtt } from "@/lib/skipTimes";
+import { getCleanServerName } from "@/lib/serverNames";
 
 interface VideoPlayerProps {
   src: string;
@@ -402,7 +403,7 @@ export function VideoPlayer({
               Stream Temporarily Unavailable
             </h3>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              {serverName ? `"${serverName}" encountered an error loading this episode.` : "This server encountered an error loading this episode."}
+              {serverName ? `"${getCleanServerName(serverName)}" encountered an error loading this episode.` : "This server encountered an error loading this episode."}
               {availableServers && availableServers.length > 1
                 ? " Please switch to another available server below or retry."
                 : " The upstream link may have expired. Please click Retry below."}
@@ -423,7 +424,7 @@ export function VideoPlayer({
                     }}
                     className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-secondary/80 hover:bg-primary hover:text-white text-foreground border border-border/50 hover:border-primary transition-all cursor-pointer"
                   >
-                    {srv.name}
+                    {getCleanServerName(srv.name, idx)}
                   </button>
                 ))}
               </div>

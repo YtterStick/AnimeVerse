@@ -529,6 +529,22 @@ export class ConsumetStreamProvider implements StreamProvider {
   }
 
   /**
+   * Transforms raw provider names (VidStreaming, BirdStream, DuckStream) into clean, premium anime streaming server names.
+   */
+  private formatServerName(rawName: string, index = 0): string {
+    const lower = (rawName || "").toLowerCase();
+    if (lower.includes("vidstreaming")) return "Nova HD";
+    if (lower.includes("birdstream")) return "Zenith HD";
+    if (lower.includes("duckstream")) return "Eclipse HD";
+    if (lower.includes("animeheaven")) return "Aether HD";
+    if (lower.includes("gogoanime")) return "Orion HD";
+    if (lower.includes("streamsb")) return "Vortex HD";
+    if (lower.includes("streamtape")) return "Mirage HD";
+    const defaults = ["Nova HD", "Zenith HD", "Eclipse HD", "Aether HD", "Orion HD"];
+    return defaults[index % defaults.length] || `Server ${index + 1} (HD)`;
+  }
+
+  /**
    * Fetch both SUB (ja-JP) and DUB (en-US) servers from KickAssAnime.
    */
   private async fetchKAAServers(meta: AnimeMetadata, episode: number): Promise<StreamServer[]> {
@@ -562,6 +578,7 @@ export class ConsumetStreamProvider implements StreamProvider {
         url: string;
         serverName: string;
         subtitles: SubtitleTrack[];
+        quality?: string;
       } | null = null;
 
       await Promise.all(
@@ -628,14 +645,24 @@ export class ConsumetStreamProvider implements StreamProvider {
                 ? await this.inspectMasterM3U8(manifestUrl)
                 : { hasEnglishAudio: false, hasJapaneseAudio: false, hasAudioGroups: false, qualities: [] };
 
+              const has2160 = m3u8Info.qualities.some((q) => parseInt(q.quality, 10) >= 2160);
+              const has1440 = m3u8Info.qualities.some((q) => parseInt(q.quality, 10) >= 1440);
+              const detectedQuality = has2160
+                ? "2160p (4K)"
+                : has1440
+                ? "1440p (2K)"
+                : m3u8Info.qualities[0]?.quality || "1080p";
+
+              const serverDisplayName = this.formatServerName(srv.name, i);
+
               if (category === "SUB") {
                 servers.push({
                   id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
-                  name: `${srv.name} (Eng Sub)`,
+                  name: serverDisplayName,
                   category: "SUB",
                   url: isHls ? this.proxyUrl(manifestUrl, "jpn") : manifestUrl,
                   type: isHls ? "hls" : "mp4",
-                  quality: "1080p",
+                  quality: detectedQuality,
                   subtitles: serverSubs,
                 });
 
@@ -645,6 +672,7 @@ export class ConsumetStreamProvider implements StreamProvider {
                     url: manifestUrl,
                     serverName: srv.name,
                     subtitles: serverSubs,
+                    quality: detectedQuality,
                   };
                 }
               } else {
@@ -652,11 +680,11 @@ export class ConsumetStreamProvider implements StreamProvider {
                 foundDubServer = true;
                 servers.push({
                   id: `kaa-dub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
-                  name: `${srv.name} (Eng Dub)`,
+                  name: serverDisplayName,
                   category: "DUB",
                   url: isHls ? this.proxyUrl(manifestUrl, "eng") : manifestUrl,
                   type: isHls ? "hls" : "mp4",
-                  quality: "1080p",
+                  quality: detectedQuality,
                   subtitles: serverSubs,
                 });
               }
@@ -673,14 +701,15 @@ export class ConsumetStreamProvider implements StreamProvider {
           url: string;
           serverName: string;
           subtitles: SubtitleTrack[];
+          quality?: string;
         };
         servers.push({
           id: `kaa-dub-multiaudio-0`,
-          name: `${master.serverName} (Eng Dub)`,
+          name: this.formatServerName(master.serverName, 0),
           category: "DUB",
           url: this.proxyUrl(master.url, "eng"),
           type: "hls",
-          quality: "1080p",
+          quality: master.quality || "1080p",
           subtitles: master.subtitles,
         });
       }
@@ -803,7 +832,7 @@ export class ConsumetStreamProvider implements StreamProvider {
       for (let i = 0; i < Math.min(sourcesToUse.length, 2); i++) {
         servers.push({
           id: `animeheaven-sub-${i}`,
-          name: i === 0 ? "AnimeHeaven (Eng Sub)" : "AnimeHeaven (Backup)",
+          name: i === 0 ? "Aether HD" : "Aether HD (Backup)",
           category: "SUB",
           url: this.proxyUrl(sourcesToUse[i], undefined, "https://animeheaven.me/"),
           type: "mp4",

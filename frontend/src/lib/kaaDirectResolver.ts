@@ -1,5 +1,6 @@
 import type { StreamServer, SubtitleTrack } from "@/types";
 import { BACKEND_URL } from "./api";
+import { getCleanServerName } from "./serverNames";
 
 const decodeHtml = (str: string) => {
   return str
@@ -114,10 +115,10 @@ export async function resolveKaaClient(
           }
         }
 
-        // Single top-quality adaptive 1080p master server
+        // Single top-quality adaptive master server
         servers.push({
           id: `kaa-sub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
-          name: `${srv.name} (Eng Sub)`,
+          name: getCleanServerName(srv.name, i),
           category: "SUB",
           url: buildProxyUrl(manifestUrl, "jpn"),
           type: "hls",
@@ -165,7 +166,7 @@ export async function resolveKaaClient(
 
             servers.push({
               id: `kaa-dub-${srv.name.toLowerCase().replace(/\s+/g, "-")}-${i}`,
-              name: `${srv.name} (Eng Dub)`,
+              name: getCleanServerName(srv.name, i),
               category: "DUB",
               url: buildProxyUrl(manifestUrl, "eng"),
               type: "hls",
