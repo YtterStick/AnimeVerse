@@ -1,8 +1,8 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, RefreshCw } from "lucide-react";
-import { MediaPlayer, MediaProvider, Track } from "@vidstack/react";
-import { defaultLayoutIcons, DefaultVideoLayout } from "@vidstack/react/player/layouts/default";
+import { MediaPlayer, MediaProvider, Track, SeekButton } from "@vidstack/react";
+import { defaultLayoutIcons, DefaultVideoLayout, DefaultTooltip } from "@vidstack/react/player/layouts/default";
 
 // Import Vidstack default styles
 import "@vidstack/react/player/styles/default/theme.css";
@@ -42,6 +42,64 @@ const SKIP_LABELS: Record<string, string> = {
   ed: "Skip Outro",
   recap: "Skip Recap",
 };
+
+function SeekBackward10Icon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className || "w-5 h-5"}
+    >
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <text
+        x="12"
+        y="15.5"
+        fontSize="7.5"
+        fontWeight="bold"
+        fontFamily="sans-serif"
+        fill="currentColor"
+        stroke="none"
+        textAnchor="middle"
+      >
+        10
+      </text>
+    </svg>
+  );
+}
+
+function SeekForward10Icon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className || "w-5 h-5"}
+    >
+      <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <text
+        x="12"
+        y="15.5"
+        fontSize="7.5"
+        fontWeight="bold"
+        fontFamily="sans-serif"
+        fill="currentColor"
+        stroke="none"
+        textAnchor="middle"
+      >
+        10
+      </text>
+    </svg>
+  );
+}
 
 export function VideoPlayer({
   src,
@@ -353,7 +411,35 @@ export function VideoPlayer({
             />
           )}
         </MediaProvider>
-        <DefaultVideoLayout icons={defaultLayoutIcons} thumbnails={thumbnails} />
+        <DefaultVideoLayout
+          icons={defaultLayoutIcons}
+          thumbnails={thumbnails}
+          seekStep={10}
+          slots={{
+            beforePlayButton: (
+              <DefaultTooltip content="Seek Backward 10s" placement="top">
+                <SeekButton
+                  seconds={-10}
+                  className="vds-seek-button vds-button"
+                  aria-label="Seek Backward 10 Seconds"
+                >
+                  <SeekBackward10Icon className="vds-icon" />
+                </SeekButton>
+              </DefaultTooltip>
+            ),
+            afterPlayButton: (
+              <DefaultTooltip content="Seek Forward 10s" placement="top">
+                <SeekButton
+                  seconds={10}
+                  className="vds-seek-button vds-button"
+                  aria-label="Seek Forward 10 Seconds"
+                >
+                  <SeekForward10Icon className="vds-icon" />
+                </SeekButton>
+              </DefaultTooltip>
+            ),
+          }}
+        />
 
         {/* Yellow Intro & Outro Timeline Highlights rendered right on the seekbar */}
         {sliderEl && duration > 0 && refinedSkips.length > 0 && createPortal(
