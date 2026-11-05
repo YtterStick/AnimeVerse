@@ -89,6 +89,9 @@ export const animeApi = {
   topAiring: (page = 1) =>
     fetchApi<ApiResponse<Anime[]>>(`/anime/top-airing?page=${page}`),
 
+  upcoming: (page = 1) =>
+    fetchApi<ApiResponse<Anime[]>>(`/anime/upcoming?page=${page}`),
+
   popular: (page = 1) =>
     fetchApi<ApiResponse<Anime[]>>(`/anime/popular?page=${page}`),
 

@@ -84,6 +84,10 @@ export function useTopAiring() {
   return useAnimeQuery<Anime[]>(() => animeApi.topAiring(), []);
 }
 
+export function useUpcoming() {
+  return useAnimeQuery<Anime[]>(() => animeApi.upcoming(), []);
+}
+
 export function usePopular() {
   return useAnimeQuery<Anime[]>(() => animeApi.popular(), []);
 }
@@ -111,6 +115,9 @@ export function useAnimeSearch(
       if (category === "top-airing" && !query && !genres) {
         return animeApi.topAiring(page);
       }
+      if (category === "upcoming" && !query && !genres) {
+        return animeApi.upcoming(page);
+      }
       if (category === "popular" && !query && !genres) {
         return animeApi.popular(page);
       }
@@ -125,6 +132,7 @@ export function useAnimeSearch(
       if (category === "trending") orderBy = "trending";
       if (category === "popular") orderBy = "popularity";
       if (category === "top-airing") status = "airing";
+      if (category === "upcoming") status = "upcoming";
 
       return animeApi.search(query, page, genres, orderBy, status);
     },

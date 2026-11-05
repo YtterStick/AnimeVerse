@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Star, Play } from "lucide-react";
+import { Star, Play, Sparkles } from "lucide-react";
 import type { Anime } from "@/types";
 import { formatScore } from "@/lib/utils";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
@@ -14,6 +14,10 @@ export function AnimeCard({ anime }: AnimeCardProps) {
   const image = anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url;
   const score = anime.score;
   const type = anime.type;
+  const isUpcoming =
+    anime.status === "Not yet aired" ||
+    anime.status === "Upcoming" ||
+    anime.status === "NOT_YET_RELEASED";
 
   return (
     <Link
@@ -43,12 +47,17 @@ export function AnimeCard({ anime }: AnimeCardProps) {
               {type}
             </span>
           )}
-          {score !== null && score > 0 && (
+          {score !== null && score > 0 ? (
             <span className="px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 bg-primary text-white border border-primary/20 shadow-md backdrop-blur-sm">
               <Star className="w-3 h-3 fill-white" />
               {formatScore(score)}
             </span>
-          )}
+          ) : isUpcoming ? (
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 bg-amber-500/90 text-black border border-amber-400/40 shadow-md backdrop-blur-sm">
+              <Sparkles className="w-3 h-3 fill-black text-black" />
+              {anime.year ? `${anime.season ? `${anime.season} ` : ""}${anime.year}` : "Upcoming"}
+            </span>
+          ) : null}
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import {
   usePopular,
   useTopRated,
   useTopAiring,
+  useUpcoming,
 } from "@/hooks/useAnime";
 import { AnimeGrid } from "@/components/anime/AnimeGrid";
 import { Pagination } from "@/components/shared/Pagination";
@@ -33,6 +34,7 @@ import {
   Brain,
   Bot,
   DoorOpen,
+  CalendarDays,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -88,6 +90,12 @@ export const CATEGORY_CONFIG: Record<
     badge: "Top Rated",
     icon: Star,
   },
+  upcoming: {
+    title: "Upcoming Releases & Anticipated Anime",
+    subtitle: "Most anticipated future releases, upcoming seasons, and premieres",
+    badge: "Upcoming Releases",
+    icon: CalendarDays,
+  },
 };
 
 export function SearchPage() {
@@ -136,6 +144,7 @@ export function SearchPage() {
   const { data: popularList, loading: popularLoading } = usePopular();
   const { data: topRatedList, loading: topRatedLoading } = useTopRated();
   const { data: topAiringList, loading: topAiringLoading } = useTopAiring();
+  const { data: upcomingList, loading: upcomingLoading } = useUpcoming();
 
   const updateSearch = (
     newQuery: string,
@@ -518,6 +527,38 @@ export function SearchPage() {
             <AnimeGrid
               animeList={topAiringList ? topAiringList.slice(0, 12) : null}
               loading={topAiringLoading}
+            />
+          </section>
+
+          {/* Section 4: Upcoming Anticipated Releases */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between border-b border-border/30 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center">
+                  <CalendarDays className="w-5 h-5 text-pink-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-bold text-white leading-tight">
+                    Upcoming Releases &amp; Anticipated Premieres
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Future seasons and upcoming broadcast premieres.
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                to="/search?category=upcoming"
+                className="text-xs sm:text-sm text-primary hover:text-primary/80 flex items-center gap-1 font-semibold transition-colors group cursor-pointer"
+              >
+                <span>View More</span>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+            </div>
+
+            <AnimeGrid
+              animeList={upcomingList ? upcomingList.slice(0, 12) : null}
+              loading={upcomingLoading}
             />
           </section>
         </div>

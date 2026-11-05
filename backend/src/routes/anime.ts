@@ -78,6 +78,21 @@ router.get("/top-airing", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/anime/upcoming
+router.get("/upcoming", async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const data = await jikanService.getUpcoming(page);
+    res.json(data);
+  } catch (error: any) {
+    console.warn("[AnimeRoute] Upcoming failed:", error.message);
+    res.json({
+      data: [],
+      pagination: { last_visible_page: 1, has_next_page: false, current_page: 1 },
+    });
+  }
+});
+
 // GET /api/anime/popular
 router.get("/popular", async (req: Request, res: Response) => {
   try {

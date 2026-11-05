@@ -690,6 +690,8 @@ export const jikanService = {
 
     if (status === "airing") {
       jikanParams.status = "airing";
+    } else if (status === "upcoming") {
+      jikanParams.status = "upcoming";
     }
 
     if (genreIds.length > 0) {
@@ -698,7 +700,11 @@ export const jikanService = {
 
     const extraVars: Record<string, any> = {};
     if (trimmed) extraVars.search = trimmed;
-    if (status === "airing") extraVars.status = "RELEASING";
+    if (status === "airing") {
+      extraVars.status = "RELEASING";
+    } else if (status === "upcoming") {
+      extraVars.status = "NOT_YET_RELEASED";
+    }
 
     const anilistGenreIn: string[] = [];
     const anilistTagIn: string[] = [];
@@ -761,6 +767,21 @@ export const jikanService = {
       "/top/anime",
       { filter: "airing", page, limit: 25 },
       () => fetchAniListMediaList(["SCORE_DESC", "POPULARITY_DESC"], page, 25, { status: "RELEASING" })
+    );
+  },
+
+  // Get upcoming anime releases
+  getUpcoming: async (page = 1) => {
+    return executeJikanRequest<any>(
+      "/seasons/upcoming",
+      { page, limit: 25 },
+      () =>
+        fetchAniListMediaList(
+          ["POPULARITY_DESC", "TRENDING_DESC"],
+          page,
+          25,
+          { status: "NOT_YET_RELEASED" }
+        )
     );
   },
 

@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import { Star, Clock, Calendar, Heart, Play, AlertCircle } from "lucide-react";
+import { Star, Clock, Calendar, Heart, Play, AlertCircle, Sparkles } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes } from "@/hooks/useAnime";
 import { useWatchlist } from "@/hooks/useWatchHistory";
 import { EpisodeList } from "@/components/anime/EpisodeList";
@@ -17,6 +17,11 @@ export function AnimePage() {
   const { episodes, loading: episodesLoading } = useAnimeEpisodes(animeId);
   const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
   const { formatTitle, language } = useTitleLanguage();
+
+  const isUpcoming =
+    anime?.status === "Not yet aired" ||
+    anime?.status === "Upcoming" ||
+    anime?.status === "NOT_YET_RELEASED";
 
   if (detailLoading) {
     return (
@@ -196,6 +201,12 @@ export function AnimePage() {
                     {formatScore(anime.score)}
                   </span>
                 )}
+                {isUpcoming && (
+                  <span className="px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Upcoming Release
+                  </span>
+                )}
                 {anime.duration && (
                   <span className="px-3 py-1 rounded-full text-xs font-medium bg-secondary/80 text-foreground border border-border/40 flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" />
@@ -212,21 +223,35 @@ export function AnimePage() {
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
+                {!isUpcoming ? (
+                  <Button
+                    asChild
+                    className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 py-5 shadow-lg shadow-primary/10 transition-all font-semibold"
+                  >
+                    <Link to={`/watch/${anime.mal_id}/1`}>
+                      <Play className="w-4 h-4 mr-2 fill-white" />
+                      Watch Episode 1
+                    </Link>
+                  </Button>
+                ) : anime.trailer?.url ? (
+                  <Button
+                    asChild
+                    className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 py-5 shadow-lg shadow-primary/10 transition-all font-semibold"
+                  >
+                    <a href={anime.trailer.url} target="_blank" rel="noopener noreferrer">
+                      <Play className="w-4 h-4 mr-2 fill-white" />
+                      Watch Official Trailer
+                    </a>
+                  </Button>
+                ) : null}
                 <Button
-                  asChild
-                  className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 py-5 shadow-lg shadow-primary/10 transition-all font-semibold"
-                >
-                  <Link to={`/watch/${anime.mal_id}/1`}>
-                    <Play className="w-4 h-4 mr-2 fill-white" />
-                    Watch Episode 1
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
+                  variant={isUpcoming ? "default" : "outline"}
                   onClick={handleWatchlistToggle}
                   className={`rounded-full px-6 py-5 border flex items-center gap-2 transition-all cursor-pointer ${
                     isSaved
                       ? "bg-primary/15 border-primary/40 text-primary hover:bg-primary/25 shadow-sm shadow-primary/20"
+                      : isUpcoming
+                      ? "bg-primary hover:bg-primary/90 text-white border-transparent"
                       : "border-border/60 hover:bg-secondary text-foreground"
                   }`}
                 >
@@ -237,12 +262,25 @@ export function AnimePage() {
                     </>
                   ) : (
                     <>
-                      <Heart className="w-4 h-4" />
+                      <Heart className={`w-4 h-4 ${isUpcoming ? "fill-white" : ""}`} />
                       <span>Add to Watchlist</span>
                     </>
                   )}
                 </Button>
               </div>
+
+              {/* Upcoming Notice Card */}
+              {isUpcoming && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3 text-amber-200">
+                  <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-bold text-amber-300">Scheduled Upcoming Release</p>
+                    <p className="text-xs text-amber-200/80 leading-relaxed">
+                      This title is not yet released ({anime.aired?.string || anime.season || "Release Date TBA"}). Keep it saved to your Watchlist so you won&apos;t miss the premiere!
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Synopsis */}
@@ -266,7 +304,7 @@ export function AnimePage() {
             <div className="space-y-4 pt-4 border-t border-border/30">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold text-white tracking-tight">Episodes</h2>
-                {episodesLoading && episodes.length > 0 && (
+                {!isUpcoming && episodesLoading && episodes.length > 0 && (
                   <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                     <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                     Loading episodes...
@@ -274,12 +312,22 @@ export function AnimePage() {
                 )}
               </div>
 
-              <EpisodeList
-                animeId={anime.mal_id}
-                episodes={episodes}
-                loading={episodesLoading}
-                animeImage={image}
-              />
+              {isUpcoming ? (
+                <div className="text-center py-12 px-4 rounded-2xl bg-card/40 border border-border/40 space-y-2">
+                  <Calendar className="w-8 h-8 text-amber-400 mx-auto" />
+                  <p className="text-sm font-bold text-white">Broadcast Has Not Started</p>
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    Episodes will become available here once the series officially begins broadcasting ({anime.aired?.string || anime.season || "Release Date TBA"}).
+                  </p>
+                </div>
+              ) : (
+                <EpisodeList
+                  animeId={anime.mal_id}
+                  episodes={episodes}
+                  loading={episodesLoading}
+                  animeImage={image}
+                />
+              )}
             </div>
 
           </div>

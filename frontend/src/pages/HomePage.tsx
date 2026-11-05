@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Play, History, ChevronRight } from "lucide-react";
-import { useTrending, useTopAiring, usePopular } from "@/hooks/useAnime";
+import { useTrending, useTopAiring, useUpcoming, usePopular } from "@/hooks/useAnime";
 import { useWatchHistory } from "@/hooks/useWatchHistory";
 import { getRecentLocalHistory, isEpisodeFinished } from "@/lib/watchProgress";
 import { HeroBanner } from "@/components/anime/HeroBanner";
@@ -23,6 +23,7 @@ interface ContinueItem {
 export function HomePage() {
   const { data: trending, loading: trendingLoading } = useTrending();
   const { data: topAiring, loading: topAiringLoading } = useTopAiring();
+  const { data: upcoming, loading: upcomingLoading } = useUpcoming();
   const { data: popular, loading: popularLoading } = usePopular();
   const { history } = useWatchHistory();
   const [localHistory, setLocalHistory] = useState(() => getRecentLocalHistory());
@@ -198,6 +199,12 @@ export function HomePage() {
           animeList={topAiring}
           loading={topAiringLoading}
           viewMoreLink="/search?category=top-airing"
+        />
+        <AnimeCarousel
+          title="Upcoming Releases"
+          animeList={upcoming}
+          loading={upcomingLoading}
+          viewMoreLink="/search?category=upcoming"
         />
         <AnimeCarousel
           title="Most Popular"

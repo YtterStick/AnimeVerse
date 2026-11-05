@@ -54,6 +54,12 @@ export function Footer() {
                   </Link>
                 </li>
                 <li>
+                  <Link to="/search?category=upcoming" className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Upcoming Releases</span>
+                  </Link>
+                </li>
+                <li>
                   <Link to="/history" className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-1.5">
                     <History className="w-3.5 h-3.5 text-primary" />
                     <span>Watch History</span>

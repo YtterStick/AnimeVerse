@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2 } from "lucide-react";
+import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { TitleLanguageToggle } from "@/components/shared/TitleLanguageToggle";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
@@ -228,10 +228,23 @@ export function Navbar() {
               <Link
                 to="/search"
                 className={`transition-colors duration-200 ${
-                  isActive("/search") ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                  isActive("/search") && !location.search.includes("category=upcoming")
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Discover
+              </Link>
+              <Link
+                to="/search?category=upcoming"
+                className={`transition-colors duration-200 flex items-center gap-1.5 ${
+                  location.search.includes("category=upcoming")
+                    ? "text-primary font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Upcoming</span>
               </Link>
               <Link
                 to="/history"
@@ -358,10 +371,19 @@ export function Navbar() {
                 to="/search"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`px-3 py-2 rounded-lg text-sm transition-all ${
-                  isActive("/search") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                  isActive("/search") && !location.search.includes("category=upcoming") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
                 }`}
               >
                 Discover
+              </Link>
+              <Link
+                to="/search?category=upcoming"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
+                  location.search.includes("category=upcoming") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                }`}
+              >
+                <Sparkles className="w-4 h-4 text-amber-400" /> Upcoming Releases
               </Link>
               <Link
                 to="/history"
