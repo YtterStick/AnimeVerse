@@ -1,7 +1,7 @@
 import type { StreamServer } from "./streamProvider";
 
 export const KNOWN_STREAM_MAP: Record<number, Record<number, { url: string; quality: string }>> = {
-  // MAL 3470: S.A: Special A (24 Episodes)
+  // MAL 3470: S.A: Special A (24 Episodes, 360p)
   3470: {
   "1": {
     "url": "https://vixcloud.cc/playlist/136631?type=video&rendition=360p&token=TFdGWw-85q9Fsxjt4r1CYw&expires=1799113318&edge=au-u2-01",
@@ -99,6 +99,109 @@ export const KNOWN_STREAM_MAP: Record<number, Record<number, { url: string; qual
     "url": "https://vixcloud.cc/playlist/136654?type=video&rendition=360p&token=1aSbT5H5p60rx5NiauEaQQ&expires=1799113361&edge=au-u1-01",
     "quality": "360p"
   }
+},
+  // MAL 1562: The Wallflower / Yamato Nadeshiko Shichihenge (25 Episodes, 480p)
+  1562: {
+  "1": {
+    "url": "https://vixcloud.cc/playlist/144855?type=video&rendition=480p&token=IqKLmlA3QnAsZ-jhRp4E5A&expires=1799113913&edge=au-u1-01",
+    "quality": "480p"
+  },
+  "2": {
+    "url": "https://vixcloud.cc/playlist/144857?type=video&rendition=480p&token=cmC_Ieo9SqGL51SNdlKZTg&expires=1799113915&edge=au-u3-01",
+    "quality": "480p"
+  },
+  "3": {
+    "url": "https://vixcloud.cc/playlist/144856?type=video&rendition=480p&token=fDMBSAJqIOzOiA0Tp8chqg&expires=1799113918&edge=au-u1-01",
+    "quality": "480p"
+  },
+  "4": {
+    "url": "https://vixcloud.cc/playlist/144860?type=video&rendition=480p&token=JnpDiEslGiyG3HEr8X9J4w&expires=1799113920&edge=au-u2-01",
+    "quality": "480p"
+  },
+  "5": {
+    "url": "https://vixcloud.cc/playlist/144861?type=video&rendition=480p&token=MdhsbefUg4hDwPZV1otwGQ&expires=1799113922&edge=au-u2-01",
+    "quality": "480p"
+  },
+  "6": {
+    "url": "https://vixcloud.cc/playlist/144863?type=video&rendition=480p&token=H1MU5H93h83v_w6_THUDag&expires=1799113924&edge=au-u1-01",
+    "quality": "480p"
+  },
+  "7": {
+    "url": "https://vixcloud.cc/playlist/144858?type=video&rendition=480p&token=-KJHivRYlNW5cQ3M6dqh-A&expires=1799113926&edge=au-u1-01",
+    "quality": "480p"
+  },
+  "8": {
+    "url": "https://vixcloud.cc/playlist/144864?type=video&rendition=480p&token=neUvyRyiNTpTXQfIL3ChUA&expires=1799113928&edge=au-u3-01",
+    "quality": "480p"
+  },
+  "9": {
+    "url": "https://vixcloud.cc/playlist/144865?type=video&rendition=480p&token=KDaf3GqH5uP1uelYutDySQ&expires=1799113930&edge=au-u1-01",
+    "quality": "480p"
+  },
+  "10": {
+    "url": "https://vixcloud.cc/playlist/144862?type=video&rendition=480p&token=_bXsyvNaZ2KV0YwWtLgQwA&expires=1799113932&edge=au-u3-01",
+    "quality": "480p"
+  },
+  "11": {
+    "url": "https://vixcloud.cc/playlist/144859?type=video&rendition=480p&token=NMIA4TmWhGl7rW9Rt01YhQ&expires=1799113935&edge=au-u2-01",
+    "quality": "480p"
+  },
+  "12": {
+    "url": "https://vixcloud.cc/playlist/144870?type=video&rendition=480p&token=1VDVw9Ja7nctGRoakg5ovA&expires=1799113937&edge=au-u1-01",
+    "quality": "480p"
+  },
+  "13": {
+    "url": "https://vixcloud.cc/playlist/144866?type=video&rendition=480p&token=EwEHmJvRxDf4EKWQR_FDIA&expires=1799113939&edge=au-u3-01",
+    "quality": "480p"
+  },
+  "14": {
+    "url": "https://vixcloud.cc/playlist/144867?type=video&rendition=480p&token=ajHrb9rJlM7VvHt4rIUn6w&expires=1799113941&edge=au-u2-01",
+    "quality": "480p"
+  },
+  "15": {
+    "url": "https://vixcloud.cc/playlist/144871?type=video&rendition=480p&token=SUbfmy6WS8e3UwRiUUmt5g&expires=1799113943&edge=au-u2-01",
+    "quality": "480p"
+  },
+  "16": {
+    "url": "https://vixcloud.cc/playlist/144868?type=video&rendition=480p&token=rVXphuujNQ6uV9PJzGoqRA&expires=1799113945&edge=au-u3-01",
+    "quality": "480p"
+  },
+  "17": {
+    "url": "https://vixcloud.cc/playlist/144872?type=video&rendition=480p&token=_gnxXKYM-AlZSqg7HzWqIw&expires=1799113947&edge=au-u2-01",
+    "quality": "480p"
+  },
+  "18": {
+    "url": "https://vixcloud.cc/playlist/144869?type=video&rendition=480p&token=TQcFLUAHs3jxfpUWSnbj2g&expires=1799113949&edge=au-u1-01",
+    "quality": "480p"
+  },
+  "19": {
+    "url": "https://vixcloud.cc/playlist/144873?type=video&rendition=480p&token=OGdowqSbEr_fn5bX0nkcbA&expires=1799113951&edge=au-u1-01",
+    "quality": "480p"
+  },
+  "20": {
+    "url": "https://vixcloud.cc/playlist/144874?type=video&rendition=480p&token=bNPCqD8aDS-dlkXnAR_58A&expires=1799113953&edge=au-u2-01",
+    "quality": "480p"
+  },
+  "21": {
+    "url": "https://vixcloud.cc/playlist/144875?type=video&rendition=480p&token=tzwryd1vIoMXI8kIpD9rYw&expires=1799113955&edge=au-u3-01",
+    "quality": "480p"
+  },
+  "22": {
+    "url": "https://vixcloud.cc/playlist/144877?type=video&rendition=480p&token=_pSPYut35Xqn_PvGgulZmg&expires=1799113957&edge=au-u3-01",
+    "quality": "480p"
+  },
+  "23": {
+    "url": "https://vixcloud.cc/playlist/144878?type=video&rendition=480p&token=R4z9abVRpgv4A_exDNv4Cg&expires=1799113959&edge=au-u3-01",
+    "quality": "480p"
+  },
+  "24": {
+    "url": "https://vixcloud.cc/playlist/144876?type=video&rendition=480p&token=fTwMwf0K8CkxeNMwKV9Dig&expires=1799113961&edge=au-u3-01",
+    "quality": "480p"
+  },
+  "25": {
+    "url": "https://vixcloud.cc/playlist/144879?type=video&rendition=480p&token=v68C6pThi10Tv_0Q1OB-7g&expires=1799113963&edge=au-u3-01",
+    "quality": "480p"
+  }
 }
 };
 
@@ -108,6 +211,8 @@ export function getKnownStreams(animeId: number, episode: number): StreamServer[
   const epEntry = animeEntry[episode];
   if (!epEntry) return null;
 
+  const detectedQuality = epEntry.quality || "480p";
+
   const servers: StreamServer[] = [
     {
       id: `stellar-sub-${animeId}-${episode}`,
@@ -115,7 +220,7 @@ export function getKnownStreams(animeId: number, episode: number): StreamServer[
       category: "SUB",
       url: epEntry.url,
       type: "hls",
-      quality: epEntry.quality || "360p",
+      quality: detectedQuality,
       subtitles: [],
     },
     {
@@ -124,7 +229,7 @@ export function getKnownStreams(animeId: number, episode: number): StreamServer[
       category: "SUB",
       url: `/api/stream/proxy?url=${encodeURIComponent(epEntry.url)}&referer=${encodeURIComponent("https://www.animeunity.to/")}`,
       type: "hls",
-      quality: epEntry.quality || "360p",
+      quality: detectedQuality,
       subtitles: [],
     }
   ];
