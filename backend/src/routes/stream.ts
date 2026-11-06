@@ -283,6 +283,8 @@ router.get("/proxy", async (req: Request, res: Response) => {
       "narutokun.xyz": "https://krussdomi.com/",
       "animeheaven.me": "https://animeheaven.me/",
       "vixcloud.cc": "https://www.animeunity.to/",
+      "vixcloud.co": "https://www.animeunity.to/",
+      "vix-content.net": "https://www.animeunity.to/",
       "animeunity.to": "https://www.animeunity.to/",
     };
 
@@ -475,6 +477,13 @@ router.get("/debug/kaa/:animeId/:episode", async (req: Request, res: Response) =
     return res.status(400).json({ message: "Invalid parameters" });
   }
   res.json({ steps: await streamProvider.diagnoseKAA(animeId, episode) });
+});
+
+// GET /api/stream/debug/au/:query
+// Step-by-step diagnostics for AnimeUnity
+router.get("/debug/au/:query", async (req: Request, res: Response) => {
+  const query = req.params.query;
+  res.json(await streamProvider.diagnoseAU(query));
 });
 
 // GET /api/stream/skip-times/:animeId/:episode?duration=1440

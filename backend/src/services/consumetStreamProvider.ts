@@ -50,12 +50,18 @@ const KAA_HEADERS: Record<string, string> = {
 export class ConsumetStreamProvider implements StreamProvider {
   private kaa: any;
   private animeUnity: any;
-  private readonly providerTimeoutMs = 15000;
+  private readonly providerTimeoutMs = 8500;
 
   constructor() {
     this.kaa = new ANIME.KickAssAnime();
     this.kaa.baseUrl = "https://kaa.lt";
     this.animeUnity = new ANIME.AnimeUnity();
+    this.animeUnity.client.defaults.headers.common["User-Agent"] = USER_AGENT;
+    this.animeUnity.client.defaults.headers.common["Accept"] =
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8";
+    this.animeUnity.client.defaults.headers.common["Accept-Language"] = "en-US,en;q=0.9";
+    this.animeUnity.client.defaults.headers.common["Referer"] = "https://www.animeunity.to/";
+    this.animeUnity.client.defaults.timeout = 8000;
     console.log(
       `[StreamProvider] Initialized providers: KickAssAnime (SUB & DUB) + AnimeHeaven (Hard-Sub) + AnimeUnity (SUB)`
     );
@@ -312,6 +318,33 @@ export class ConsumetStreamProvider implements StreamProvider {
     return score;
   }
 
+  private getCandidateTitles(meta: AnimeMetadata): string[] {
+    const list: string[] = [
+      meta.title,
+      meta.titleEnglish || "",
+      ...meta.synonyms,
+    ];
+
+    const cleaned: string[] = [];
+    for (const t of list) {
+      if (!t) continue;
+      cleaned.push(t);
+      // Strip leading abbreviations, prefixes and colons (e.g. "S.A: Special A" -> "Special A")
+      const afterColon = t.replace(/^[^:]+:\s*/, "").trim();
+      if (afterColon && afterColon !== t) cleaned.push(afterColon);
+      const beforeColon = t.split(":")[0]?.trim();
+      if (beforeColon && beforeColon !== t && beforeColon.length > 2) cleaned.push(beforeColon);
+      // Strip punctuation (e.g. "S.A." -> "SA", "Re:Zero" -> "Re Zero")
+      const strippedPunct = t.replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+      if (strippedPunct && strippedPunct !== t) cleaned.push(strippedPunct);
+      // Strip parenthetical text (e.g. "(TV)", "(2008)")
+      const noParen = t.replace(/\s*\([^)]*\)/g, "").trim();
+      if (noParen && noParen !== t) cleaned.push(noParen);
+    }
+
+    return [...new Set(cleaned.filter((t): t is string => Boolean(t && t.length >= 2)))];
+  }
+
   // ─── KickAssAnime (kaa.lt) SUB + DUB Resolver ─────────────
 
   private async resolveKAASlug(meta: AnimeMetadata): Promise<string | null> {
@@ -335,12 +368,7 @@ export class ConsumetStreamProvider implements StreamProvider {
     }
 
     // 2. Search KAA /api/fsearch with candidate titles and score results
-    const queries = [
-      meta.title,
-      meta.titleEnglish,
-      meta.title.split(":")[0]?.trim(),
-      meta.titleEnglish?.split(":")[0]?.trim(),
-    ].filter((q, idx, arr): q is string => Boolean(q && q.length >= 2 && arr.indexOf(q) === idx));
+    const queries = this.getCandidateTitles(meta);
 
     const candidates = new Map<string, any>();
 
@@ -745,14 +773,13 @@ export class ConsumetStreamProvider implements StreamProvider {
     const servers: StreamServer[] = [];
 
     try {
-      // Search AnimeUnity using candidate title queries
-      const queries = [meta.titleEnglish, meta.title]
-        .filter((q, idx, arr): q is string => Boolean(q && arr.indexOf(q) === idx));
+      // Search AnimeUnity using normalized candidate title queries
+      const queries = this.getCandidateTitles(meta);
 
       let bestResult: any = null;
       let bestScore = -Infinity;
 
-      for (const q of queries) {
+      for (const q of queries.slice(0, 4)) {
         try {
           const results = await this.animeUnity.search(q);
           for (const r of results?.results || []) {
@@ -805,7 +832,8 @@ export class ConsumetStreamProvider implements StreamProvider {
         return bq - aq;
       });
 
-      // Use the highest-quality source as an HLS master
+      // Vixcloud has open CORS (Access-Control-Allow-Origin: *), so browsers can play directly
+      // without proxy latency or datacenter IP blocks!
       const best = sorted[0];
       const isHls = best.url?.includes(".m3u8") || best.isM3U8;
       const detectedQuality = best.quality && best.quality !== "default"
@@ -815,6 +843,17 @@ export class ConsumetStreamProvider implements StreamProvider {
       servers.push({
         id: `animeunity-sub-0`,
         name: "Stellar HD",
+        category: "SUB",
+        url: best.url,
+        type: isHls ? "hls" : "mp4",
+        quality: detectedQuality,
+        subtitles: [],
+      });
+
+      // Also add proxied version as a backup server
+      servers.push({
+        id: `animeunity-sub-proxied`,
+        name: "Stellar HD (Proxy)",
         category: "SUB",
         url: isHls
           ? this.proxyUrl(best.url, undefined, "https://www.animeunity.to/")
@@ -829,12 +868,10 @@ export class ConsumetStreamProvider implements StreamProvider {
         const backup = sorted[1];
         const backupIsHls = backup.url?.includes(".m3u8") || backup.isM3U8;
         servers.push({
-          id: `animeunity-sub-1`,
+          id: `animeunity-sub-backup`,
           name: "Stellar HD (Backup)",
           category: "SUB",
-          url: backupIsHls
-            ? this.proxyUrl(backup.url, undefined, "https://www.animeunity.to/")
-            : backup.url,
+          url: backup.url,
           type: backupIsHls ? "hls" : "mp4",
           quality: backup.quality && backup.quality !== "default"
             ? backup.quality
@@ -855,8 +892,7 @@ export class ConsumetStreamProvider implements StreamProvider {
     const servers: StreamServer[] = [];
 
     try {
-      const queries = [meta.titleEnglish, meta.title]
-        .filter((q, idx, arr): q is string => Boolean(q && arr.indexOf(q) === idx));
+      const queries = this.getCandidateTitles(meta).slice(0, 3);
 
       const candidateHrefs = new Set<string>();
 
@@ -866,7 +902,7 @@ export class ConsumetStreamProvider implements StreamProvider {
             `https://animeheaven.me/search.php?s=${encodeURIComponent(q)}`,
             {
               headers: { "User-Agent": USER_AGENT, Referer: "https://animeheaven.me/" },
-              timeout: 5000,
+              timeout: 3500,
             }
           );
           const html = String(searchRes.data || "");
@@ -1075,6 +1111,27 @@ export class ConsumetStreamProvider implements StreamProvider {
       );
     }
     return steps;
+  }
+
+  async diagnoseAU(query: string): Promise<any> {
+    const started = Date.now();
+    try {
+      const results = await this.animeUnity.search(query);
+      return {
+        ok: true,
+        ms: Date.now() - started,
+        count: results?.results?.length || 0,
+        results: (results?.results || []).slice(0, 5),
+      };
+    } catch (err: any) {
+      return {
+        ok: false,
+        ms: Date.now() - started,
+        error: err.message,
+        status: err.response?.status,
+        data: String(err.response?.data || "").slice(0, 300),
+      };
+    }
   }
 
   // ─── Timeout & Ordering Helpers ───────────────────────────
