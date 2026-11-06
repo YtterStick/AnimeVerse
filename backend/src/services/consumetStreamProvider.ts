@@ -9,6 +9,7 @@ import {
   SubtitleTrack,
 } from "./streamProvider";
 import { jikanService } from "./jikanService";
+import { getKnownStreams } from "./knownStreamRegistry";
 
 // Cache resolved slugs for 7 days (exact MAL mappings never change), 3 min for streams
 const slugCache = new NodeCache({ stdTTL: 7 * 24 * 3600, checkperiod: 600 });
@@ -1207,6 +1208,17 @@ export class ConsumetStreamProvider implements StreamProvider {
     const dubServers = [...(kaaServers || []).filter((s) => s.category === "DUB")];
 
     const allServers = [...subServers, ...dubServers];
+
+    // If live scrapers yielded 0 servers, check verified known stream fallbacks
+    if (allServers.length === 0) {
+      const knownFallbacks = getKnownStreams(animeId, episode);
+      if (knownFallbacks && knownFallbacks.length > 0) {
+        console.log(
+          `[StreamProvider] 🌟 Applied ${knownFallbacks.length} known fallback stream(s) for MAL ${animeId} ep ${episode}`
+        );
+        allServers.push(...knownFallbacks);
+      }
+    }
 
     console.log(
       `[StreamProvider] ✅ Resolved ${allServers.length} server(s): SUB=${subServers.length}, DUB=${dubServers.length}`

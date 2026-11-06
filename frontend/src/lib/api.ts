@@ -8,6 +8,7 @@ import type {
   WatchlistEntry,
 } from "@/types";
 import { resolveKaaClient } from "./kaaDirectResolver";
+import { resolveKnownStream } from "./knownStreamResolver";
 
 export const BACKEND_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const API_BASE = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
@@ -160,6 +161,14 @@ export const streamApi = {
       if (!hasKaa) {
         // Prepend client-side resolved CatStream servers (fastest & highest quality)
         res.servers = [...clientServers, ...(res.servers || [])];
+      }
+    }
+
+    // Fallback: If neither backend nor KAA returned streams, check verified known client-side streams
+    if (!res.servers || res.servers.length === 0) {
+      const known = resolveKnownStream(animeId, episode);
+      if (known && known.length > 0) {
+        res.servers = known;
       }
     }
 
