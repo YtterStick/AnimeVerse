@@ -370,6 +370,13 @@ export function VideoPlayer({
     src,
     type: mimeType as "application/x-mpegurl" | "video/mp4",
   };
+  // Omit crossOrigin on direct external MP4s without external subtitle/thumbnail tracks
+  // so native <video> streams directly from the CDN (0 MB proxy bandwidth) without CORS blocks.
+  const needsCors =
+    type === "hls" ||
+    subtitles.length > 0 ||
+    Boolean(thumbnails) ||
+    src.includes("/proxy?");
 
   return (
     <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative">
@@ -388,7 +395,7 @@ export function VideoPlayer({
         autoPlay
         preload="auto"
         load="eager"
-        crossOrigin="anonymous"
+        crossOrigin={needsCors ? "anonymous" : undefined}
       >
         <MediaProvider>
           {subtitles.map((subtitle, index) => (

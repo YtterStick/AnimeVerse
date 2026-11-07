@@ -182,7 +182,19 @@ function rewriteM3U8(
     }
   }
 
+  const isDirectCorsSafeSegment = (targetUrl: string): boolean => {
+    try {
+      const host = new URL(targetUrl).hostname.toLowerCase();
+      return host === "vix-content.net" || host.endsWith(".vix-content.net");
+    } catch {
+      return false;
+    }
+  };
+
   const buildProxyLink = (targetUrl: string) => {
+    if (isDirectCorsSafeSegment(targetUrl)) {
+      return targetUrl;
+    }
     let link = `${proxyBaseUrl}?url=${encodeURIComponent(targetUrl)}`;
     if (customReferer) {
       link += `&referer=${encodeURIComponent(customReferer)}`;
@@ -305,7 +317,7 @@ router.get("/proxy", async (req: Request, res: Response) => {
     }
 
     const isSubtitle = /\.(vtt|srt|ass|ssa)(?:[?#]|$)/i.test(url);
-    const isPlaylist = !isSubtitle && /\.m3u8(?:[?#]|$)/i.test(url);
+    const isPlaylist = !isSubtitle && /(?:\.m3u8(?:[?#]|$)|\/playlist\/)/i.test(url);
     const isMp4 = /video\.mp4|\.mp4(?:[?#]|$)/i.test(url);
 
     // If client is requesting an MP4 and didn't provide a Range header,

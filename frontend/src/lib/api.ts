@@ -13,6 +13,30 @@ import { resolveKnownStream } from "./knownStreamResolver";
 export const BACKEND_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const API_BASE = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
 
+/**
+ * In production (Vercel), stream/subtitle/playlist proxying runs on our Vercel Edge
+ * Streaming Function (`/api/proxy`) so Render uses 0 MB of video bandwidth.
+ * In local Vite dev (`import.meta.env.DEV`), fall back to the local Express backend proxy.
+ */
+export const STREAM_PROXY_BASE = import.meta.env.DEV
+  ? BACKEND_URL
+    ? `${BACKEND_URL}/api/stream/proxy`
+    : "/api/stream/proxy"
+  : "/api/proxy";
+
+function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
+  if (rawUrl.startsWith("/api/stream/proxy")) {
+    return `${STREAM_PROXY_BASE}${rawUrl.slice("/api/stream/proxy".length)}`;
+  }
+  if (BACKEND_URL && rawUrl.startsWith(`${BACKEND_URL}/api/stream/proxy`)) {
+    return `${STREAM_PROXY_BASE}${rawUrl.slice(`${BACKEND_URL}/api/stream/proxy`.length)}`;
+  }
+  if (!rawUrl.startsWith("http") && BACKEND_URL) {
+    return `${BACKEND_URL}${rawUrl}`;
+  }
+  return rawUrl;
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit & { timeoutMs?: number },
@@ -139,13 +163,14 @@ export const streamApi = {
 
     if (backendSettled.status === "fulfilled" && backendSettled.value?.servers) {
       res = backendSettled.value;
-      if (BACKEND_URL && res.servers) {
+      if (res.servers) {
         res.servers = res.servers.map((s) => ({
           ...s,
-          url: s.url.startsWith("http") ? s.url : `${BACKEND_URL}${s.url}`,
+          url: rewriteStreamUrlToEdgeProxy(s.url),
+          thumbnails: s.thumbnails ? rewriteStreamUrlToEdgeProxy(s.thumbnails) : s.thumbnails,
           subtitles: s.subtitles?.map((sub) => ({
             ...sub,
-            url: sub.url.startsWith("http") ? sub.url : `${BACKEND_URL}${sub.url}`,
+            url: rewriteStreamUrlToEdgeProxy(sub.url),
           })),
         }));
       }

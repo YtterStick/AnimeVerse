@@ -1,5 +1,5 @@
 import type { StreamServer } from "@/types";
-import { BACKEND_URL } from "./api";
+import { STREAM_PROXY_BASE } from "./api";
 
 export const KNOWN_STREAM_MAP: Record<number, Record<number, { url: string; quality: string }>> = {
   // MAL 3470: S.A: Special A (24 Episodes, 360p)
@@ -212,7 +212,7 @@ export function resolveKnownStream(animeId: number, episode: number): StreamServ
   const epEntry = animeEntry[episode];
   if (!epEntry) return null;
 
-  const baseProxy = BACKEND_URL ? `${BACKEND_URL}/api/stream/proxy` : "/api/stream/proxy";
+  const baseProxy = STREAM_PROXY_BASE;
   const detectedQuality = epEntry.quality || "480p";
 
   const servers: StreamServer[] = [

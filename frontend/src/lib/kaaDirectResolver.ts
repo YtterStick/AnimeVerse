@@ -1,5 +1,5 @@
 import type { StreamServer, SubtitleTrack } from "@/types";
-import { BACKEND_URL } from "./api";
+import { BACKEND_URL, STREAM_PROXY_BASE } from "./api";
 import { getCleanServerName } from "./serverNames";
 
 const decodeHtml = (str: string) => {
@@ -21,8 +21,7 @@ const sanitizeUrl = (raw: string) => {
 };
 
 const buildProxyUrl = (url: string, audio?: "jpn" | "eng", quality?: string) => {
-  const base = BACKEND_URL ? `${BACKEND_URL}/api/stream/proxy` : "/api/stream/proxy";
-  let full = `${base}?url=${encodeURIComponent(sanitizeUrl(url))}`;
+  let full = `${STREAM_PROXY_BASE}?url=${encodeURIComponent(sanitizeUrl(url))}`;
   if (audio) full += `&audio=${audio}`;
   if (quality) full += `&quality=${encodeURIComponent(quality)}`;
   return full;
