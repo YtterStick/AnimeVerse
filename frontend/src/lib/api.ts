@@ -287,36 +287,19 @@ export const streamApi = {
     episode: number,
     fresh = false
   ): Promise<MultiStreamResult> => {
-    const clientPromise = resolveKaaClient(animeId, episode).catch(() => []);
+    // 1. Resolve directly in the browser + Vercel Edge first (uses 0 bytes on Render)
+    const clientServers = await resolveKaaClient(animeId, episode).catch(() => []);
 
-    const isRenderCold = Date.now() < renderColdUntil && !fresh;
-    const backendSafePromise: Promise<MultiStreamResult | null> = isRenderCold
-      ? Promise.resolve(null)
-      : fetchApi<MultiStreamResult>(
-          `/stream/${animeId}/${episode}${fresh ? "?fresh=1" : ""}`,
-          { timeoutMs: 8500, maxAttempts: 1 }
-        ).catch(() => {
-          markRenderColdAndWake();
-          return null;
-        });
-
-    const clientServers = await clientPromise;
-
+    // 2. Only query Render's backup scrapers if client resolution found nothing or user clicked Retry
     let backendValue: MultiStreamResult | null = null;
-    if (clientServers.length > 0) {
-      // CatStream 1080p SUB/DUB is already ready! Give Render at most 1.8s to add backup servers
-      backendValue = await Promise.race([
-        backendSafePromise,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1800)),
-      ]);
-    } else if (!isRenderCold) {
-      backendValue = await backendSafePromise;
-    } else {
-      // Render was marked cold AND client KAA had no match — try Render directly up to 6s
+    if (clientServers.length === 0 || fresh) {
       backendValue = await fetchApi<MultiStreamResult>(
         `/stream/${animeId}/${episode}${fresh ? "?fresh=1" : ""}`,
-        { timeoutMs: 6000, maxAttempts: 1 }
-      ).catch(() => null);
+        { timeoutMs: 8500, maxAttempts: 1 }
+      ).catch(() => {
+        markRenderColdAndWake();
+        return null;
+      });
     }
 
     let res: MultiStreamResult = { servers: [], default: 0 };
@@ -389,19 +372,9 @@ export const streamApi = {
     return res;
   },
 
-  /** Intro/outro/recap timestamps (seconds) from AniSkip, with direct browser fallback. */
+  /** Intro/outro/recap timestamps (seconds) directly from AniSkip (0 bytes on Render). */
   getSkipTimes: async (animeId: number, episode: number, duration = 0) => {
-    if (Date.now() < renderColdUntil) {
-      return fetchAniSkipDirect(animeId, episode, duration);
-    }
-    try {
-      return await fetchApi<{ found: boolean; skips: SkipInterval[] }>(
-        `/stream/skip-times/${animeId}/${episode}?duration=${Math.round(duration)}`,
-        { timeoutMs: 3500, maxAttempts: 1 }
-      );
-    } catch {
-      return fetchAniSkipDirect(animeId, episode, duration);
-    }
+    return fetchAniSkipDirect(animeId, episode, duration);
   },
 };
 
