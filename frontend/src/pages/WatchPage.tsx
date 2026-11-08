@@ -41,6 +41,7 @@ export function WatchPage() {
   });
   const currentPlaybackTimeRef = useRef<number>(initialTime);
   const currentDurationRef = useRef<number>(0);
+  const initializedEpisodeKeyRef = useRef<string>("");
   const lastLocalSaveRef = useRef<number>(0);
   const lastRemoteSaveRef = useRef<number>(0);
   const [activeRangeIndex, setActiveRangeIndex] = useState(0);
@@ -268,6 +269,16 @@ export function WatchPage() {
   // 2. Resolve initial start time from localStorage first, then fallback to database history
   useEffect(() => {
     if (!animeId || !episodeNum) return;
+    const epKey = `${animeId}:${episodeNum}`;
+    const isNewEpisode = initializedEpisodeKeyRef.current !== epKey;
+    if (isNewEpisode) {
+      initializedEpisodeKeyRef.current = epKey;
+      currentPlaybackTimeRef.current = 0;
+      currentDurationRef.current = 0;
+    } else if (currentPlaybackTimeRef.current > 5) {
+      // Never overwrite initialTime while the viewer is actively watching this episode
+      return;
+    }
     const local = getLocalEpisodeProgress(animeId, episodeNum);
     if (local && local.progressSeconds > 3) {
       setInitialTime(local.progressSeconds);
@@ -414,6 +425,10 @@ export function WatchPage() {
   }, [multiStream, selectedServer]);
 
   const handleRetry = () => {
+    // Preserve exact playback timestamp on retry so viewer never loses their place
+    const cur = Math.floor(currentPlaybackTimeRef.current);
+    if (cur > 0) setInitialTime(cur);
+
     // Re-trigger the stream fetch with forceFresh = true
     setStreamLoading(true);
     setStreamError(null);

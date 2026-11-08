@@ -1,7 +1,15 @@
-import { useRef, useEffect, useState, useMemo } from "react";
+import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, RefreshCw } from "lucide-react";
-import { MediaPlayer, MediaProvider, Track, SeekButton } from "@vidstack/react";
+import type Hls from "hls.js";
+import {
+  MediaPlayer,
+  MediaProvider,
+  Track,
+  SeekButton,
+  isHLSProvider,
+  type MediaProviderAdapter,
+} from "@vidstack/react";
 import { defaultLayoutIcons, DefaultVideoLayout, DefaultTooltip } from "@vidstack/react/player/layouts/default";
 
 // Import Vidstack default styles
@@ -122,8 +130,15 @@ export function VideoPlayer({
   onSelectServer,
 }: VideoPlayerProps) {
   const playerRef = useRef<any>(null);
+  const hlsInstanceRef = useRef<Hls | null>(null);
   const autoSkippedRef = useRef<Set<string>>(new Set());
   const hasSeekedInitialRef = useRef(false);
+  const lastPlaybackTimeRef = useRef<number>(initialTime > 0 ? initialTime : 0);
+  const recoveryAttemptsRef = useRef<number>(0);
+  const lastRecoveryAtTimeRef = useRef<number>(0);
+  const resumeOverrideRef = useRef<number | null>(null);
+  const recoveryTimerRef = useRef<number | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
   const [autoSkipToast, setAutoSkipToast] = useState<string | null>(null);
   const [duration, setDuration] = useState<number>(0);
@@ -135,13 +150,104 @@ export function VideoPlayer({
   );
   const [sliderEl, setSliderEl] = useState<HTMLElement | null>(null);
 
-  // Clear error state whenever the source changes
+  const effectiveStartTime =
+    resumeOverrideRef.current !== null ? resumeOverrideRef.current : initialTime;
+
+  // Clear error and recovery state whenever the source changes
   useEffect(() => {
     setPlaybackError(null);
+    recoveryAttemptsRef.current = 0;
+    lastRecoveryAtTimeRef.current = 0;
+    resumeOverrideRef.current = null;
+    lastPlaybackTimeRef.current = initialTime > 0 ? initialTime : 0;
+    hlsInstanceRef.current = null;
+    if (recoveryTimerRef.current) {
+      window.clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = null;
+    }
   }, [src]);
+
+  useEffect(() => {
+    return () => {
+      if (recoveryTimerRef.current) {
+        window.clearTimeout(recoveryTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleProviderChange = useCallback((provider: MediaProviderAdapter | null) => {
+    if (isHLSProvider(provider)) {
+      // Lazy-load bundled hls.js instead of downloading unminified script from jsDelivr CDN
+      provider.library = () => import("hls.js");
+      provider.config = {
+        maxBufferLength: 120,
+        maxMaxBufferLength: 300,
+        backBufferLength: 60,
+        maxBufferHole: 0.5,
+        nudgeOffset: 0.2,
+        nudgeMaxRetry: 10,
+        manifestLoadingTimeOut: 20000,
+        manifestLoadingMaxRetry: 6,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingTimeOut: 20000,
+        levelLoadingMaxRetry: 6,
+        levelLoadingRetryDelay: 1000,
+        fragLoadingTimeOut: 25000,
+        fragLoadingMaxRetry: 10,
+        fragLoadingRetryDelay: 1000,
+        fragLoadingMaxRetryTimeout: 16000,
+        startFragPrefetch: true,
+      };
+      provider.onInstance((hls) => {
+        hlsInstanceRef.current = hls;
+      });
+    } else {
+      hlsInstanceRef.current = null;
+    }
+  }, []);
 
   const handleMediaError = (event: any) => {
     const errorMsg = event?.detail?.message || "Stream loading error";
+    const resumeAt = lastPlaybackTimeRef.current;
+
+    // Auto-recover silently mid-episode (e.g. ~10-12 min CDN connection drop, segment hiccup, or eyecatch splice)
+    if (resumeAt > 3 && recoveryAttemptsRef.current < 4) {
+      recoveryAttemptsRef.current += 1;
+      lastRecoveryAtTimeRef.current = resumeAt;
+      const attempt = recoveryAttemptsRef.current;
+
+      console.warn(
+        `[VideoPlayer] Mid-stream hiccup at ${Math.round(resumeAt)}s (attempt ${attempt}/4), auto-recovering:`,
+        errorMsg
+      );
+
+      if (recoveryTimerRef.current) {
+        window.clearTimeout(recoveryTimerRef.current);
+      }
+
+      if (type === "hls" && hlsInstanceRef.current && attempt <= 2) {
+        const hls = hlsInstanceRef.current;
+        recoveryTimerRef.current = window.setTimeout(() => {
+          try {
+            hls.startLoad(Math.floor(resumeAt));
+            playerRef.current?.play?.()?.catch?.(() => {});
+          } catch {
+            // Fall through to full remount on next attempt if startLoad throws
+          }
+        }, 350 * attempt);
+        return;
+      }
+
+      // Fresh range/playlist re-attach at the exact playback second
+      recoveryTimerRef.current = window.setTimeout(() => {
+        resumeOverrideRef.current = Math.max(0, resumeAt - 0.5);
+        hasSeekedInitialRef.current = false;
+        setPlaybackError(null);
+        setReloadNonce((n) => n + 1);
+      }, 450 * attempt);
+      return;
+    }
+
     console.warn("[VideoPlayer] Stream load error:", errorMsg, src);
     setPlaybackError(errorMsg);
     onError?.(event);
@@ -281,12 +387,12 @@ export function VideoPlayer({
 
   // Imperatively seek to initial position as soon as player is ready
   const seekToInitialIfReady = () => {
-    if (hasSeekedInitialRef.current || !initialTime || initialTime <= 0) return;
+    if (hasSeekedInitialRef.current || !effectiveStartTime || effectiveStartTime <= 0) return;
     const player = playerRef.current;
     if (!player) return;
 
     try {
-      player.currentTime = initialTime;
+      player.currentTime = effectiveStartTime;
       hasSeekedInitialRef.current = true;
     } catch {
       // player may still be initializing
@@ -295,10 +401,10 @@ export function VideoPlayer({
 
   // If initialTime updates after mount (e.g. async history fetch or server switch), seek immediately
   useEffect(() => {
-    if (initialTime > 0 && !hasSeekedInitialRef.current) {
+    if (effectiveStartTime > 0 && !hasSeekedInitialRef.current) {
       seekToInitialIfReady();
     }
-  }, [initialTime]);
+  }, [effectiveStartTime, reloadNonce]);
 
   // Seek to initial position and activate subtitles when media is loaded
   const handleCanPlay = () => {
@@ -335,8 +441,19 @@ export function VideoPlayer({
       setDuration(currentDuration);
     }
     // If playback progressed past initial time, mark initial seek as completed
-    if (currentTime > 0 && (!initialTime || currentTime >= initialTime - 1)) {
+    if (currentTime > 0 && (!effectiveStartTime || currentTime >= effectiveStartTime - 1)) {
       hasSeekedInitialRef.current = true;
+    }
+    if (currentTime > 0) {
+      lastPlaybackTimeRef.current = currentTime;
+      // Once playback advances cleanly for 10+ seconds past a recovery point, reset the recovery counter
+      if (
+        recoveryAttemptsRef.current > 0 &&
+        currentTime - lastRecoveryAtTimeRef.current >= 10
+      ) {
+        recoveryAttemptsRef.current = 0;
+        resumeOverrideRef.current = null;
+      }
     }
     if (currentTime && currentDuration && onProgress) {
       onProgress(currentTime, currentDuration);
@@ -384,14 +501,15 @@ export function VideoPlayer({
         ref={playerRef}
         title={title}
         src={mediaSource as any}
-        currentTime={initialTime > 0 ? initialTime : undefined}
+        currentTime={effectiveStartTime > 0 ? effectiveStartTime : undefined}
+        onProviderChange={handleProviderChange}
         onCanPlay={handleCanPlay}
         onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
         onError={handleMediaError}
         onEnd={onEnded}
         className="w-full h-full"
-        key={src}
+        key={`${src}-${reloadNonce}`}
         autoPlay
         preload="auto"
         load="eager"
