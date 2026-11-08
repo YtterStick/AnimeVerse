@@ -8,6 +8,7 @@ import { TitleLanguageToggle } from "@/components/shared/TitleLanguageToggle";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 import { UserMenu } from "../auth/UserMenu";
 import { AuthModal } from "../auth/AuthModal";
+import { DonationModal } from "@/components/shared/DonationModal";
 import { animeApi } from "@/lib/api";
 import type { Anime } from "@/types";
 
@@ -20,6 +21,7 @@ export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
   const [authDefaultTab, setAuthDefaultTab] = useState<"signin" | "signup">("signin");
 
   // Search autocomplete / suggestions state
@@ -308,6 +310,17 @@ export function Navbar() {
             <div className="flex items-center gap-2 sm:gap-3">
               <TitleLanguageToggle />
 
+              {/* Glowing Support Pill Button */}
+              <button
+                type="button"
+                onClick={() => setIsDonationModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-pink-300 bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/35 hover:border-pink-500/60 shadow-sm shadow-pink-500/15 hover:shadow-pink-500/30 transition-all duration-200 cursor-pointer select-none hover:scale-105 active:scale-95 shrink-0"
+                title="Support AniVerse — Keep it fast & ad-free!"
+              >
+                <Heart className="w-3.5 h-3.5 text-pink-400 fill-pink-400/40 animate-pulse" />
+                <span className="hidden xs:inline">Support</span>
+              </button>
+
               {user ? (
                 <UserMenu />
               ) : (
@@ -425,6 +438,19 @@ export function Navbar() {
                 <TitleLanguageToggle size="sm" />
               </div>
 
+              {/* Support AniVerse (Mobile) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsDonationModalOpen(true);
+                }}
+                className="w-full px-3 py-2.5 rounded-xl text-xs font-bold text-pink-300 bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/35 flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-all active:scale-95"
+              >
+                <Heart className="w-4 h-4 text-pink-400 fill-pink-400/40 animate-pulse" />
+                <span>Support AniVerse (Keep Ad-Free)</span>
+              </button>
+
               {user ? (
                 <Link
                   to="/watchlist"
@@ -466,6 +492,9 @@ export function Navbar() {
 
       {/* Auth Modal overlay */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} defaultTab={authDefaultTab} />
+
+      {/* Support / Donation Modal overlay */}
+      <DonationModal isOpen={isDonationModalOpen} onClose={() => setIsDonationModalOpen(false)} />
     </>
   );
 }

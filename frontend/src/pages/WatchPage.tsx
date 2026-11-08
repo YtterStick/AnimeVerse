@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag, Heart, Coffee } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
@@ -8,6 +8,7 @@ import { getLocalEpisodeProgress, saveLocalEpisodeProgress, isEpisodeFinished, g
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { ServerSelector } from "@/components/player/ServerSelector";
 import { ReportModal } from "@/components/player/ReportModal";
+import { DonationModal } from "@/components/shared/DonationModal";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AnimeSeasons } from "@/components/anime/AnimeSeasons";
@@ -35,6 +36,7 @@ export function WatchPage() {
   const [, setFailedServerIndices] = useState<Set<number>>(new Set());
   const [serverToast, setServerToast] = useState<string | null>(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isDonationOpen, setIsDonationOpen] = useState(false);
   const [initialTime, setInitialTime] = useState<number>(() => {
     if (!animeId || !episodeNum) return 0;
     const local = getLocalEpisodeProgress(animeId, episodeNum);
@@ -712,6 +714,34 @@ export function WatchPage() {
             />
           </div>
         )}
+
+        {/* Under-Player Ad-Free Support Banner */}
+        <div className="relative overflow-hidden rounded-2xl border border-pink-500/30 bg-gradient-to-r from-pink-500/10 via-purple-500/5 to-amber-500/10 p-3.5 sm:p-4 shadow-lg backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 flex items-center justify-center shadow-md shrink-0">
+                <Heart className="w-5 h-5 text-pink-400 fill-pink-400/30 animate-pulse" />
+              </div>
+              <div className="space-y-0.5 min-w-0">
+                <p className="text-xs sm:text-sm font-bold text-white leading-tight">
+                  Enjoying AniVerse ad-free and without pop-ups?
+                </p>
+                <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">
+                  Help keep our servers fast and free by buying us a coffee ☕
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsDonationOpen(true)}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 shadow-md shadow-pink-500/20 hover:shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer shrink-0"
+            >
+              <Coffee className="w-3.5 h-3.5" />
+              <span>Support Now</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Right Column: Self-contained Episode List Card */}
@@ -1076,6 +1106,12 @@ export function WatchPage() {
         episodeNumber={episodeNum}
         serverName={cleanActiveServerName}
         category={activeServer?.category || "SUB"}
+      />
+
+      {/* Support / Donation Dialog */}
+      <DonationModal
+        isOpen={isDonationOpen}
+        onClose={() => setIsDonationOpen(false)}
       />
     </div>
   </div>
