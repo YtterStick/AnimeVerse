@@ -435,14 +435,16 @@ export function AdminPage() {
                   </div>
 
                   {/* User Details box (if any) */}
-                  {report.details && (
-                    <div className="bg-secondary/40 border border-border/40 rounded-xl p-3 text-xs text-muted-foreground">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary block mb-0.5">
-                        Viewer Note:
-                      </span>
-                      &ldquo;{report.details}&rdquo;
-                    </div>
-                  )}
+                  {report.details &&
+                    report.details.trim().length > 0 &&
+                    report.details !== "Verified test issue" && (
+                      <div className="bg-secondary/40 border border-border/40 rounded-xl p-3 text-xs text-muted-foreground">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-primary block mb-0.5">
+                          Viewer Note:
+                        </span>
+                        &ldquo;{report.details.replace(/Verified test issue/gi, "").replace(/^\|\s*|\s*\|$/g, "").trim()}&rdquo;
+                      </div>
+                    )}
 
                   {/* Bottom Action Bar */}
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-border/30">

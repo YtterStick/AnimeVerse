@@ -122,12 +122,16 @@ router.post("/", optionalAuth, async (req: AuthRequest, res: Response, next: Nex
 
     if (existingIndex !== -1) {
       const existing = reports[existingIndex];
-      const combinedDetails =
-        cleanDetails && !existing.details.includes(cleanDetails)
-          ? existing.details
-            ? `${existing.details} | ${cleanDetails}`.slice(0, 600)
-            : cleanDetails
-          : existing.details;
+      let prevDetails = existing.details
+        ? existing.details.replace(/Verified test issue/gi, "").replace(/^\|\s*|\s*\|$/g, "").trim()
+        : "";
+
+      let combinedDetails = prevDetails;
+      if (cleanDetails) {
+        combinedDetails = prevDetails && !prevDetails.includes(cleanDetails)
+          ? `${cleanDetails} | ${prevDetails}`.slice(0, 600)
+          : cleanDetails;
+      }
 
       savedReport = {
         ...existing,
@@ -150,7 +154,7 @@ router.post("/", optionalAuth, async (req: AuthRequest, res: Response, next: Nex
         server_name: cleanServer,
         category: cleanCategory,
         reason: cleanReason,
-        details: cleanDetails,
+        details: cleanDetails.replace(/Verified test issue/gi, "").trim(),
         reporter_email: reporterEmail,
         status: "open",
         report_count: 1,
