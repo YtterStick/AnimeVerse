@@ -67,7 +67,7 @@ async function saveReports(reports: VideoReport[]): Promise<void> {
   await ensureBucket();
 
   const payload = JSON.stringify(reports, null, 2);
-  const { error } = await supabase.storage.from(BUCKET_NAME).upload(FILE_NAME, payload, {
+  const { error } = await supabase.storage.from(BUCKET_NAME).upload(FILE_NAME, Buffer.from(payload, "utf-8"), {
     contentType: "application/json",
     upsert: true,
   });
