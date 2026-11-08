@@ -409,6 +409,11 @@ export function WatchPage() {
   };
 
   const handleStreamError = useCallback(() => {
+    // If the viewer was already actively watching this episode for >5s,
+    // this is a mid-stream network/buffer stall, NOT a dead server.
+    // Do NOT discard this server or force-switch servers!
+    if (currentPlaybackTimeRef.current > 5) return;
+
     if (!multiStream || multiStream.servers.length <= 1) return;
 
     setFailedServerIndices((prev) => {

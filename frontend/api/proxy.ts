@@ -279,16 +279,29 @@ function buildProxyHeaders(
 
   const baseRange: Record<string, string> = rangeHeader ? { Range: rangeHeader } : {};
 
+  // AnimeHeaven (ct.animeheaven.me) requires Cookie: key=<token> extracted from query parameters
+  // to serve the full episode rather than a 600 KB anti-bot placeholder clip.
+  const extraHeaders: Record<string, string> = {};
+  if (targetUrl.hostname.includes("animeheaven")) {
+    const hexTokens = targetUrl.search.match(/([a-f0-9]{32})/g);
+    if (hexTokens && hexTokens.length > 0) {
+      const epKey = hexTokens[hexTokens.length - 1];
+      extraHeaders["Cookie"] = `key=${epKey}`;
+    }
+  }
+
   return [
     {
       Referer: referer,
       Origin: refererOrigin,
       "User-Agent": USER_AGENT,
+      ...extraHeaders,
       ...baseRange,
     },
     {
       Referer: referer,
       "User-Agent": USER_AGENT,
+      ...extraHeaders,
       ...baseRange,
     },
     {
@@ -300,10 +313,12 @@ function buildProxyHeaders(
     {
       Referer: `${origin}/`,
       "User-Agent": USER_AGENT,
+      ...extraHeaders,
       ...baseRange,
     },
     {
       "User-Agent": USER_AGENT,
+      ...extraHeaders,
       ...baseRange,
     },
   ];

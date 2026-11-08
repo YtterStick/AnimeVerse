@@ -20,6 +20,13 @@ import type { SkipInterval } from "@/lib/api";
 import { parseCues, refineSkips, buildChaptersVtt } from "@/lib/skipTimes";
 import { getCleanServerName } from "@/lib/serverNames";
 
+function formatTime(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(s / 60);
+  const remainingS = s % 60;
+  return `${m}:${remainingS < 10 ? "0" : ""}${remainingS}`;
+}
+
 interface VideoPlayerProps {
   src: string;
   type?: "hls" | "mp4";
@@ -173,8 +180,6 @@ export function VideoPlayer({
   const lastRecoveryAtTimeRef = useRef<number>(0);
   const resumeOverrideRef = useRef<number | null>(null);
   const recoveryTimerRef = useRef<number | null>(null);
-  const reloadResetTimerRef = useRef<number | null>(null);
-  const [reloadingSource, setReloadingSource] = useState(false);
   const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
   const [autoSkipToast, setAutoSkipToast] = useState<string | null>(null);
   const [duration, setDuration] = useState<number>(0);
@@ -189,7 +194,7 @@ export function VideoPlayer({
   const effectiveStartTime =
     resumeOverrideRef.current !== null ? resumeOverrideRef.current : initialTime;
 
-  const activeSrc = isLoadingStream || reloadingSource || !src ? "" : src;
+  const activeSrc = isLoadingStream || !src ? "" : src;
 
   // Clear error and per-source state whenever the stream URL changes (without unmounting <MediaPlayer>)
   useEffect(() => {
@@ -216,9 +221,6 @@ export function VideoPlayer({
     return () => {
       if (recoveryTimerRef.current) {
         window.clearTimeout(recoveryTimerRef.current);
-      }
-      if (reloadResetTimerRef.current) {
-        window.clearTimeout(reloadResetTimerRef.current);
       }
     };
   }, []);
@@ -254,34 +256,66 @@ export function VideoPlayer({
     }
   }, []);
 
-  const triggerInPlaceReload = useCallback(() => {
-    shouldAutoPlayOnLoadRef.current = true;
-    hasSeekedInitialRef.current = false;
+  const attemptRecovery = useCallback(() => {
+    const resumeAt = lastPlaybackTimeRef.current;
+    const targetTime = Math.max(0, resumeAt - 0.5);
     setPlaybackError(null);
-    setReloadingSource(true);
-    if (reloadResetTimerRef.current) {
-      window.clearTimeout(reloadResetTimerRef.current);
+
+    if (type === "hls" && hlsInstanceRef.current) {
+      const hls = hlsInstanceRef.current;
+      try {
+        hls.recoverMediaError();
+      } catch {
+        hls.startLoad(Math.floor(targetTime));
+      }
+      playerRef.current?.play?.()?.catch?.(() => {});
+      return;
     }
-    reloadResetTimerRef.current = window.setTimeout(() => {
-      setReloadingSource(false);
-    }, 60);
-  }, []);
+
+    // Direct MP4 native video recovery:
+    // Nudge currentTime and resume without unmounting or resetting src
+    const videoEl =
+      (playerRef.current?.el?.querySelector("video") as HTMLVideoElement | null) ||
+      (playerRef.current?.provider?.video as HTMLVideoElement | null);
+
+    if (videoEl) {
+      try {
+        videoEl.currentTime = targetTime;
+        const playPromise = videoEl.play();
+        if (playPromise) {
+          playPromise.catch(() => {
+            try {
+              videoEl.load();
+              videoEl.currentTime = targetTime;
+              videoEl.play().catch(() => {});
+            } catch {}
+          });
+        }
+      } catch {
+        try {
+          videoEl.load();
+          videoEl.currentTime = targetTime;
+          videoEl.play().catch(() => {});
+        } catch {}
+      }
+    }
+  }, [type]);
 
   const handleMediaError = (event: any) => {
-    // Ignore transient abort events while switching episodes or reloading in-place
-    if (!activeSrc || isLoadingStream || reloadingSource) return;
+    // Ignore transient abort events while switching episodes
+    if (!activeSrc || isLoadingStream) return;
 
     const errorMsg = event?.detail?.message || "Stream loading error";
     const resumeAt = lastPlaybackTimeRef.current;
 
-    // Auto-recover silently mid-episode (e.g. ~10-12 min CDN connection drop, segment hiccup, or eyecatch splice)
-    if (resumeAt > 3 && recoveryAttemptsRef.current < 4) {
+    // Auto-recover silently mid-episode (e.g. TCP reset, Apache 5s keepalive timeout, or segment hiccup)
+    if (resumeAt > 3 && recoveryAttemptsRef.current < 6) {
       recoveryAttemptsRef.current += 1;
       lastRecoveryAtTimeRef.current = resumeAt;
       const attempt = recoveryAttemptsRef.current;
 
       console.warn(
-        `[VideoPlayer] Mid-stream hiccup at ${Math.round(resumeAt)}s (attempt ${attempt}/4), auto-recovering:`,
+        `[VideoPlayer] Mid-stream hiccup at ${Math.round(resumeAt)}s (attempt ${attempt}/6), auto-recovering:`,
         errorMsg
       );
 
@@ -289,30 +323,24 @@ export function VideoPlayer({
         window.clearTimeout(recoveryTimerRef.current);
       }
 
-      if (type === "hls" && hlsInstanceRef.current && attempt <= 2) {
-        const hls = hlsInstanceRef.current;
-        recoveryTimerRef.current = window.setTimeout(() => {
-          try {
-            hls.startLoad(Math.floor(resumeAt));
-            playerRef.current?.play?.()?.catch?.(() => {});
-          } catch {
-            // Fall through to full source reload on next attempt if startLoad throws
-          }
-        }, 350 * attempt);
-        return;
-      }
-
-      // Fresh range/playlist re-attach at the exact playback second WITHOUT unmounting <MediaPlayer>
       recoveryTimerRef.current = window.setTimeout(() => {
-        resumeOverrideRef.current = Math.max(0, resumeAt - 0.5);
-        triggerInPlaceReload();
-      }, 450 * attempt);
+        attemptRecovery();
+      }, 350 * Math.min(attempt, 3));
+
       return;
     }
 
-    console.warn("[VideoPlayer] Stream load error:", errorMsg, src);
-    setPlaybackError(errorMsg);
-    onError?.(event);
+    // Only report error to parent (for automatic server failover) if the stream failed at the start
+    if (resumeAt <= 3) {
+      console.warn("[VideoPlayer] Initial stream load failed:", errorMsg, src);
+      setPlaybackError(errorMsg);
+      onError?.(event);
+    } else {
+      // If mid-stream and auto-recovery exhausted (e.g. user temporarily lost internet connection):
+      // Keep player intact and show an in-place "Resume Playback" button at the exact second
+      console.warn("[VideoPlayer] Stream paused mid-episode:", errorMsg);
+      setPlaybackError("Playback paused due to a network connection drop.");
+    }
   };
 
   // Keep refinedSkips in sync with props as baseline (filtering out false episode 1 recaps)
@@ -565,11 +593,11 @@ export function VideoPlayer({
   // Omit crossOrigin on direct external MP4s without external subtitle/thumbnail tracks
   // so native <video> streams directly from the CDN (0 MB proxy bandwidth) without CORS blocks.
   const needsCors =
-    !activeSrc ||
-    type === "hls" ||
-    subtitles.length > 0 ||
-    Boolean(thumbnails) ||
-    activeSrc.includes("/proxy?");
+    Boolean(activeSrc) &&
+    (type === "hls" ||
+      subtitles.length > 0 ||
+      Boolean(thumbnails) ||
+      activeSrc.includes("/proxy?"));
 
   const activeErrorMessage = !isLoadingStream ? streamError || playbackError : null;
 
@@ -819,19 +847,36 @@ export function VideoPlayer({
               </div>
             )}
 
-            {onRetry && (
-              <button
-                type="button"
-                onClick={() => {
-                  setPlaybackError(null);
-                  onRetry();
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-white text-black hover:bg-white/90 shadow-lg cursor-pointer transition-all mt-1"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Retry Stream
-              </button>
-            )}
+            <div className="flex items-center gap-3 justify-center pt-1">
+              {lastPlaybackTimeRef.current > 3 && (
+                <button
+                  type="button"
+                  onClick={attemptRecovery}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary/90 shadow-lg cursor-pointer transition-all"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white" />
+                  Resume from {formatTime(lastPlaybackTimeRef.current)}
+                </button>
+              )}
+
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlaybackError(null);
+                    onRetry();
+                  }}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold shadow-lg cursor-pointer transition-all ${
+                    lastPlaybackTimeRef.current > 3
+                      ? "bg-secondary text-foreground hover:bg-secondary/80 border border-border/50"
+                      : "bg-white text-black hover:bg-white/90"
+                  }`}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  {lastPlaybackTimeRef.current > 3 ? "Reload Video" : "Retry Stream"}
+                </button>
+              )}
+            </div>
           </div>
         )}
       </MediaPlayer>
