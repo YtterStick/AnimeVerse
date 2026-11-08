@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, RefreshCw, Compass, FastForward, Check, X, Search, LayoutGrid } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
@@ -41,6 +41,8 @@ export function WatchPage() {
   const currentPlaybackTimeRef = useRef<number>(initialTime);
   const currentDurationRef = useRef<number>(0);
   const initializedEpisodeKeyRef = useRef<string>("");
+  const preferredCategoryRef = useRef<string | null>(null);
+  const lastAnimeIdRef = useRef<number>(animeId);
   const lastLocalSaveRef = useRef<number>(0);
   const lastRemoteSaveRef = useRef<number>(0);
   const [activeRangeIndex, setActiveRangeIndex] = useState(0);
@@ -89,9 +91,11 @@ export function WatchPage() {
     });
   };
 
-  // Scroll window to top when watching a new anime or episode
+  // Scroll window to top when watching a new anime or episode (skip if staying in fullscreen)
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    if (!document.fullscreenElement) {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }
   }, [animeId, episodeNum]);
 
   // Fetch intro/outro timestamps (AniSkip) for this episode
@@ -186,17 +190,22 @@ export function WatchPage() {
     return filtered;
   }, [episodes, ranges, activeRangeIndex, episodeSearch]);
 
-  // Auto-scroll to center the currently active episode in view
+  // Auto-scroll to center the currently active episode in view (defer while in fullscreen)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeEpisodeRef.current) {
+    const scrollActiveEpisode = () => {
+      if (activeEpisodeRef.current && !document.fullscreenElement) {
         activeEpisodeRef.current.scrollIntoView({
           behavior: "smooth",
           block: "nearest",
         });
       }
-    }, 200);
-    return () => clearTimeout(timer);
+    };
+    const timer = setTimeout(scrollActiveEpisode, 200);
+    document.addEventListener("fullscreenchange", scrollActiveEpisode);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("fullscreenchange", scrollActiveEpisode);
+    };
   }, [episodeNum, activeRangeIndex, displayedEpisodes, viewMode]);
 
   useEffect(() => {
@@ -222,6 +231,10 @@ export function WatchPage() {
   // 1. Fetch all available streaming servers
   useEffect(() => {
     let cancelled = false;
+    if (lastAnimeIdRef.current !== animeId) {
+      lastAnimeIdRef.current = animeId;
+      preferredCategoryRef.current = null;
+    }
     setStreamLoading(true);
     setStreamError(null);
     setMultiStream(null);
@@ -234,8 +247,15 @@ export function WatchPage() {
       .then((res) => {
         if (!cancelled) {
           if (res.servers && res.servers.length > 0) {
+            let targetIdx = res.default >= 0 ? res.default : 0;
+            if (preferredCategoryRef.current) {
+              const catIdx = res.servers.findIndex(
+                (s) => (s.category || "SUB") === preferredCategoryRef.current
+              );
+              if (catIdx !== -1) targetIdx = catIdx;
+            }
             setMultiStream(res);
-            setSelectedServer(res.default >= 0 ? res.default : 0);
+            setSelectedServer(targetIdx);
           } else {
             setStreamError(
               res.message || "No streaming servers found for this episode."
@@ -378,9 +398,13 @@ export function WatchPage() {
   };
 
   const handleServerChange = (index: number) => {
-    // Retain playback timestamp when switching servers
+    // Retain playback timestamp and SUB/DUB preference across episodes
     const cur = Math.floor(currentPlaybackTimeRef.current);
     if (cur > 0) setInitialTime(cur);
+    const chosen = multiStream?.servers?.[index];
+    if (chosen) {
+      preferredCategoryRef.current = chosen.category || "SUB";
+    }
     setSelectedServer(index);
   };
 
@@ -438,8 +462,15 @@ export function WatchPage() {
       .getStreamUrl(animeId, episodeNum, true)
       .then((res) => {
         if (res.servers && res.servers.length > 0) {
+          let targetIdx = res.default >= 0 ? res.default : 0;
+          if (preferredCategoryRef.current) {
+            const catIdx = res.servers.findIndex(
+              (s) => (s.category || "SUB") === preferredCategoryRef.current
+            );
+            if (catIdx !== -1) targetIdx = catIdx;
+          }
           setMultiStream(res);
-          setSelectedServer(res.default >= 0 ? res.default : 0);
+          setSelectedServer(targetIdx);
         } else {
           setStreamError(
             res.message || "No streaming servers found for this episode."
@@ -463,8 +494,15 @@ export function WatchPage() {
     navigate(`/watch/${animeId}/${episodeNum + 1}`);
   };
 
-  // Only show full-page "Anime not found" when BOTH metadata AND stream sources failed to load
-  if (!animeLoading && !anime && !streamLoading && (!multiStream?.servers || multiStream.servers.length === 0)) {
+  // Only show full-page "Anime not found" when BOTH metadata AND stream sources failed to load (and not in fullscreen)
+  if (
+    !animeLoading &&
+    !anime &&
+    !streamLoading &&
+    (!multiStream?.servers || multiStream.servers.length === 0) &&
+    typeof document !== "undefined" &&
+    !document.fullscreenElement
+  ) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-16 text-center space-y-4">
         <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
@@ -533,100 +571,36 @@ export function WatchPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start">
           {/* Left Column: Player & Server */}
           <div className="lg:col-span-8 xl:col-span-8 2xl:col-span-9 space-y-4 min-w-0">
-            {/* Video Player Interface */}
-        {streamLoading ? (
-          /* Premium Player Skeleton Loader */
-          <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative flex flex-col justify-between p-4 sm:p-6 select-none">
-            {/* Blurred Backdrop Cover Art */}
-            {coverImage && (
-              <div
-                className="absolute inset-0 bg-cover bg-center opacity-25 blur-lg scale-105 transition-all duration-500"
-                style={{
-                  backgroundImage: `url(${coverImage})`,
-                }}
-              />
-            )}
-            <div className="absolute inset-0 bg-linear-to-t from-black via-black/40 to-black/60" />
-
-            {/* Top Bar (Title skeleton) */}
-            <div className="relative z-10 flex justify-between items-start w-full opacity-60">
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-bold text-primary tracking-wider uppercase">Loading Stream</span>
-                <h3 className="text-xs sm:text-sm font-bold text-white line-clamp-1">
-                  {title} — Episode {episodeNum}
-                </h3>
-              </div>
-              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
-            </div>
-
-            {/* Center pulsing play icon */}
-            <div className="relative z-10 flex flex-col items-center justify-center space-y-3 my-auto">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center shadow-lg relative">
-                {/* Double pulsing ring */}
-                <div className="absolute inset-0 rounded-full border border-primary/40 animate-ping opacity-75" />
-                <Play className="w-6 h-6 sm:w-7 sm:h-7 text-white/40 fill-white/25 ml-1" />
-              </div>
-            </div>
-
-            {/* Bottom Control Bar skeleton */}
-            <div className="relative z-10 w-full space-y-3 opacity-60">
-              {/* Timeline progress line */}
-              <div className="h-1 bg-white/10 rounded-full w-full relative overflow-hidden">
-                <div className="absolute left-0 top-0 bottom-0 bg-primary/40 w-1/4 animate-pulse" />
-              </div>
-
-              {/* Controls */}
-              <div className="flex justify-between items-center w-full text-white/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded bg-white/20" />
-                  <div className="w-4 h-4 rounded bg-white/20" />
-                  <div className="w-12 h-2.5 rounded bg-white/20" />
-                  <div className="w-16 h-2 rounded bg-white/20" />
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-4 rounded bg-white/20" />
-                  <div className="w-4 h-4 rounded bg-white/20" />
-                  <div className="w-4 h-4 rounded bg-white/20" />
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : streamError || !activeServer ? (
-          <div className="w-full aspect-video rounded-xl bg-card/40 border border-border/20 flex flex-col items-center justify-center text-center p-6 space-y-4">
-            <AlertCircle className="w-12 h-12 text-destructive" />
-            <div>
-              <p className="font-semibold text-white">No Streaming Sources Available</p>
-              <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                {streamError || "Unable to retrieve stream sources for this episode. The providers may be temporarily down."}
-              </p>
-            </div>
-            <Button onClick={handleRetry} size="sm" variant="outline" className="rounded-full gap-2">
-              <RefreshCw className="w-3.5 h-3.5" />
-              Retry
-            </Button>
-          </div>
-        ) : (
-          <VideoPlayer
-            src={activeServer.url}
-            type={activeServer.type}
-            category={activeServer.category}
-            title={`${title} - Episode ${episodeNum}`}
-            poster={coverImage}
-            onProgress={handleProgress}
-            initialTime={initialTime}
-            subtitles={activeServer.subtitles}
-            thumbnails={activeServer.thumbnails}
-            skips={skips}
-            autoSkip={autoSkip}
-            episodeNumber={episodeNum}
-            onError={handleStreamError}
-            onRetry={handleRetry}
-            onEnded={handleVideoEnded}
-            serverName={cleanActiveServerName}
-            availableServers={multiStream?.servers || []}
-            onSelectServer={handleServerChange}
-          />
-        )}
+            {/* Video Player Interface — kept persistently mounted so Fullscreen never exits across episodes */}
+            <VideoPlayer
+              src={activeServer?.url || ""}
+              type={activeServer?.type || "hls"}
+              category={activeServer?.category || "SUB"}
+              title={`${title} — Episode ${episodeNum}`}
+              poster={coverImage}
+              isLoadingStream={streamLoading}
+              streamError={
+                !streamLoading && (streamError || !activeServer)
+                  ? streamError ||
+                    "Unable to retrieve stream sources for this episode. The providers may be temporarily down."
+                  : null
+              }
+              onProgress={handleProgress}
+              initialTime={initialTime}
+              subtitles={activeServer?.subtitles}
+              thumbnails={activeServer?.thumbnails}
+              skips={skips}
+              autoSkip={autoSkip}
+              episodeNumber={episodeNum}
+              onError={handleStreamError}
+              onRetry={handleRetry}
+              onEnded={handleVideoEnded}
+              onPrevEpisode={episodeNum > 1 ? handlePrevEpisode : undefined}
+              onNextEpisode={hasNext ? handleNextEpisode : undefined}
+              serverName={cleanActiveServerName}
+              availableServers={multiStream?.servers || []}
+              onSelectServer={handleServerChange}
+            />
 
         {/* Server Selector */}
         {multiStream && multiStream.servers.length > 0 && (

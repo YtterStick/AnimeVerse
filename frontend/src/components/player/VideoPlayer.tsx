@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, Play, RefreshCw } from "lucide-react";
 import Hls from "hls.js";
 import {
   MediaPlayer,
@@ -26,6 +26,10 @@ interface VideoPlayerProps {
   category?: string;
   title: string;
   poster?: string;
+  /** True while resolving stream servers for a new episode (keeps <MediaPlayer> mounted so fullscreen never exits) */
+  isLoadingStream?: boolean;
+  /** Error message when no stream servers could be resolved for this episode */
+  streamError?: string | null;
   onProgress?: (currentTime: number, duration: number) => void;
   initialTime?: number;
   subtitles?: SubtitleTrack[];
@@ -40,6 +44,8 @@ interface VideoPlayerProps {
   onError?: (errorDetail?: any) => void;
   onRetry?: () => void;
   onEnded?: () => void;
+  onPrevEpisode?: () => void;
+  onNextEpisode?: () => void;
   serverName?: string;
   availableServers?: Array<{ id: string; name: string; category?: string }>;
   onSelectServer?: (index: number) => void;
@@ -109,12 +115,38 @@ function SeekForward10Icon({ className }: { className?: string }) {
   );
 }
 
+function PrevEpisodeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className || "w-5 h-5"}
+    >
+      <path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z" />
+    </svg>
+  );
+}
+
+function NextEpisodeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className || "w-5 h-5"}
+    >
+      <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+    </svg>
+  );
+}
+
 export function VideoPlayer({
   src,
   type = "hls",
   category = "SUB",
   title,
-  poster: _poster,
+  poster,
+  isLoadingStream = false,
+  streamError = null,
   onProgress,
   initialTime = 0,
   subtitles = [],
@@ -125,6 +157,8 @@ export function VideoPlayer({
   onError,
   onRetry,
   onEnded,
+  onPrevEpisode,
+  onNextEpisode,
   serverName,
   availableServers,
   onSelectServer,
@@ -133,12 +167,14 @@ export function VideoPlayer({
   const hlsInstanceRef = useRef<Hls | null>(null);
   const autoSkippedRef = useRef<Set<string>>(new Set());
   const hasSeekedInitialRef = useRef(false);
+  const shouldAutoPlayOnLoadRef = useRef(true);
   const lastPlaybackTimeRef = useRef<number>(initialTime > 0 ? initialTime : 0);
   const recoveryAttemptsRef = useRef<number>(0);
   const lastRecoveryAtTimeRef = useRef<number>(0);
   const resumeOverrideRef = useRef<number | null>(null);
   const recoveryTimerRef = useRef<number | null>(null);
-  const [reloadNonce, setReloadNonce] = useState(0);
+  const reloadResetTimerRef = useRef<number | null>(null);
+  const [reloadingSource, setReloadingSource] = useState(false);
   const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
   const [autoSkipToast, setAutoSkipToast] = useState<string | null>(null);
   const [duration, setDuration] = useState<number>(0);
@@ -153,7 +189,9 @@ export function VideoPlayer({
   const effectiveStartTime =
     resumeOverrideRef.current !== null ? resumeOverrideRef.current : initialTime;
 
-  // Clear error and recovery state whenever the source changes
+  const activeSrc = isLoadingStream || reloadingSource || !src ? "" : src;
+
+  // Clear error and per-source state whenever the stream URL changes (without unmounting <MediaPlayer>)
   useEffect(() => {
     setPlaybackError(null);
     recoveryAttemptsRef.current = 0;
@@ -161,6 +199,13 @@ export function VideoPlayer({
     resumeOverrideRef.current = null;
     lastPlaybackTimeRef.current = initialTime > 0 ? initialTime : 0;
     hlsInstanceRef.current = null;
+    autoSkippedRef.current = new Set();
+    hasSeekedInitialRef.current = false;
+    setActiveSkip(null);
+    setDuration(0);
+    if (src) {
+      shouldAutoPlayOnLoadRef.current = true;
+    }
     if (recoveryTimerRef.current) {
       window.clearTimeout(recoveryTimerRef.current);
       recoveryTimerRef.current = null;
@@ -171,6 +216,9 @@ export function VideoPlayer({
     return () => {
       if (recoveryTimerRef.current) {
         window.clearTimeout(recoveryTimerRef.current);
+      }
+      if (reloadResetTimerRef.current) {
+        window.clearTimeout(reloadResetTimerRef.current);
       }
     };
   }, []);
@@ -206,7 +254,23 @@ export function VideoPlayer({
     }
   }, []);
 
+  const triggerInPlaceReload = useCallback(() => {
+    shouldAutoPlayOnLoadRef.current = true;
+    hasSeekedInitialRef.current = false;
+    setPlaybackError(null);
+    setReloadingSource(true);
+    if (reloadResetTimerRef.current) {
+      window.clearTimeout(reloadResetTimerRef.current);
+    }
+    reloadResetTimerRef.current = window.setTimeout(() => {
+      setReloadingSource(false);
+    }, 60);
+  }, []);
+
   const handleMediaError = (event: any) => {
+    // Ignore transient abort events while switching episodes or reloading in-place
+    if (!activeSrc || isLoadingStream || reloadingSource) return;
+
     const errorMsg = event?.detail?.message || "Stream loading error";
     const resumeAt = lastPlaybackTimeRef.current;
 
@@ -232,18 +296,16 @@ export function VideoPlayer({
             hls.startLoad(Math.floor(resumeAt));
             playerRef.current?.play?.()?.catch?.(() => {});
           } catch {
-            // Fall through to full remount on next attempt if startLoad throws
+            // Fall through to full source reload on next attempt if startLoad throws
           }
         }, 350 * attempt);
         return;
       }
 
-      // Fresh range/playlist re-attach at the exact playback second
+      // Fresh range/playlist re-attach at the exact playback second WITHOUT unmounting <MediaPlayer>
       recoveryTimerRef.current = window.setTimeout(() => {
         resumeOverrideRef.current = Math.max(0, resumeAt - 0.5);
-        hasSeekedInitialRef.current = false;
-        setPlaybackError(null);
-        setReloadNonce((n) => n + 1);
+        triggerInPlaceReload();
       }, 450 * attempt);
       return;
     }
@@ -261,13 +323,6 @@ export function VideoPlayer({
       setRefinedSkips(skips);
     }
   }, [skips, episodeNumber]);
-
-  // Reset per-source skip and initial seek bookkeeping
-  useEffect(() => {
-    autoSkippedRef.current = new Set();
-    hasSeekedInitialRef.current = false;
-    setActiveSkip(null);
-  }, [src]);
 
   // Attempt to refine skip times to frame-accurate timestamps using dialogue subtitle cues
   useEffect(() => {
@@ -381,15 +436,21 @@ export function VideoPlayer({
   };
 
   useEffect(() => {
+    if (!activeSrc) return;
     const timer = window.setTimeout(syncSubtitleTrackMode, 400);
     return () => window.clearTimeout(timer);
-  }, [src, category, subtitles]);
+  }, [activeSrc, category, subtitles]);
 
   // Imperatively seek to initial position as soon as player is ready
   const seekToInitialIfReady = () => {
-    if (hasSeekedInitialRef.current || !effectiveStartTime || effectiveStartTime <= 0) return;
+    if (hasSeekedInitialRef.current) return;
     const player = playerRef.current;
     if (!player) return;
+
+    if (!effectiveStartTime || effectiveStartTime <= 0) {
+      hasSeekedInitialRef.current = true;
+      return;
+    }
 
     try {
       player.currentTime = effectiveStartTime;
@@ -401,21 +462,27 @@ export function VideoPlayer({
 
   // If initialTime updates after mount (e.g. async history fetch or server switch), seek immediately
   useEffect(() => {
-    if (effectiveStartTime > 0 && !hasSeekedInitialRef.current) {
+    if (activeSrc && effectiveStartTime > 0 && !hasSeekedInitialRef.current) {
       seekToInitialIfReady();
     }
-  }, [effectiveStartTime, reloadNonce]);
+  }, [activeSrc, effectiveStartTime]);
 
-  // Seek to initial position and activate subtitles when media is loaded
+  // Seek to initial position, activate subtitles, and ensure playback starts on episode transitions
   const handleCanPlay = () => {
+    if (!activeSrc) return;
     seekToInitialIfReady();
     if (playerRef.current?.duration) {
       setDuration(playerRef.current.duration);
     }
     syncSubtitleTrackMode();
+    if (shouldAutoPlayOnLoadRef.current) {
+      shouldAutoPlayOnLoadRef.current = false;
+      Promise.resolve(playerRef.current?.play?.()).catch(() => {});
+    }
   };
 
   const handleLoadedMetadata = () => {
+    if (!activeSrc) return;
     seekToInitialIfReady();
     if (playerRef.current?.duration) {
       setDuration(playerRef.current.duration);
@@ -435,7 +502,7 @@ export function VideoPlayer({
   };
 
   const handleTimeUpdate = () => {
-    if (!playerRef.current) return;
+    if (!playerRef.current || !activeSrc || isLoadingStream) return;
     const { currentTime, duration: currentDuration } = playerRef.current;
     if (currentDuration && currentDuration !== duration) {
       setDuration(currentDuration);
@@ -481,55 +548,66 @@ export function VideoPlayer({
     }
   };
 
+  const handleEnded = () => {
+    if (!activeSrc || isLoadingStream) return;
+    onEnded?.();
+  };
+
   // Explicitly tell Vidstack about the HLS format so it initializes hls.js
   const mimeType = type === "hls" ? "application/x-mpegurl" : "video/mp4";
-  const mediaSource = {
-    src,
-    type: mimeType as "application/x-mpegurl" | "video/mp4",
-  };
+  const mediaSource = activeSrc
+    ? {
+        src: activeSrc,
+        type: mimeType as "application/x-mpegurl" | "video/mp4",
+      }
+    : "";
+
   // Omit crossOrigin on direct external MP4s without external subtitle/thumbnail tracks
   // so native <video> streams directly from the CDN (0 MB proxy bandwidth) without CORS blocks.
   const needsCors =
+    !activeSrc ||
     type === "hls" ||
     subtitles.length > 0 ||
     Boolean(thumbnails) ||
-    src.includes("/proxy?");
+    activeSrc.includes("/proxy?");
+
+  const activeErrorMessage = !isLoadingStream ? streamError || playbackError : null;
 
   return (
     <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative">
+      {/* Keep <MediaPlayer> persistently mounted across episode & server transitions so Fullscreen NEVER exits */}
       <MediaPlayer
         ref={playerRef}
         title={title}
         src={mediaSource as any}
-        currentTime={effectiveStartTime > 0 ? effectiveStartTime : undefined}
         onProviderChange={handleProviderChange}
         onCanPlay={handleCanPlay}
         onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
         onError={handleMediaError}
-        onEnd={onEnded}
-        className="w-full h-full"
-        key={`${src}-${reloadNonce}`}
+        onEnd={handleEnded}
+        className="w-full h-full relative"
         autoPlay
         preload="auto"
         load="eager"
         crossOrigin={needsCors ? "anonymous" : undefined}
       >
         <MediaProvider>
-          {subtitles.map((subtitle, index) => (
+          {activeSrc &&
+            subtitles.map((subtitle, index) => (
+              <Track
+                key={`${activeSrc}-${subtitle.id || `${subtitle.lang}-${index}`}`}
+                src={subtitle.url}
+                kind="subtitles"
+                label={subtitle.label}
+                lang={subtitle.lang}
+                type="vtt"
+                default={isSubMode && index === activeDefaultSubIndex}
+              />
+            ))}
+          {activeSrc && chaptersUrl && (
             <Track
-              key={subtitle.id || `${subtitle.lang}-${index}`}
-              src={subtitle.url}
-              kind="subtitles"
-              label={subtitle.label}
-              lang={subtitle.lang}
-              type="vtt"
-              default={isSubMode && index === activeDefaultSubIndex}
-            />
-          ))}
-          {chaptersUrl && (
-            <Track
-              key={`chapters-${src}`}
+              key={`chapters-${activeSrc}`}
               src={chaptersUrl}
               kind="chapters"
               default
@@ -538,36 +616,64 @@ export function VideoPlayer({
         </MediaProvider>
         <DefaultVideoLayout
           icons={defaultLayoutIcons}
-          thumbnails={thumbnails}
+          thumbnails={activeSrc ? thumbnails : undefined}
           seekStep={10}
           slots={{
             beforePlayButton: (
-              <DefaultTooltip content="Seek Backward 10s" placement="top">
-                <SeekButton
-                  seconds={-10}
-                  className="vds-seek-button vds-button"
-                  aria-label="Seek Backward 10 Seconds"
-                >
-                  <SeekBackward10Icon className="vds-icon" />
-                </SeekButton>
-              </DefaultTooltip>
+              <>
+                {onPrevEpisode && (
+                  <DefaultTooltip content="Previous Episode" placement="top">
+                    <button
+                      type="button"
+                      onClick={onPrevEpisode}
+                      className="vds-button"
+                      aria-label="Previous Episode"
+                    >
+                      <PrevEpisodeIcon className="vds-icon" />
+                    </button>
+                  </DefaultTooltip>
+                )}
+                <DefaultTooltip content="Seek Backward 10s" placement="top">
+                  <SeekButton
+                    seconds={-10}
+                    className="vds-seek-button vds-button"
+                    aria-label="Seek Backward 10 Seconds"
+                  >
+                    <SeekBackward10Icon className="vds-icon" />
+                  </SeekButton>
+                </DefaultTooltip>
+              </>
             ),
             afterPlayButton: (
-              <DefaultTooltip content="Seek Forward 10s" placement="top">
-                <SeekButton
-                  seconds={10}
-                  className="vds-seek-button vds-button"
-                  aria-label="Seek Forward 10 Seconds"
-                >
-                  <SeekForward10Icon className="vds-icon" />
-                </SeekButton>
-              </DefaultTooltip>
+              <>
+                <DefaultTooltip content="Seek Forward 10s" placement="top">
+                  <SeekButton
+                    seconds={10}
+                    className="vds-seek-button vds-button"
+                    aria-label="Seek Forward 10 Seconds"
+                  >
+                    <SeekForward10Icon className="vds-icon" />
+                  </SeekButton>
+                </DefaultTooltip>
+                {onNextEpisode && (
+                  <DefaultTooltip content="Next Episode" placement="top">
+                    <button
+                      type="button"
+                      onClick={onNextEpisode}
+                      className="vds-button"
+                      aria-label="Next Episode"
+                    >
+                      <NextEpisodeIcon className="vds-icon" />
+                    </button>
+                  </DefaultTooltip>
+                )}
+              </>
             ),
           }}
         />
 
         {/* Yellow Intro & Outro Timeline Highlights rendered right on the seekbar */}
-        {sliderEl && duration > 0 && refinedSkips.length > 0 && createPortal(
+        {activeSrc && sliderEl && duration > 0 && refinedSkips.length > 0 && createPortal(
           <div className="vds-skip-highlights-overlay">
             {refinedSkips.map((skip, idx) => {
               const left = Math.min(100, Math.max(0, (skip.start / duration) * 100));
@@ -588,78 +694,147 @@ export function VideoPlayer({
           sliderEl
         )}
 
-        {/* Skip Intro / Outro button (rendered inside the player so it also shows in fullscreen) */}
-        {activeSkip && (
-          <button
-            type="button"
-            onClick={() => seekPast(activeSkip)}
-            className="absolute bottom-20 right-4 z-50 rounded-md border border-white/30 bg-black/70 px-4 py-2 text-sm font-bold text-white shadow-lg backdrop-blur-sm transition hover:bg-white hover:text-black cursor-pointer"
-          >
-            {SKIP_LABELS[activeSkip.type] || "Skip"} ⏭
-          </button>
+        {/* Skip Intro / Outro button (rendered inside <MediaPlayer> so it shows in fullscreen) */}
+        {activeSrc && !isLoadingStream && activeSkip && (
+          <div className="absolute bottom-20 right-4 z-40 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => seekPast(activeSkip)}
+              className="rounded-md border border-white/30 bg-black/70 px-4 py-2 text-sm font-bold text-white shadow-lg backdrop-blur-sm transition hover:bg-white hover:text-black cursor-pointer"
+            >
+              {SKIP_LABELS[activeSkip.type] || "Skip"} ⏭
+            </button>
+            {activeSkip.type === "ed" && onNextEpisode && (
+              <button
+                type="button"
+                onClick={onNextEpisode}
+                className="rounded-md border border-primary/50 bg-primary/85 px-4 py-2 text-sm font-bold text-white shadow-lg backdrop-blur-sm transition hover:bg-primary cursor-pointer"
+              >
+                Next Ep ⏭
+              </button>
+            )}
+          </div>
         )}
 
         {autoSkipToast && (
-          <div className="pointer-events-none absolute top-4 right-4 z-50 rounded-md bg-black/70 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+          <div className="pointer-events-none absolute top-4 right-4 z-40 rounded-md bg-black/70 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
             {autoSkipToast}
           </div>
         )}
-      </MediaPlayer>
 
-      {/* Stream Error & Quick Server Switch Overlay */}
-      {playbackError && (
-        <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in select-none">
-          <div className="w-14 h-14 rounded-full bg-destructive/20 border border-destructive/40 flex items-center justify-center text-destructive">
-            <AlertCircle className="w-7 h-7" />
-          </div>
-          <div className="space-y-1.5 max-w-md">
-            <h3 className="text-base sm:text-lg font-bold text-white">
-              Stream Temporarily Unavailable
-            </h3>
-            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              {serverName ? `"${getCleanServerName(serverName)}" encountered an error loading this episode.` : "This server encountered an error loading this episode."}
-              {availableServers && availableServers.length > 1
-                ? " Please switch to another available server below or retry."
-                : " The upstream link may have expired. Please click Retry below."}
-            </p>
-          </div>
+        {/* In-Player Episode Loading Overlay (renders inside <MediaPlayer> so Fullscreen stays active) */}
+        {isLoadingStream && (
+          <div className="absolute inset-0 z-50 bg-black flex flex-col justify-between p-4 sm:p-6 select-none overflow-hidden">
+            {poster && (
+              <div
+                className="absolute inset-0 bg-cover bg-center opacity-25 blur-lg scale-105 transition-all duration-500"
+                style={{ backgroundImage: `url(${poster})` }}
+              />
+            )}
+            <div className="absolute inset-0 bg-linear-to-t from-black via-black/40 to-black/60" />
 
-          {availableServers && availableServers.length > 1 && onSelectServer && (
-            <div className="space-y-2 pt-1 w-full max-w-md">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-primary">Switch Server:</p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {availableServers.map((srv, idx) => (
-                  <button
-                    key={srv.id || idx}
-                    type="button"
-                    onClick={() => {
-                      setPlaybackError(null);
-                      onSelectServer(idx);
-                    }}
-                    className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-secondary/80 hover:bg-primary hover:text-white text-foreground border border-border/50 hover:border-primary transition-all cursor-pointer"
-                  >
-                    {getCleanServerName(srv.name, idx)}
-                  </button>
-                ))}
+            <div className="relative z-10 flex justify-between items-start w-full opacity-80">
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-primary tracking-wider uppercase">
+                  Loading Stream
+                </span>
+                <h3 className="text-xs sm:text-sm font-bold text-white line-clamp-1">
+                  {title}
+                </h3>
+              </div>
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+            </div>
+
+            <div className="relative z-10 flex flex-col items-center justify-center space-y-3 my-auto">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center shadow-lg relative">
+                <div className="absolute inset-0 rounded-full border border-primary/40 animate-ping opacity-75" />
+                <Play className="w-6 h-6 sm:w-7 sm:h-7 text-white/40 fill-white/25 ml-1" />
               </div>
             </div>
-          )}
 
-          {onRetry && (
-            <button
-              type="button"
-              onClick={() => {
-                setPlaybackError(null);
-                onRetry();
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-white text-black hover:bg-white/90 shadow-lg cursor-pointer transition-all mt-1"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Retry Stream
-            </button>
-          )}
-        </div>
-      )}
+            <div className="relative z-10 w-full space-y-3 opacity-60">
+              <div className="h-1 bg-white/10 rounded-full w-full relative overflow-hidden">
+                <div className="absolute left-0 top-0 bottom-0 bg-primary/40 w-1/4 animate-pulse" />
+              </div>
+              <div className="flex justify-between items-center w-full text-white/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded bg-white/20" />
+                  <div className="w-4 h-4 rounded bg-white/20" />
+                  <div className="w-12 h-2.5 rounded bg-white/20" />
+                  <div className="w-16 h-2 rounded bg-white/20" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-4 rounded bg-white/20" />
+                  <div className="w-4 h-4 rounded bg-white/20" />
+                  <div className="w-4 h-4 rounded bg-white/20" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* In-Player Stream Error & Quick Server Switch Overlay (also visible inside Fullscreen) */}
+        {activeErrorMessage && (
+          <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in select-none">
+            <div className="w-14 h-14 rounded-full bg-destructive/20 border border-destructive/40 flex items-center justify-center text-destructive">
+              <AlertCircle className="w-7 h-7" />
+            </div>
+            <div className="space-y-1.5 max-w-md">
+              <h3 className="text-base sm:text-lg font-bold text-white">
+                {streamError ? "No Streaming Sources Available" : "Stream Temporarily Unavailable"}
+              </h3>
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                {streamError
+                  ? streamError
+                  : `${
+                      serverName
+                        ? `"${getCleanServerName(serverName)}" encountered an error loading this episode.`
+                        : "This server encountered an error loading this episode."
+                    }${
+                      availableServers && availableServers.length > 1
+                        ? " Please switch to another available server below or retry."
+                        : " The upstream link may have expired. Please click Retry below."
+                    }`}
+              </p>
+            </div>
+
+            {!streamError && availableServers && availableServers.length > 1 && onSelectServer && (
+              <div className="space-y-2 pt-1 w-full max-w-md">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-primary">Switch Server:</p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {availableServers.map((srv, idx) => (
+                    <button
+                      key={srv.id || idx}
+                      type="button"
+                      onClick={() => {
+                        setPlaybackError(null);
+                        onSelectServer(idx);
+                      }}
+                      className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-secondary/80 hover:bg-primary hover:text-white text-foreground border border-border/50 hover:border-primary transition-all cursor-pointer"
+                    >
+                      {getCleanServerName(srv.name, idx)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {onRetry && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPlaybackError(null);
+                  onRetry();
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-white text-black hover:bg-white/90 shadow-lg cursor-pointer transition-all mt-1"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Retry Stream
+              </button>
+            )}
+          </div>
+        )}
+      </MediaPlayer>
     </div>
   );
 }
