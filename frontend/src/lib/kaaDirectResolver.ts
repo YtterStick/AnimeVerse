@@ -37,16 +37,55 @@ export async function resolveKaaClient(
   episodeNum: number
 ): Promise<StreamServer[]> {
   try {
-    // 1. Resolve slug via backend endpoint (avoids browser CORS block on api.malsync.moe)
-    const slugApi = BACKEND_URL ? `${BACKEND_URL}/api/stream/slug/${animeId}` : `/api/stream/slug/${animeId}`;
+    // 1. Resolve slug via localStorage cache -> backend endpoint -> Edge MalSync fallback
+    const slugStorageKey = `aniverse:kaa-slug:${animeId}`;
     let slug: string | null = null;
     try {
-      const slugRes = await fetch(slugApi, { signal: AbortSignal.timeout(12000) })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null);
-      slug = slugRes?.slug || null;
+      slug = localStorage.getItem(slugStorageKey);
     } catch {
       slug = null;
+    }
+
+    if (!slug) {
+      const slugApi = BACKEND_URL
+        ? `${BACKEND_URL}/api/stream/slug/${animeId}`
+        : `/api/stream/slug/${animeId}`;
+      try {
+        const slugRes = await fetch(slugApi, { signal: AbortSignal.timeout(7000) })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        slug = slugRes?.slug || null;
+      } catch {
+        slug = null;
+      }
+    }
+
+    // Fallback: query MalSync directly through our Vercel Edge proxy if Render returned 503
+    if (!slug) {
+      try {
+        const malSyncRes = await fetch(
+          `${STREAM_PROXY_BASE}?url=${encodeURIComponent(`https://api.malsync.moe/mal/anime/${animeId}`)}`,
+          { signal: AbortSignal.timeout(6000) }
+        )
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        const kaaPages = malSyncRes?.Sites?.KickAssAnime;
+        if (kaaPages && typeof kaaPages === "object") {
+          const firstEntry: any = Object.values(kaaPages)[0];
+          const identifier: string | undefined = firstEntry?.identifier || firstEntry?.url?.split("/").pop();
+          if (identifier) slug = identifier;
+        }
+      } catch {
+        slug = null;
+      }
+    }
+
+    if (slug) {
+      try {
+        localStorage.setItem(slugStorageKey, slug);
+      } catch {
+        // Ignore storage quota errors
+      }
     }
 
     if (!slug) return [];

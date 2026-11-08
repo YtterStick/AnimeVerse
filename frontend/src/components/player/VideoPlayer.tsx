@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, RefreshCw } from "lucide-react";
-import type Hls from "hls.js";
+import Hls from "hls.js";
 import {
   MediaPlayer,
   MediaProvider,
@@ -177,8 +177,8 @@ export function VideoPlayer({
 
   const handleProviderChange = useCallback((provider: MediaProviderAdapter | null) => {
     if (isHLSProvider(provider)) {
-      // Lazy-load bundled hls.js instead of downloading unminified script from jsDelivr CDN
-      provider.library = () => import("hls.js");
+      // Pass bundled Hls constructor synchronously so setup() + autoPlay never race an async script load
+      provider.library = Hls;
       provider.config = {
         maxBufferLength: 120,
         maxMaxBufferLength: 300,

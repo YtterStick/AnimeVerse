@@ -15,7 +15,11 @@ class RequestQueue {
   private queue: (() => Promise<void>)[] = [];
   private processing = false;
   private lastRequestTime = 0;
-  private minInterval = 350;
+  private minInterval: number;
+
+  constructor(minInterval = 350) {
+    this.minInterval = minInterval;
+  }
 
   enqueue<T>(requestFn: () => Promise<T>): Promise<T> {
     return new Promise((resolve, reject) => {
@@ -55,7 +59,9 @@ class RequestQueue {
   }
 }
 
-const jikanQueue = new RequestQueue();
+const jikanQueue = new RequestQueue(350);
+// Pace outbound AniList GraphQL bursts so concurrent page requests never trigger 429 -> 503
+const aniListQueue = new RequestQueue(120);
 
 const ANILIST_MEDIA_FIELDS = `
   id
@@ -335,16 +341,18 @@ async function queryAniList(query: string, variables: Record<string, any>): Prom
     if (wait > 0) await sleep(Math.min(wait, 4000));
 
     try {
-      const response = await axios.post(
-        ANILIST_GRAPHQL_URL,
-        { query, variables },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          timeout: 7000,
-        }
+      const response = await aniListQueue.enqueue(() =>
+        axios.post(
+          ANILIST_GRAPHQL_URL,
+          { query, variables },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            timeout: 8000,
+          }
+        )
       );
       return response.data?.data;
     } catch (err: any) {
@@ -399,22 +407,22 @@ async function executeJikanRequest<T>(
       }
     }
 
-    // 2) Jikan secondary — skipped while it is known to be unreachable from this host
+    // 2) Jikan secondary — skipped briefly while unreachable from this host
     if (Date.now() >= jikanDownUntil) {
       try {
         const data = await jikanQueue.enqueue(async () => {
           const response = await axios.get(`${JIKAN_BASE_URL}${endpoint}`, {
             params,
-            timeout: 4000,
+            timeout: 8500,
           });
           return normalizeJikanPayload(response.data as T);
         });
         return store(data);
       } catch (error: any) {
         const status = error.response?.status;
-        if (!error.response || status === 429 || status >= 500) {
-          // Mark Jikan as down for 5 minutes so we don't wait on it again
-          jikanDownUntil = Date.now() + 300_000;
+        if (!error.response || status >= 500) {
+          // Brief 15s cooldown on hard network/5xx failure (do not lock out for 5 minutes)
+          jikanDownUntil = Date.now() + 15_000;
         }
         console.warn(`[MetadataService] Jikan failed for ${endpoint}:`, error.code || status);
       }

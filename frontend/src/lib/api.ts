@@ -130,11 +130,168 @@ export const animeApi = {
   getGenres: () =>
     fetchApi<{ data: { id: number; name: string }[] }>(`/anime/genres`),
 
-  getById: (id: number) =>
-    fetchApi<{ data: Anime }>(`/anime/${id}`),
+  getById: async (id: number): Promise<{ data: Anime }> => {
+    try {
+      return await fetchApi<{ data: Anime }>(`/anime/${id}`, { timeoutMs: 9000 });
+    } catch (primaryErr) {
+      // Direct browser fallback to Jikan / AniList (residential IP, open CORS) so a Render 503 never breaks anime pages
+      try {
+        const jikanRes = await fetch(`https://api.jikan.moe/v4/anime/${id}`, {
+          signal: AbortSignal.timeout(7000),
+        });
+        if (jikanRes.ok) {
+          const json = await jikanRes.json();
+          if (json?.data) return { data: json.data as Anime };
+        }
+      } catch {
+        // Fall through to AniList browser fallback
+      }
 
-  getEpisodes: (id: number, page: number | string = "all") =>
-    fetchApi<ApiResponse<Episode[]>>(`/anime/${id}/episodes?page=${page}`),
+      try {
+        const alRes = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            query: `query ($idMal: Int) {
+              Media(idMal: $idMal, type: ANIME) {
+                id idMal format episodes status averageScore popularity season seasonYear
+                description(asHtml: false)
+                genres synonyms
+                nextAiringEpisode { episode }
+                title { romaji english native }
+                coverImage { extraLarge large medium }
+                studios(isMain: true) { nodes { id name } }
+              }
+            }`,
+            variables: { idMal: id },
+          }),
+          signal: AbortSignal.timeout(7000),
+        });
+        if (alRes.ok) {
+          const alJson = await alRes.json();
+          const m = alJson?.data?.Media;
+          if (m) {
+            const img = m.coverImage?.extraLarge || m.coverImage?.large || m.coverImage?.medium || "";
+            const totalEps =
+              m.episodes ||
+              (m.nextAiringEpisode?.episode && m.nextAiringEpisode.episode > 1
+                ? m.nextAiringEpisode.episode - 1
+                : null);
+            return {
+              data: {
+                mal_id: m.idMal || id,
+                url: "",
+                images: {
+                  jpg: { image_url: img, small_image_url: img, large_image_url: img },
+                  webp: { image_url: img, small_image_url: img, large_image_url: img },
+                },
+                trailer: { youtube_id: null, url: null, embed_url: null },
+                title: m.title?.romaji || m.title?.english || `Anime #${id}`,
+                title_english: m.title?.english || null,
+                title_japanese: m.title?.native || null,
+                type: m.format || "TV",
+                source: "Original",
+                episodes: totalEps,
+                status: m.status === "RELEASING" ? "Currently Airing" : "Finished Airing",
+                airing: m.status === "RELEASING",
+                aired: { from: null, to: null, string: "" },
+                duration: "24 min per ep",
+                rating: "PG-13",
+                score: m.averageScore ? Number((m.averageScore / 10).toFixed(2)) : null,
+                scored_by: m.popularity || null,
+                rank: null,
+                popularity: m.popularity || null,
+                members: m.popularity || null,
+                favorites: null,
+                synopsis: m.description ? String(m.description).replace(/<[^>]+>/g, "") : null,
+                background: null,
+                season: m.season ? String(m.season).toLowerCase() : null,
+                year: m.seasonYear || null,
+                studios: (m.studios?.nodes || []).map((s: any) => ({ mal_id: s.id, type: "anime", name: s.name })),
+                genres: (m.genres || []).map((g: string, i: number) => ({ mal_id: i + 1, type: "anime", name: g })),
+                themes: [],
+                demographics: [],
+              } as Anime,
+            };
+          }
+        }
+      } catch {
+        // Ignore secondary fallback error
+      }
+
+      throw primaryErr;
+    }
+  },
+
+  getEpisodes: async (id: number, page: number | string = "all"): Promise<ApiResponse<Episode[]>> => {
+    try {
+      return await fetchApi<ApiResponse<Episode[]>>(`/anime/${id}/episodes?page=${page}`, {
+        timeoutMs: 10000,
+      });
+    } catch (primaryErr) {
+      // Direct browser fallback to AniList episode count + titles so episode navigation always loads
+      try {
+        const alRes = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            query: `query ($idMal: Int) {
+              Media(idMal: $idMal, type: ANIME) {
+                episodes
+                nextAiringEpisode { episode }
+                streamingEpisodes { title }
+              }
+            }`,
+            variables: { idMal: id },
+          }),
+          signal: AbortSignal.timeout(7000),
+        });
+        if (alRes.ok) {
+          const alJson = await alRes.json();
+          const m = alJson?.data?.Media;
+          if (m) {
+            const titleMap = new Map<number, string>();
+            for (const se of m.streamingEpisodes || []) {
+              const match = String(se.title || "").match(/Episode\s+(\d+)\s*[-–:]?\s*(.*)/i);
+              if (match) {
+                const epNum = parseInt(match[1], 10);
+                if (!isNaN(epNum)) titleMap.set(epNum, match[2]?.trim() || `Episode ${epNum}`);
+              }
+            }
+            const airedCount = m.nextAiringEpisode?.episode
+              ? Math.max(1, m.nextAiringEpisode.episode - 1)
+              : m.episodes || titleMap.size || 12;
+            const total = Math.max(airedCount, titleMap.size, 1);
+            const eps: Episode[] = [];
+            for (let i = 1; i <= total; i++) {
+              eps.push({
+                mal_id: i,
+                title: titleMap.get(i) || `Episode ${i}`,
+                title_japanese: null,
+                title_romanji: null,
+                aired: null,
+                filler: false,
+                recap: false,
+                episode_number: i,
+              });
+            }
+            return {
+              data: eps,
+              pagination: {
+                last_visible_page: 1,
+                has_next_page: false,
+                current_page: 1,
+                items: { count: eps.length, total: eps.length, per_page: eps.length },
+              },
+            };
+          }
+        }
+      } catch {
+        // Ignore fallback error
+      }
+      throw primaryErr;
+    }
+  },
 
   getRecommendations: (id: number) =>
     fetchApi<ApiResponse<any[]>>(`/anime/${id}/recommendations`, {

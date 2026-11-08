@@ -9,7 +9,6 @@ import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { ServerSelector } from "@/components/player/ServerSelector";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
 import { AnimeSeasons } from "@/components/anime/AnimeSeasons";
 import type { MultiStreamResult } from "@/types";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
@@ -464,45 +463,8 @@ export function WatchPage() {
     navigate(`/watch/${animeId}/${episodeNum + 1}`);
   };
 
-  if (animeLoading) {
-    return (
-      <div className="min-h-screen bg-background w-full max-w-full page-enter animate-pulse overflow-x-hidden pb-12">
-        <div className="w-full max-w-[1800px] mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
-          <Skeleton className="h-4 w-32 bg-card" />
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="lg:col-span-8 xl:col-span-8 2xl:col-span-9 space-y-4">
-              <Skeleton className="w-full aspect-video rounded-2xl bg-card" />
-              <Skeleton className="h-14 w-full bg-card rounded-xl" />
-            </div>
-            <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 rounded-2xl border border-border/40 bg-card/25 p-4 space-y-3 h-[560px] lg:h-[620px]">
-              <Skeleton className="h-6 w-28 bg-card" />
-              <div className="space-y-2">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <Skeleton key={i} className="h-10 w-full bg-card rounded-lg" />
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="space-y-4 pt-4">
-            <div className="space-y-2 py-2 border-b border-border/20 pb-6">
-              <Skeleton className="h-7 w-48 bg-card" />
-              <Skeleton className="h-4 w-64 bg-card" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-5 w-20 bg-card" />
-              <div className="space-y-1.5">
-                <Skeleton className="h-4 w-full bg-card" />
-                <Skeleton className="h-4 w-full bg-card" />
-                <Skeleton className="h-4 w-2/3 bg-card" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!anime) {
+  // Only show full-page "Anime not found" when BOTH metadata AND stream sources failed to load
+  if (!animeLoading && !anime && !streamLoading && (!multiStream?.servers || multiStream.servers.length === 0)) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-16 text-center space-y-4">
         <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
@@ -512,10 +474,14 @@ export function WatchPage() {
         </Button>
       </div>
     );
-  }   
+  }
 
-  const title = formatTitle(anime);
-  const hasNext = episodes.some((ep) => ep.episode_number === episodeNum + 1) || (anime.episodes ? episodeNum < anime.episodes : true);
+  const title = anime ? formatTitle(anime) : `Anime #${animeId}`;
+  const coverImage =
+    anime?.images?.webp?.large_image_url || anime?.images?.jpg?.large_image_url || undefined;
+  const hasNext =
+    episodes.some((ep) => ep.episode_number === episodeNum + 1) ||
+    (anime?.episodes ? episodeNum < anime.episodes : true);
 
   const handleVideoEnded = () => {
     if (autoNext && hasNext) {
@@ -572,12 +538,14 @@ export function WatchPage() {
           /* Premium Player Skeleton Loader */
           <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative flex flex-col justify-between p-4 sm:p-6 select-none">
             {/* Blurred Backdrop Cover Art */}
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-25 blur-lg scale-105 transition-all duration-500"
-              style={{
-                backgroundImage: `url(${anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url})`,
-              }}
-            />
+            {coverImage && (
+              <div
+                className="absolute inset-0 bg-cover bg-center opacity-25 blur-lg scale-105 transition-all duration-500"
+                style={{
+                  backgroundImage: `url(${coverImage})`,
+                }}
+              />
+            )}
             <div className="absolute inset-0 bg-linear-to-t from-black via-black/40 to-black/60" />
 
             {/* Top Bar (Title skeleton) */}
@@ -643,7 +611,7 @@ export function WatchPage() {
             type={activeServer.type}
             category={activeServer.category}
             title={`${title} - Episode ${episodeNum}`}
-            poster={anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url}
+            poster={coverImage}
             onProgress={handleProgress}
             initialTime={initialTime}
             subtitles={activeServer.subtitles}
@@ -978,7 +946,7 @@ export function WatchPage() {
         <div className="space-y-2 pb-6">
           <h2 className="text-base font-bold text-foreground">Synopsis</h2>
           <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
-            {anime.synopsis || "No synopsis available."}
+            {anime?.synopsis || (animeLoading ? "Loading synopsis..." : "No synopsis available.")}
           </p>
         </div>
 
