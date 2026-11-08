@@ -241,16 +241,27 @@ function buildProxyHeaders(
 
   const baseRange: Record<string, string> = rangeHeader ? { Range: rangeHeader } : {};
 
+  const extraHeaders: Record<string, string> = {};
+  if (targetUrl.hostname.includes("animeheaven")) {
+    const hexTokens = targetUrl.search.match(/([a-f0-9]{32})/g);
+    if (hexTokens && hexTokens.length > 0) {
+      const epKey = hexTokens[hexTokens.length - 1];
+      extraHeaders["Cookie"] = `key=${epKey}`;
+    }
+  }
+
   return [
     {
       Referer: referer,
       "User-Agent": userAgent,
+      ...extraHeaders,
       ...baseRange,
     },
     {
       Referer: referer,
       Origin: refererOrigin,
       "User-Agent": userAgent,
+      ...extraHeaders,
       ...baseRange,
     },
     {
@@ -261,10 +272,12 @@ function buildProxyHeaders(
     {
       Referer: `${origin}/`,
       "User-Agent": userAgent,
+      ...extraHeaders,
       ...baseRange,
     },
     {
       "User-Agent": userAgent,
+      ...extraHeaders,
       ...baseRange,
     },
   ];

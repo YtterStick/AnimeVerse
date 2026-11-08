@@ -44,7 +44,27 @@ function markRenderColdAndWake(): void {
   }
 }
 
+const RENDER_BASE = BACKEND_URL || "https://animeverse-z6p4.onrender.com";
+const RENDER_STREAM_PROXY = `${RENDER_BASE}/api/stream/proxy`;
+
 function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
+  if (!rawUrl) return rawUrl;
+
+  // AnimeHeaven (animeheaven.me) blocks cross-site browser requests (via Sec-Fetch-Site: cross-site)
+  // and blocks Vercel Edge proxies (via X-Vercel-Id) with 400 Bad Request.
+  // It MUST be proxied through our Node/Express backend on Render which strips these headers.
+  if (rawUrl.includes("animeheaven")) {
+    if (rawUrl.startsWith("/api/stream/proxy")) {
+      return `${RENDER_BASE}${rawUrl}`;
+    }
+    if (rawUrl.startsWith("http")) {
+      if (rawUrl.includes("/api/stream/proxy")) {
+        return rawUrl;
+      }
+      return `${RENDER_STREAM_PROXY}?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://animeheaven.me/")}`;
+    }
+  }
+
   if (rawUrl.startsWith("/api/stream/proxy")) {
     return `${STREAM_PROXY_BASE}${rawUrl.slice("/api/stream/proxy".length)}`;
   }

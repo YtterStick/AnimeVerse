@@ -996,18 +996,19 @@ export class ConsumetStreamProvider implements StreamProvider {
       const sourcesToUse = candidateList.length > 0 ? candidateList : uniqueSources;
 
       if (sourcesToUse.length > 0) {
-        // Primary direct MP4 stream: browsers play directly in <video> with 0 MB proxy bandwidth!
+        // AnimeHeaven actively blocks cross-site browser requests (via Sec-Fetch-Site: cross-site)
+        // with HTTP 400 Bad Request, so both primary and backup must be proxied through backend.
         servers.push({
           id: "animeheaven-sub-0",
           name: "Aether HD",
           category: "SUB",
-          url: this.sanitizeUrl(sourcesToUse[0]),
+          url: this.proxyUrl(sourcesToUse[0], undefined, "https://animeheaven.me/"),
           type: "mp4",
           quality: "1080p",
           subtitles: [],
         });
 
-        // Backup Edge-proxied stream in case a viewer's ISP/network blocks direct CDN access
+        // Backup proxied stream
         const backupSource = sourcesToUse[1] || sourcesToUse[0];
         servers.push({
           id: "animeheaven-sub-backup",
