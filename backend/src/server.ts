@@ -66,14 +66,16 @@ async function warmupCache() {
 
 // Health Check (supports both GET and HEAD on /health and /api/health for cron pingers)
 // Now also triggers cache warmup so the API data is always pre-loaded
-const healthHandler = async (_req: express.Request, res: express.Response) => {
-  // Fire warmup in background — don't block the health response
-  warmupCache().catch(() => {});
-
+const healthHandler = (_req: express.Request, res: express.Response) => {
   res.status(200).json({
     status: "ok",
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
+  });
+
+  // Fire warmup after flushing the 200 OK response so health checks return in <5ms
+  setImmediate(() => {
+    warmupCache().catch(() => {});
   });
 };
 
@@ -99,6 +101,8 @@ app.listen(PORT, () => {
   console.log(`🚀 AniVerse Backend Server running on http://localhost:${PORT}`);
   console.log(`🏥 Health check available at http://localhost:${PORT}/health`);
 
-  // Warm the cache immediately on startup so even the very first visitor gets fast responses
-  warmupCache().catch(() => {});
+  // Defer cache warmup by 4s so Express answers Render's startup health probe with zero CPU contention
+  setTimeout(() => {
+    warmupCache().catch(() => {});
+  }, 4000);
 });

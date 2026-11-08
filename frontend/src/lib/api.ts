@@ -7,6 +7,7 @@ import type {
   WatchHistoryEntry,
   WatchlistEntry,
 } from "@/types";
+import { anilistBrowserFallback } from "./anilistBrowserFallback";
 import { resolveKaaClient } from "./kaaDirectResolver";
 import { resolveKnownStream } from "./knownStreamResolver";
 
@@ -24,6 +25,25 @@ export const STREAM_PROXY_BASE = import.meta.env.DEV
     : "/api/stream/proxy"
   : "/api/proxy";
 
+/**
+ * Tracks whether Render recently timed out or returned 502/503 while waking up.
+ * While `Date.now() < renderColdUntil`, read-only anime/stream calls bypass the
+ * 3.8s wait and resolve directly in ~0.5s via AniList/Jikan/Edge while `/api/keepalive`
+ * finishes waking Render in the background.
+ */
+let renderColdUntil = 0;
+let lastWakeTriggerAt = 0;
+
+function markRenderColdAndWake(): void {
+  const now = Date.now();
+  renderColdUntil = now + 25_000;
+  if (now - lastWakeTriggerAt > 20_000) {
+    lastWakeTriggerAt = now;
+    const wakeUrl = import.meta.env.DEV ? `${API_BASE}/health` : "/api/keepalive";
+    fetch(wakeUrl, { cache: "no-store" }).catch(() => {});
+  }
+}
+
 function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
   if (rawUrl.startsWith("/api/stream/proxy")) {
     return `${STREAM_PROXY_BASE}${rawUrl.slice("/api/stream/proxy".length)}`;
@@ -39,34 +59,43 @@ function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
 
 async function fetchApi<T>(
   endpoint: string,
-  options?: RequestInit & { timeoutMs?: number },
+  options?: RequestInit & { timeoutMs?: number; maxAttempts?: number },
   attempt = 1
 ): Promise<T> {
   const timeoutMs = options?.timeoutMs;
+  const maxAttempts = options?.maxAttempts ?? 3;
   const controller = timeoutMs ? new AbortController() : undefined;
   const timeoutId = controller
     ? window.setTimeout(() => controller.abort(), timeoutMs)
     : undefined;
 
-  const { timeoutMs: _omitTimeout, headers: extraHeaders, ...restOptions } = options || {};
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...restOptions,
-    // Merge headers LAST so auth headers never wipe out Content-Type
-    headers: {
-      "Content-Type": "application/json",
-      ...(extraHeaders as Record<string, string> | undefined),
-    },
-    signal: controller?.signal ?? restOptions.signal,
-  });
+  const {
+    timeoutMs: _omitTimeout,
+    maxAttempts: _omitMaxAttempts,
+    headers: extraHeaders,
+    ...restOptions
+  } = options || {};
 
-  if (timeoutId) {
-    window.clearTimeout(timeoutId);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      ...restOptions,
+      // Merge headers LAST so auth headers never wipe out Content-Type
+      headers: {
+        "Content-Type": "application/json",
+        ...(extraHeaders as Record<string, string> | undefined),
+      },
+      signal: controller?.signal ?? restOptions.signal,
+    });
+  } finally {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
   }
 
-  // Transparently retry idempotent GETs when the backend/upstream is briefly busy
+  // Transparently retry idempotent GETs when maxAttempts > 1
   const isGet = !options?.method || options.method.toUpperCase() === "GET";
-  const MAX_ATTEMPTS = 3;
-  if (isGet && [429, 502, 503].includes(res.status) && attempt < MAX_ATTEMPTS) {
+  if (isGet && [429, 502, 503].includes(res.status) && attempt < maxAttempts) {
     const retryAfter = parseInt(res.headers.get("Retry-After") || "", 10);
     const delayMs = Number.isFinite(retryAfter)
       ? Math.min(retryAfter * 1000, 5000)
@@ -83,13 +112,30 @@ async function fetchApi<T>(
   return res.json();
 }
 
+async function withBrowserFallback<T>(
+  endpoint: string,
+  fallback: () => Promise<T>,
+  timeoutMs = 3800
+): Promise<T> {
+  if (Date.now() < renderColdUntil) {
+    return fallback();
+  }
+
+  try {
+    return await fetchApi<T>(endpoint, { timeoutMs, maxAttempts: 1 });
+  } catch {
+    markRenderColdAndWake();
+    return fallback();
+  }
+}
+
 function withAuth(token: string | null): Record<string, string> {
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
 }
 
 // ============================================
-// Anime Endpoints
+// Anime Endpoints (Render Cache -> Direct Browser AniList/Jikan Fallback)
 // ============================================
 
 export const animeApi = {
@@ -106,222 +152,179 @@ export const animeApi = {
     if (genres) params.set("genres", genres);
     if (orderBy) params.set("order_by", orderBy);
     if (status) params.set("status", status);
-    return fetchApi<ApiResponse<Anime[]>>(`/anime/search?${params.toString()}`);
+    return withBrowserFallback<ApiResponse<Anime[]>>(
+      `/anime/search?${params.toString()}`,
+      () => anilistBrowserFallback.search(query, page, genres, orderBy, status)
+    );
   },
 
   trending: (page = 1) =>
-    fetchApi<ApiResponse<Anime[]>>(`/anime/trending?page=${page}`),
+    withBrowserFallback<ApiResponse<Anime[]>>(
+      `/anime/trending?page=${page}`,
+      () => anilistBrowserFallback.trending(page)
+    ),
 
   topAiring: (page = 1) =>
-    fetchApi<ApiResponse<Anime[]>>(`/anime/top-airing?page=${page}`),
+    withBrowserFallback<ApiResponse<Anime[]>>(
+      `/anime/top-airing?page=${page}`,
+      () => anilistBrowserFallback.topAiring(page)
+    ),
 
   upcoming: (page = 1) =>
-    fetchApi<ApiResponse<Anime[]>>(`/anime/upcoming?page=${page}`),
+    withBrowserFallback<ApiResponse<Anime[]>>(
+      `/anime/upcoming?page=${page}`,
+      () => anilistBrowserFallback.upcoming(page)
+    ),
 
   popular: (page = 1) =>
-    fetchApi<ApiResponse<Anime[]>>(`/anime/popular?page=${page}`),
+    withBrowserFallback<ApiResponse<Anime[]>>(
+      `/anime/popular?page=${page}`,
+      () => anilistBrowserFallback.popular(page)
+    ),
 
   topRated: (page = 1) =>
-    fetchApi<ApiResponse<Anime[]>>(`/anime/top-rated?page=${page}`),
+    withBrowserFallback<ApiResponse<Anime[]>>(
+      `/anime/top-rated?page=${page}`,
+      () => anilistBrowserFallback.topRated(page)
+    ),
 
   getSchedule: (day = "monday") =>
-    fetchApi<ApiResponse<Anime[]>>(`/anime/schedule?day=${encodeURIComponent(day)}`),
+    withBrowserFallback<ApiResponse<Anime[]>>(
+      `/anime/schedule?day=${encodeURIComponent(day)}`,
+      () => anilistBrowserFallback.schedule(day)
+    ),
 
   getGenres: () =>
-    fetchApi<{ data: { id: number; name: string }[] }>(`/anime/genres`),
+    withBrowserFallback<{ data: { id: number; name: string }[] }>(
+      `/anime/genres`,
+      () => anilistBrowserFallback.genres()
+    ),
 
-  getById: async (id: number): Promise<{ data: Anime }> => {
-    try {
-      return await fetchApi<{ data: Anime }>(`/anime/${id}`, { timeoutMs: 9000 });
-    } catch (primaryErr) {
-      // Direct browser fallback to Jikan / AniList (residential IP, open CORS) so a Render 503 never breaks anime pages
-      try {
-        const jikanRes = await fetch(`https://api.jikan.moe/v4/anime/${id}`, {
-          signal: AbortSignal.timeout(7000),
-        });
-        if (jikanRes.ok) {
-          const json = await jikanRes.json();
-          if (json?.data) return { data: json.data as Anime };
-        }
-      } catch {
-        // Fall through to AniList browser fallback
-      }
+  getById: (id: number): Promise<{ data: Anime }> =>
+    withBrowserFallback<{ data: Anime }>(
+      `/anime/${id}`,
+      () => anilistBrowserFallback.byId(id),
+      4200
+    ),
 
-      try {
-        const alRes = await fetch("https://graphql.anilist.co", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            query: `query ($idMal: Int) {
-              Media(idMal: $idMal, type: ANIME) {
-                id idMal format episodes status averageScore popularity season seasonYear
-                description(asHtml: false)
-                genres synonyms
-                nextAiringEpisode { episode }
-                title { romaji english native }
-                coverImage { extraLarge large medium }
-                studios(isMain: true) { nodes { id name } }
-              }
-            }`,
-            variables: { idMal: id },
-          }),
-          signal: AbortSignal.timeout(7000),
-        });
-        if (alRes.ok) {
-          const alJson = await alRes.json();
-          const m = alJson?.data?.Media;
-          if (m) {
-            const img = m.coverImage?.extraLarge || m.coverImage?.large || m.coverImage?.medium || "";
-            const totalEps =
-              m.episodes ||
-              (m.nextAiringEpisode?.episode && m.nextAiringEpisode.episode > 1
-                ? m.nextAiringEpisode.episode - 1
-                : null);
-            return {
-              data: {
-                mal_id: m.idMal || id,
-                url: "",
-                images: {
-                  jpg: { image_url: img, small_image_url: img, large_image_url: img },
-                  webp: { image_url: img, small_image_url: img, large_image_url: img },
-                },
-                trailer: { youtube_id: null, url: null, embed_url: null },
-                title: m.title?.romaji || m.title?.english || `Anime #${id}`,
-                title_english: m.title?.english || null,
-                title_japanese: m.title?.native || null,
-                type: m.format || "TV",
-                source: "Original",
-                episodes: totalEps,
-                status: m.status === "RELEASING" ? "Currently Airing" : "Finished Airing",
-                airing: m.status === "RELEASING",
-                aired: { from: null, to: null, string: "" },
-                duration: "24 min per ep",
-                rating: "PG-13",
-                score: m.averageScore ? Number((m.averageScore / 10).toFixed(2)) : null,
-                scored_by: m.popularity || null,
-                rank: null,
-                popularity: m.popularity || null,
-                members: m.popularity || null,
-                favorites: null,
-                synopsis: m.description ? String(m.description).replace(/<[^>]+>/g, "") : null,
-                background: null,
-                season: m.season ? String(m.season).toLowerCase() : null,
-                year: m.seasonYear || null,
-                studios: (m.studios?.nodes || []).map((s: any) => ({ mal_id: s.id, type: "anime", name: s.name })),
-                genres: (m.genres || []).map((g: string, i: number) => ({ mal_id: i + 1, type: "anime", name: g })),
-                themes: [],
-                demographics: [],
-              } as Anime,
-            };
-          }
-        }
-      } catch {
-        // Ignore secondary fallback error
-      }
-
-      throw primaryErr;
-    }
-  },
-
-  getEpisodes: async (id: number, page: number | string = "all"): Promise<ApiResponse<Episode[]>> => {
-    try {
-      return await fetchApi<ApiResponse<Episode[]>>(`/anime/${id}/episodes?page=${page}`, {
-        timeoutMs: 10000,
-      });
-    } catch (primaryErr) {
-      // Direct browser fallback to AniList episode count + titles so episode navigation always loads
-      try {
-        const alRes = await fetch("https://graphql.anilist.co", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            query: `query ($idMal: Int) {
-              Media(idMal: $idMal, type: ANIME) {
-                episodes
-                nextAiringEpisode { episode }
-                streamingEpisodes { title }
-              }
-            }`,
-            variables: { idMal: id },
-          }),
-          signal: AbortSignal.timeout(7000),
-        });
-        if (alRes.ok) {
-          const alJson = await alRes.json();
-          const m = alJson?.data?.Media;
-          if (m) {
-            const titleMap = new Map<number, string>();
-            for (const se of m.streamingEpisodes || []) {
-              const match = String(se.title || "").match(/Episode\s+(\d+)\s*[-–:]?\s*(.*)/i);
-              if (match) {
-                const epNum = parseInt(match[1], 10);
-                if (!isNaN(epNum)) titleMap.set(epNum, match[2]?.trim() || `Episode ${epNum}`);
-              }
-            }
-            const airedCount = m.nextAiringEpisode?.episode
-              ? Math.max(1, m.nextAiringEpisode.episode - 1)
-              : m.episodes || titleMap.size || 12;
-            const total = Math.max(airedCount, titleMap.size, 1);
-            const eps: Episode[] = [];
-            for (let i = 1; i <= total; i++) {
-              eps.push({
-                mal_id: i,
-                title: titleMap.get(i) || `Episode ${i}`,
-                title_japanese: null,
-                title_romanji: null,
-                aired: null,
-                filler: false,
-                recap: false,
-                episode_number: i,
-              });
-            }
-            return {
-              data: eps,
-              pagination: {
-                last_visible_page: 1,
-                has_next_page: false,
-                current_page: 1,
-                items: { count: eps.length, total: eps.length, per_page: eps.length },
-              },
-            };
-          }
-        }
-      } catch {
-        // Ignore fallback error
-      }
-      throw primaryErr;
-    }
-  },
+  getEpisodes: (id: number, page: number | string = "all"): Promise<ApiResponse<Episode[]>> =>
+    withBrowserFallback<ApiResponse<Episode[]>>(
+      `/anime/${id}/episodes?page=${page}`,
+      () => anilistBrowserFallback.episodes(id),
+      4500
+    ),
 
   getRecommendations: (id: number) =>
-    fetchApi<ApiResponse<any[]>>(`/anime/${id}/recommendations`, {
-      timeoutMs: 12000,
-    }),
+    withBrowserFallback<ApiResponse<any[]>>(
+      `/anime/${id}/recommendations`,
+      () => anilistBrowserFallback.recommendations(id),
+      4200
+    ),
 
   getSeasons: (id: number) =>
-    fetchApi<ApiResponse<AnimeSeason[]>>(`/anime/${id}/seasons`, {
-      timeoutMs: 12000,
-    }),
+    withBrowserFallback<ApiResponse<AnimeSeason[]>>(
+      `/anime/${id}/seasons`,
+      () => anilistBrowserFallback.seasons(id),
+      4200
+    ),
 };
 
 // ============================================
 // Stream Endpoints
 // ============================================
 
+async function fetchAniSkipDirect(
+  animeId: number,
+  episode: number,
+  duration = 0
+): Promise<{ found: boolean; skips: SkipInterval[] }> {
+  try {
+    const len = Math.max(0, Math.round(duration));
+    const url = `https://api.aniskip.com/v2/skip-times/${animeId}/${episode}?types[]=op&types[]=ed&types[]=recap&types[]=mixed-op&types[]=mixed-ed&episodeLength=${len}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(4500) });
+    if (!res.ok) return { found: false, skips: [] };
+    const json = await res.json();
+    const rawResults: any[] = json?.results || [];
+    const bestByType = new Map<string, any>();
+
+    for (const r of rawResults) {
+      const type = String(r.skipType || "").replace("mixed-", "");
+      const start = Number(r.interval?.startTime) || 0;
+      const end = Number(r.interval?.endTime) || 0;
+      const span = end - start;
+      if ((type === "op" || type === "ed") && (span < 45 || span > 130)) continue;
+      if (type === "op" && episode === 1 && start < 30) continue;
+
+      const current = bestByType.get(type);
+      if (!current) {
+        bestByType.set(type, r);
+      } else {
+        const curSpan =
+          (Number(current.interval?.endTime) || 0) -
+          (Number(current.interval?.startTime) || 0);
+        if (Math.abs(span - 89.5) < Math.abs(curSpan - 89.5)) {
+          bestByType.set(type, r);
+        }
+      }
+    }
+
+    const skips: SkipInterval[] = Array.from(bestByType.values()).map((r) => ({
+      type: String(r.skipType).replace("mixed-", ""),
+      start: Number(r.interval?.startTime) || 0,
+      end: Number(r.interval?.endTime) || 0,
+      episodeLength: Number(r.episodeLength) || 0,
+    }));
+
+    return { found: skips.length > 0, skips };
+  } catch {
+    return { found: false, skips: [] };
+  }
+}
+
 export const streamApi = {
-  getStreamUrl: async (animeId: number, episode: number, fresh = false): Promise<MultiStreamResult> => {
-    // Run backend stream resolution and client-side direct resolver concurrently
-    const [backendSettled, clientSettled] = await Promise.allSettled([
-      fetchApi<MultiStreamResult>(`/stream/${animeId}/${episode}${fresh ? "?fresh=1" : ""}`, { timeoutMs: 15000 }),
-      resolveKaaClient(animeId, episode),
-    ]);
+  getStreamUrl: async (
+    animeId: number,
+    episode: number,
+    fresh = false
+  ): Promise<MultiStreamResult> => {
+    const clientPromise = resolveKaaClient(animeId, episode).catch(() => []);
+
+    const isRenderCold = Date.now() < renderColdUntil && !fresh;
+    const backendSafePromise: Promise<MultiStreamResult | null> = isRenderCold
+      ? Promise.resolve(null)
+      : fetchApi<MultiStreamResult>(
+          `/stream/${animeId}/${episode}${fresh ? "?fresh=1" : ""}`,
+          { timeoutMs: 8500, maxAttempts: 1 }
+        ).catch(() => {
+          markRenderColdAndWake();
+          return null;
+        });
+
+    const clientServers = await clientPromise;
+
+    let backendValue: MultiStreamResult | null = null;
+    if (clientServers.length > 0) {
+      // CatStream 1080p SUB/DUB is already ready! Give Render at most 1.8s to add backup servers
+      backendValue = await Promise.race([
+        backendSafePromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1800)),
+      ]);
+    } else if (!isRenderCold) {
+      backendValue = await backendSafePromise;
+    } else {
+      // Render was marked cold AND client KAA had no match — try Render directly up to 6s
+      backendValue = await fetchApi<MultiStreamResult>(
+        `/stream/${animeId}/${episode}${fresh ? "?fresh=1" : ""}`,
+        { timeoutMs: 6000, maxAttempts: 1 }
+      ).catch(() => null);
+    }
 
     let res: MultiStreamResult = { servers: [], default: 0 };
 
-    if (backendSettled.status === "fulfilled" && backendSettled.value?.servers) {
-      res = backendSettled.value;
-      if (res.servers) {
-        res.servers = res.servers.map((s) => ({
+    if (backendValue?.servers) {
+      res = {
+        ...backendValue,
+        servers: backendValue.servers.map((s) => ({
           ...s,
           url: rewriteStreamUrlToEdgeProxy(s.url),
           thumbnails: s.thumbnails ? rewriteStreamUrlToEdgeProxy(s.thumbnails) : s.thumbnails,
@@ -329,14 +332,9 @@ export const streamApi = {
             ...sub,
             url: rewriteStreamUrlToEdgeProxy(sub.url),
           })),
-        }));
-      }
+        })),
+      };
     }
-
-    const clientServers =
-      clientSettled.status === "fulfilled" && Array.isArray(clientSettled.value)
-        ? clientSettled.value
-        : [];
 
     if (clientServers.length > 0) {
       const hasKaa = res.servers?.some((s) => s.id.startsWith("kaa-"));
@@ -376,7 +374,10 @@ export const streamApi = {
 
     // Pick best default server: Soft-subbed HLS with English subtitle track first, then any SUB
     const engSubIdx = res.servers.findIndex(
-      (s) => (s.category || "SUB") === "SUB" && s.subtitles && s.subtitles.some((sub) => sub.lang === "en")
+      (s) =>
+        (s.category || "SUB") === "SUB" &&
+        s.subtitles &&
+        s.subtitles.some((sub) => sub.lang === "en")
     );
     if (engSubIdx !== -1) {
       res.default = engSubIdx;
@@ -388,12 +389,20 @@ export const streamApi = {
     return res;
   },
 
-  /** Intro/outro/recap timestamps (seconds) from AniSkip, proxied through our backend. */
-  getSkipTimes: (animeId: number, episode: number, duration = 0) =>
-    fetchApi<{ found: boolean; skips: SkipInterval[] }>(
-      `/stream/skip-times/${animeId}/${episode}?duration=${Math.round(duration)}`,
-      { timeoutMs: 8000 }
-    ).catch(() => ({ found: false, skips: [] as SkipInterval[] })),
+  /** Intro/outro/recap timestamps (seconds) from AniSkip, with direct browser fallback. */
+  getSkipTimes: async (animeId: number, episode: number, duration = 0) => {
+    if (Date.now() < renderColdUntil) {
+      return fetchAniSkipDirect(animeId, episode, duration);
+    }
+    try {
+      return await fetchApi<{ found: boolean; skips: SkipInterval[] }>(
+        `/stream/skip-times/${animeId}/${episode}?duration=${Math.round(duration)}`,
+        { timeoutMs: 3500, maxAttempts: 1 }
+      );
+    } catch {
+      return fetchAniSkipDirect(animeId, episode, duration);
+    }
+  },
 };
 
 export interface SkipInterval {

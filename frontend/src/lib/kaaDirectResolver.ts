@@ -46,35 +46,37 @@ export async function resolveKaaClient(
       slug = null;
     }
 
-    if (!slug) {
-      const slugApi = BACKEND_URL
-        ? `${BACKEND_URL}/api/stream/slug/${animeId}`
-        : `/api/stream/slug/${animeId}`;
-      try {
-        const slugRes = await fetch(slugApi, { signal: AbortSignal.timeout(7000) })
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null);
-        slug = slugRes?.slug || null;
-      } catch {
-        slug = null;
-      }
-    }
-
-    // Fallback: query MalSync directly through our Vercel Edge proxy if Render returned 503
+    // Prefer Vercel Edge proxy for MalSync first (never sleeps, ~250ms globally)
     if (!slug) {
       try {
         const malSyncRes = await fetch(
           `${STREAM_PROXY_BASE}?url=${encodeURIComponent(`https://api.malsync.moe/mal/anime/${animeId}`)}`,
-          { signal: AbortSignal.timeout(6000) }
+          { signal: AbortSignal.timeout(4500) }
         )
           .then((r) => (r.ok ? r.json() : null))
           .catch(() => null);
         const kaaPages = malSyncRes?.Sites?.KickAssAnime;
         if (kaaPages && typeof kaaPages === "object") {
           const firstEntry: any = Object.values(kaaPages)[0];
-          const identifier: string | undefined = firstEntry?.identifier || firstEntry?.url?.split("/").pop();
+          const identifier: string | undefined =
+            firstEntry?.identifier || firstEntry?.url?.split("/").pop();
           if (identifier) slug = identifier;
         }
+      } catch {
+        slug = null;
+      }
+    }
+
+    // Secondary fallback to backend slug cache if Edge MalSync didn't resolve
+    if (!slug) {
+      const slugApi = BACKEND_URL
+        ? `${BACKEND_URL}/api/stream/slug/${animeId}`
+        : `/api/stream/slug/${animeId}`;
+      try {
+        const slugRes = await fetch(slugApi, { signal: AbortSignal.timeout(3000) })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        slug = slugRes?.slug || null;
       } catch {
         slug = null;
       }
