@@ -1,8 +1,8 @@
 import axios from "axios";
 import NodeCache from "node-cache";
 
-// Cache for API responses (15 minutes TTL, check period every 1 minute)
-const cache = new NodeCache({ stdTTL: 900, checkperiod: 60 });
+// Cache for API responses (60 minutes TTL, check period every 2 minutes)
+const cache = new NodeCache({ stdTTL: 3600, checkperiod: 120 });
 
 const JIKAN_BASE_URL = "https://api.jikan.moe/v4";
 const ANILIST_GRAPHQL_URL = "https://graphql.anilist.co";

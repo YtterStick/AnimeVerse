@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import zlib from "zlib";
 import env from "./config/env";
 import animeRoutes from "./routes/anime";
 import streamRoutes from "./routes/stream";
@@ -37,16 +38,36 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Cache Warmup ───────────────────────────────────────────────────────────
-// Pre-fetches the most visited endpoints so the first real user gets instant
-// cached responses instead of waiting 2-4s for upstream APIs.
-let lastWarmup = 0;
-const WARMUP_INTERVAL = 12 * 60 * 1000; // 12 minutes (cache TTL is 15min)
+// Native gzip compression for JSON responses >1KB (cuts Render container egress by ~85%)
+app.use((req, res, next) => {
+  const acceptEncoding = String(req.headers["accept-encoding"] || "");
+  if (!acceptEncoding.includes("gzip") || req.method === "HEAD") {
+    return next();
+  }
+  const origJson = res.json.bind(res);
+  res.json = (body: any): express.Response => {
+    const payload = JSON.stringify(body);
+    if (!payload || payload.length < 1024 || res.headersSent) {
+      return origJson(body);
+    }
+    const compressed = zlib.gzipSync(Buffer.from(payload, "utf-8"));
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Encoding", "gzip");
+    res.append("Vary", "Accept-Encoding");
+    res.setHeader("Content-Length", String(compressed.length));
+    return res.send(compressed);
+  };
+  next();
+});
+
+// ─── Startup Cache Warmup ───────────────────────────────────────────────────
+// Runs once on boot so the first visitor gets instant cached responses without
+// polling upstream APIs every 10 minutes when idle (saves Service-Initiated bandwidth).
+let warmedOnBoot = false;
 
 async function warmupCache() {
-  const now = Date.now();
-  if (now - lastWarmup < WARMUP_INTERVAL) return; // still warm
-  lastWarmup = now;
+  if (warmedOnBoot) return;
+  warmedOnBoot = true;
 
   console.log("[Warmup] Pre-fetching homepage data...");
   const endpoints = [
@@ -64,19 +85,9 @@ async function warmupCache() {
   }
 }
 
-// Health Check (supports both GET and HEAD on /health and /api/health for cron pingers)
-// Now also triggers cache warmup so the API data is always pre-loaded
+// Ultra-lightweight Health Check (11-byte body, zero upstream network calls)
 const healthHandler = (_req: express.Request, res: express.Response) => {
-  res.status(200).json({
-    status: "ok",
-    uptime: Math.floor(process.uptime()),
-    timestamp: new Date().toISOString(),
-  });
-
-  // Fire warmup after flushing the 200 OK response so health checks return in <5ms
-  setImmediate(() => {
-    warmupCache().catch(() => {});
-  });
+  res.status(200).json({ ok: true });
 };
 
 app.get("/", healthHandler);

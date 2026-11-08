@@ -3,6 +3,12 @@ import { jikanService, GENRE_MAP } from "../services/jikanService";
 
 const router = Router();
 
+// Cache public anime metadata in browsers (5 min) and CDN edges (10 min) to minimize Render bandwidth
+router.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader("Cache-Control", "public, max-age=300, s-maxage=600, stale-while-revalidate=900");
+  next();
+});
+
 // GET /api/anime/genres
 router.get("/genres", (_req: Request, res: Response) => {
   const genres = Object.entries(GENRE_MAP).map(([name, id]) => ({ id, name }));
