@@ -6,6 +6,7 @@ import animeRoutes from "./routes/anime";
 import streamRoutes from "./routes/stream";
 import historyRoutes from "./routes/history";
 import watchlistRoutes from "./routes/watchlist";
+import reportRoutes from "./routes/reports";
 import errorHandler from "./middleware/errorHandler";
 import { jikanService } from "./services/jikanService";
 
@@ -102,6 +103,7 @@ app.use("/api/anime", animeRoutes);
 app.use("/api/stream", streamRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/watchlist", watchlistRoutes);
+app.use("/api/reports", reportRoutes);
 
 // Global Error Handler
 app.use(errorHandler);

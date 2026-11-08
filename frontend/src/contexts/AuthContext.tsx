@@ -20,6 +20,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   isConfigured: boolean;
+  isAdmin: boolean;
   displayName: string;
   avatarUrl: string;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -164,6 +165,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     guestProfile.avatarUrl ||
     DEFAULT_AVATAR;
 
+  const isAdmin = Boolean(
+    user &&
+      (user.email?.toLowerCase().trim() === "andreidilag12@gmail.com" ||
+        user.app_metadata?.role === "admin")
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -171,6 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         loading,
         isConfigured: isSupabaseConfigured,
+        isAdmin,
         displayName,
         avatarUrl,
         signInWithEmail,

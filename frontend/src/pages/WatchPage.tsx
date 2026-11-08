@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
 import { getLocalEpisodeProgress, saveLocalEpisodeProgress, isEpisodeFinished, getEpisodeWatchStatus } from "@/lib/watchProgress";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { ServerSelector } from "@/components/player/ServerSelector";
+import { ReportModal } from "@/components/player/ReportModal";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AnimeSeasons } from "@/components/anime/AnimeSeasons";
@@ -33,6 +34,7 @@ export function WatchPage() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [, setFailedServerIndices] = useState<Set<number>>(new Set());
   const [serverToast, setServerToast] = useState<string | null>(null);
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const [initialTime, setInitialTime] = useState<number>(() => {
     if (!animeId || !episodeNum) return 0;
     const local = getLocalEpisodeProgress(animeId, episodeNum);
@@ -605,6 +607,7 @@ export function WatchPage() {
               serverName={cleanActiveServerName}
               availableServers={multiStream?.servers || []}
               onSelectServer={handleServerChange}
+              onReport={() => setIsReportOpen(true)}
             />
 
         {/* Server Selector */}
@@ -688,6 +691,17 @@ export function WatchPage() {
                     Auto Next
                   </span>
                 </label>
+
+                {/* Report Broken Video Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsReportOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs font-semibold text-amber-300 hover:text-amber-200 cursor-pointer select-none transition-colors"
+                  title="Report a problem with this video stream or server"
+                >
+                  <Flag className="w-3.5 h-3.5 text-amber-400" />
+                  Report
+                </button>
               </div>
             </div>
 
@@ -1051,6 +1065,18 @@ export function WatchPage() {
           )}
         </div>
       </div>
+
+      {/* Video Report Dialog */}
+      <ReportModal
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        animeId={animeId}
+        animeTitle={title}
+        animeImage={coverImage}
+        episodeNumber={episodeNum}
+        serverName={cleanActiveServerName}
+        category={activeServer?.category || "SUB"}
+      />
     </div>
   </div>
 );

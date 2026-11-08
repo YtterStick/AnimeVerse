@@ -9,10 +9,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Heart, History, LogOut, User as UserIcon } from "lucide-react";
+import { Heart, History, LogOut, ShieldAlert, User as UserIcon } from "lucide-react";
 
 export function UserMenu() {
-  const { user, signOut, displayName, avatarUrl } = useAuth();
+  const { user, signOut, displayName, avatarUrl, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -66,6 +66,18 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-border/40 my-1" />
+
+        {isAdmin && (
+          <>
+            <DropdownMenuItem asChild className="focus:bg-amber-500/20 focus:text-amber-300 text-amber-400 font-bold cursor-pointer rounded-lg px-2.5 py-2 text-xs">
+              <Link to="/admin" className="flex items-center w-full">
+                <ShieldAlert className="w-4 h-4 mr-2.5 text-amber-400" />
+                Admin Dashboard (Reports)
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-border/40 my-1" />
+          </>
+        )}
 
         <DropdownMenuItem asChild className="focus:bg-primary/15 focus:text-primary cursor-pointer rounded-lg px-2.5 py-2 text-xs font-medium">
           <Link to="/profile" className="flex items-center w-full">

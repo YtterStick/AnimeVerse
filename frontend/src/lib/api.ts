@@ -4,6 +4,7 @@ import type {
   ApiResponse,
   Episode,
   MultiStreamResult,
+  VideoReport,
   WatchHistoryEntry,
   WatchlistEntry,
 } from "@/types";
@@ -480,5 +481,56 @@ export const watchlistApi = {
   checkInWatchlist: (token: string, animeId: number) =>
     fetchApi<{ exists: boolean }>(`/watchlist/check/${animeId}`, {
       headers: withAuth(token),
+    }),
+};
+
+// ============================================
+// Video Reports Endpoints (Public Submit / Admin Manage)
+// ============================================
+
+export const reportsApi = {
+  submitReport: (
+    data: {
+      anime_id: number;
+      anime_title: string;
+      anime_image?: string | null;
+      episode_number: number;
+      server_name: string;
+      category: string;
+      reason: string;
+      details?: string;
+    },
+    token?: string | null
+  ) =>
+    fetchApi<{ data: VideoReport; message: string }>("/reports", {
+      method: "POST",
+      headers: token ? withAuth(token) : undefined,
+      body: JSON.stringify(data),
+      timeoutMs: 12000,
+      maxAttempts: 2,
+    }),
+
+  getReports: (token: string) =>
+    fetchApi<{ data: VideoReport[] }>("/reports", {
+      headers: withAuth(token),
+      timeoutMs: 12000,
+      maxAttempts: 2,
+    }),
+
+  updateStatus: (token: string, id: string, status: "open" | "resolved") =>
+    fetchApi<{ data: VideoReport }>(`/reports/${id}`, {
+      method: "PATCH",
+      headers: withAuth(token),
+      body: JSON.stringify({ status }),
+      timeoutMs: 12000,
+      maxAttempts: 2,
+    }),
+
+  deleteReport: (token: string, id: string) =>
+    fetchApi<{ message: string; remaining: number }>(`/reports/${id}`, {
+      method: "DELETE",
+      headers: withAuth(token),
+      timeoutMs: 12000,
+      maxAttempts: 2,
     }),
 };

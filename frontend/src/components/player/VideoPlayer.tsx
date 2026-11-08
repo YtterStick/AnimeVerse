@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, Play, RefreshCw } from "lucide-react";
+import { AlertCircle, Flag, Play, RefreshCw } from "lucide-react";
 import Hls from "hls.js";
 import {
   MediaPlayer,
@@ -56,6 +56,7 @@ interface VideoPlayerProps {
   serverName?: string;
   availableServers?: Array<{ id: string; name: string; category?: string }>;
   onSelectServer?: (index: number) => void;
+  onReport?: () => void;
 }
 
 const SKIP_LABELS: Record<string, string> = {
@@ -169,6 +170,7 @@ export function VideoPlayer({
   serverName,
   availableServers,
   onSelectServer,
+  onReport,
 }: VideoPlayerProps) {
   const playerRef = useRef<any>(null);
   const hlsInstanceRef = useRef<Hls | null>(null);
@@ -847,7 +849,7 @@ export function VideoPlayer({
               </div>
             )}
 
-            <div className="flex items-center gap-3 justify-center pt-1">
+            <div className="flex items-center gap-3 justify-center flex-wrap pt-1">
               {lastPlaybackTimeRef.current > 3 && (
                 <button
                   type="button"
@@ -874,6 +876,17 @@ export function VideoPlayer({
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   {lastPlaybackTimeRef.current > 3 ? "Reload Video" : "Retry Stream"}
+                </button>
+              )}
+
+              {onReport && (
+                <button
+                  type="button"
+                  onClick={onReport}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-lg cursor-pointer transition-all"
+                >
+                  <Flag className="w-3.5 h-3.5 text-amber-400" />
+                  Report Broken Video
                 </button>
               )}
             </div>

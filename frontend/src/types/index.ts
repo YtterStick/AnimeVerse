@@ -169,3 +169,21 @@ export interface UserProfile {
   avatar_url: string | null;
   created_at: string;
 }
+
+export interface VideoReport {
+  id: string;
+  anime_id: number;
+  anime_title: string;
+  anime_image: string | null;
+  episode_number: number;
+  server_name: string;
+  category: string;
+  reason: string;
+  details: string;
+  reporter_email: string;
+  status: "open" | "resolved";
+  report_count: number;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}

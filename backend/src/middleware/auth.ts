@@ -65,3 +65,24 @@ export async function optionalAuth(req: AuthRequest, res: Response, next: NextFu
   
   next();
 }
+
+export const ADMIN_EMAILS = ["andreidilag12@gmail.com"];
+
+export function isAdminUser(
+  user?: { email?: string; app_metadata?: Record<string, any> } | null
+): boolean {
+  if (!user) return false;
+  const email = (user.email || "").toLowerCase().trim();
+  if (ADMIN_EMAILS.includes(email)) return true;
+  if (user.app_metadata?.role === "admin") return true;
+  return false;
+}
+
+export async function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
+  await requireAuth(req, res, () => {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    next();
+  });
+}
