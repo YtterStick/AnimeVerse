@@ -17,10 +17,17 @@ const API_BASE = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
 
 /**
  * In production (Vercel), stream/subtitle/playlist proxying runs on our Vercel Edge
- * Streaming Function (`/api/proxy`) so Render uses 0 MB of video bandwidth.
+ * In production (Vercel), stream/subtitle/playlist proxying can route via Cloudflare Worker
+ * (`VITE_STREAM_PROXY_URL`) for 100% unlimited bandwidth, or fallback to Vercel Edge (`/api/proxy`).
  * In local Vite dev (`import.meta.env.DEV`), fall back to the local Express backend proxy.
  */
-export const STREAM_PROXY_BASE = import.meta.env.DEV
+export const CLOUDFLARE_STREAM_PROXY = (
+  import.meta.env.VITE_STREAM_PROXY_URL || ""
+).replace(/\/+$/, "");
+
+export const STREAM_PROXY_BASE = CLOUDFLARE_STREAM_PROXY
+  ? CLOUDFLARE_STREAM_PROXY
+  : import.meta.env.DEV
   ? BACKEND_URL
     ? `${BACKEND_URL}/api/stream/proxy`
     : "/api/stream/proxy"
@@ -50,6 +57,33 @@ const RENDER_STREAM_PROXY = `${RENDER_BASE}/api/stream/proxy`;
 
 function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
   if (!rawUrl) return rawUrl;
+
+  // If a Cloudflare Worker is connected, route ALL video streaming (including AnimeHeaven)
+  // through Cloudflare. This ensures 0 MB of video bandwidth on Render and 0 MB on Vercel!
+  if (CLOUDFLARE_STREAM_PROXY) {
+    let target = rawUrl;
+    let customReferer: string | undefined;
+
+    if (rawUrl.startsWith("/api/stream/proxy") || rawUrl.includes("/api/stream/proxy")) {
+      try {
+        const dummyBase = "http://localhost";
+        const parsed = new URL(rawUrl.startsWith("http") ? rawUrl : `${dummyBase}${rawUrl}`);
+        const real = parsed.searchParams.get("url");
+        if (real) target = real;
+        customReferer = parsed.searchParams.get("referer") || undefined;
+      } catch {}
+    }
+
+    if (target.includes("animeheaven") && !customReferer) {
+      customReferer = "https://animeheaven.me/";
+    }
+
+    let proxied = `${CLOUDFLARE_STREAM_PROXY}?url=${encodeURIComponent(target)}`;
+    if (customReferer) {
+      proxied += `&referer=${encodeURIComponent(customReferer)}`;
+    }
+    return proxied;
+  }
 
   // AnimeHeaven (animeheaven.me) blocks cross-site browser requests (via Sec-Fetch-Site: cross-site)
   // and blocks Vercel Edge proxies (via X-Vercel-Id) with 400 Bad Request.
