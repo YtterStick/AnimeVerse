@@ -22,7 +22,7 @@ const API_BASE = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
  * In local Vite dev (`import.meta.env.DEV`), fall back to the local Express backend proxy.
  */
 export const CLOUDFLARE_STREAM_PROXY = (
-  import.meta.env.VITE_STREAM_PROXY_URL || ""
+  import.meta.env.VITE_STREAM_PROXY_URL || "https://aniverse-stream.andreidilag12.workers.dev"
 ).replace(/\/+$/, "");
 
 export const STREAM_PROXY_BASE = CLOUDFLARE_STREAM_PROXY
@@ -52,52 +52,42 @@ function markRenderColdAndWake(): void {
   }
 }
 
-const RENDER_BASE = BACKEND_URL || "https://animeverse-z6p4.onrender.com";
-const RENDER_STREAM_PROXY = `${RENDER_BASE}/api/stream/proxy`;
+// Vercel Node serverless streaming endpoint for AnimeHeaven direct MP4s (bypasses cf-worker & X-Vercel-Id)
+const VERCEL_NODE_STREAM_PROXY = "/api/stream";
 
 function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
   if (!rawUrl) return rawUrl;
 
-  // If a Cloudflare Worker is connected, route ALL video streaming (including AnimeHeaven)
-  // through Cloudflare. This ensures 0 MB of video bandwidth on Render and 0 MB on Vercel!
+  let target = rawUrl;
+  let customReferer: string | undefined;
+
+  // Extract raw URL if it was already wrapped in a proxy path
+  if (rawUrl.startsWith("/api/stream/proxy") || rawUrl.includes("/api/stream/proxy")) {
+    try {
+      const dummyBase = "http://localhost";
+      const parsed = new URL(rawUrl.startsWith("http") ? rawUrl : `${dummyBase}${rawUrl}`);
+      const real = parsed.searchParams.get("url");
+      if (real) target = real;
+      customReferer = parsed.searchParams.get("referer") || undefined;
+    } catch {}
+  }
+
+  // 1. AnimeHeaven (animeheaven.me) requires pure Node.js runtime (AWS Lambda on Vercel)
+  // because AnimeHeaven WAF detects and caps Cloudflare Workers (via Cf-Worker) and Vercel Edge (via X-Vercel-Id).
+  // Routing to Vercel Node (/api/stream) serves the full 1080p MP4 without touching Render bandwidth!
+  if (target.includes("animeheaven")) {
+    const referer = customReferer || "https://animeheaven.me/";
+    return `${VERCEL_NODE_STREAM_PROXY}?url=${encodeURIComponent(target)}&referer=${encodeURIComponent(referer)}`;
+  }
+
+  // 2. All other anime streaming providers (HLS, M3U8, Kaal.lt, CatStream, GogoAnime)
+  // route through your live Cloudflare Worker with 100% UNLIMITED free bandwidth!
   if (CLOUDFLARE_STREAM_PROXY) {
-    let target = rawUrl;
-    let customReferer: string | undefined;
-
-    if (rawUrl.startsWith("/api/stream/proxy") || rawUrl.includes("/api/stream/proxy")) {
-      try {
-        const dummyBase = "http://localhost";
-        const parsed = new URL(rawUrl.startsWith("http") ? rawUrl : `${dummyBase}${rawUrl}`);
-        const real = parsed.searchParams.get("url");
-        if (real) target = real;
-        customReferer = parsed.searchParams.get("referer") || undefined;
-      } catch {}
-    }
-
-    if (target.includes("animeheaven") && !customReferer) {
-      customReferer = "https://animeheaven.me/";
-    }
-
     let proxied = `${CLOUDFLARE_STREAM_PROXY}?url=${encodeURIComponent(target)}`;
     if (customReferer) {
       proxied += `&referer=${encodeURIComponent(customReferer)}`;
     }
     return proxied;
-  }
-
-  // AnimeHeaven (animeheaven.me) blocks cross-site browser requests (via Sec-Fetch-Site: cross-site)
-  // and blocks Vercel Edge proxies (via X-Vercel-Id) with 400 Bad Request.
-  // It MUST be proxied through our Node/Express backend on Render which strips these headers.
-  if (rawUrl.includes("animeheaven")) {
-    if (rawUrl.startsWith("/api/stream/proxy")) {
-      return `${RENDER_BASE}${rawUrl}`;
-    }
-    if (rawUrl.startsWith("http")) {
-      if (rawUrl.includes("/api/stream/proxy")) {
-        return rawUrl;
-      }
-      return `${RENDER_STREAM_PROXY}?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://animeheaven.me/")}`;
-    }
   }
 
   if (rawUrl.startsWith("/api/stream/proxy")) {

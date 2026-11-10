@@ -28,3 +28,4 @@ Send that URL here or add it to your Vercel Environment Variables:
 * Value: `https://aniverse-stream.<your-subdomain>.workers.dev`
 
 Once added, **0 bytes of video bandwidth** will ever touch Render!
+
