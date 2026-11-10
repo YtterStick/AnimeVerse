@@ -1,4 +1,10 @@
+import dns from "dns";
 import express from "express";
+
+// Force IPv4 first for upstream proxy requests (prevents timeouts/drops on dead IPv6 addresses)
+try {
+  dns.setDefaultResultOrder("ipv4first");
+} catch {}
 import cors from "cors";
 import zlib from "zlib";
 import env from "./config/env";
