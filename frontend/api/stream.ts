@@ -59,6 +59,8 @@ export default async function handler(req: any, res: any) {
     const upstreamHeaders: Record<string, string> = {
       "User-Agent": USER_AGENT,
       Referer: referer,
+      "X-Vercel-Id": "0",
+      "cf-worker": "0",
       ...extraHeaders,
     };
     if (rangeHeader) {

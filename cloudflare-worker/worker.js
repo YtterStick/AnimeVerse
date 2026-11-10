@@ -103,6 +103,8 @@ export default {
       const upstreamHeaders = {
         "User-Agent": USER_AGENT,
         Referer: referer,
+        "cf-worker": "0",
+        "X-Vercel-Id": "0",
         ...extraHeaders,
       };
       if (rangeHeader) {
