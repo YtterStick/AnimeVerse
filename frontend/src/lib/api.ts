@@ -52,8 +52,7 @@ function markRenderColdAndWake(): void {
   }
 }
 
-// Vercel Node serverless streaming endpoint for AnimeHeaven direct MP4s (bypasses cf-worker & X-Vercel-Id)
-const VERCEL_NODE_STREAM_PROXY = "/api/stream";
+// Route video streams through Cloudflare Worker with unlimited free bandwidth
 
 function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
   if (!rawUrl) return rawUrl;
@@ -72,16 +71,12 @@ function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
     } catch {}
   }
 
-  // 1. AnimeHeaven (animeheaven.me) requires pure Node.js runtime (AWS Lambda on Vercel)
-  // because AnimeHeaven WAF detects and caps Cloudflare Workers (via Cf-Worker) and Vercel Edge (via X-Vercel-Id).
-  // Routing to Vercel Node (/api/stream) serves the full 1080p MP4 without touching Render bandwidth!
-  if (target.includes("animeheaven")) {
-    const referer = customReferer || "https://animeheaven.me/";
-    return `${VERCEL_NODE_STREAM_PROXY}?url=${encodeURIComponent(target)}&referer=${encodeURIComponent(referer)}`;
+  if (target.includes("animeheaven") && !customReferer) {
+    customReferer = "https://animeheaven.me/";
   }
 
-  // 2. All other anime streaming providers (HLS, M3U8, Kaal.lt, CatStream, GogoAnime)
-  // route through your live Cloudflare Worker with 100% UNLIMITED free bandwidth!
+  // Route 100% of video streaming through your live Cloudflare Worker!
+  // This uses 100% UNLIMITED free bandwidth and takes 0 MB of bandwidth from Render.
   if (CLOUDFLARE_STREAM_PROXY) {
     let proxied = `${CLOUDFLARE_STREAM_PROXY}?url=${encodeURIComponent(target)}`;
     if (customReferer) {
