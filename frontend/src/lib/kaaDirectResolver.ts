@@ -46,8 +46,24 @@ export async function resolveKaaClient(
       slug = null;
     }
 
-    // Prefer Vercel Edge proxy for MalSync first (never sleeps, ~250ms globally)
+    // Prefer our backend slug resolver (never hits Cloudflare Workers MalSync 1106 403 block and caches for 24h)
     if (!slug) {
+      const slugApi = BACKEND_URL
+        ? `${BACKEND_URL}/api/stream/slug/${animeId}`
+        : `/api/stream/slug/${animeId}`;
+      try {
+        const slugRes = await fetch(slugApi, { signal: AbortSignal.timeout(6000) })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        slug = slugRes?.slug || null;
+      } catch {
+        slug = null;
+      }
+    }
+
+    // Only use proxy MalSync fallback if STREAM_PROXY_BASE is not a Cloudflare Worker
+    // (MalSync's Cloudflare WAF returns 403 error 1106 to *.workers.dev IPs)
+    if (!slug && !STREAM_PROXY_BASE.includes("workers.dev")) {
       try {
         const malSyncRes = await fetch(
           `${STREAM_PROXY_BASE}?url=${encodeURIComponent(`https://api.malsync.moe/mal/anime/${animeId}`)}`,
@@ -62,21 +78,6 @@ export async function resolveKaaClient(
             firstEntry?.identifier || firstEntry?.url?.split("/").pop();
           if (identifier) slug = identifier;
         }
-      } catch {
-        slug = null;
-      }
-    }
-
-    // Secondary fallback to backend slug cache if Edge MalSync didn't resolve
-    if (!slug) {
-      const slugApi = BACKEND_URL
-        ? `${BACKEND_URL}/api/stream/slug/${animeId}`
-        : `/api/stream/slug/${animeId}`;
-      try {
-        const slugRes = await fetch(slugApi, { signal: AbortSignal.timeout(3000) })
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null);
-        slug = slugRes?.slug || null;
       } catch {
         slug = null;
       }

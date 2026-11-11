@@ -1,9 +1,11 @@
 import dns from "dns";
+import net from "net";
 import express from "express";
 
-// Force IPv4 first for upstream proxy requests (prevents timeouts/drops on dead IPv6 addresses)
+// Force IPv4 first and disable Node Happy Eyeballs dual-stack racing (prevents 250ms AggregateError on dead IPv6 addresses)
 try {
   dns.setDefaultResultOrder("ipv4first");
+  (net as any).setDefaultAutoSelectFamily?.(false);
 } catch {}
 import cors from "cors";
 import zlib from "zlib";

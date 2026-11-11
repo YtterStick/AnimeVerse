@@ -1,9 +1,23 @@
 import { Router, Request, Response, NextFunction } from "express";
+import http from "http";
+import https from "https";
 import axios from "axios";
 import ConsumetStreamProvider from "../services/consumetStreamProvider";
 
 const router = Router();
 const streamProvider = new ConsumetStreamProvider();
+
+// Explicit IPv4 agents avoid dual-stack Happy Eyeballs 250ms timeouts against hosts with unreachable IPv6 (e.g. *.animeheaven.me)
+const ipv4HttpAgent = new http.Agent({ keepAlive: true, family: 4 });
+const ipv4HttpsAgent = new https.Agent({ keepAlive: true, family: 4 });
+
+function formatAxiosError(err: any): string {
+  if (err?.message) return err.message;
+  if (Array.isArray(err?.errors) && err.errors.length > 0) {
+    return err.errors.map((e: any) => e?.code || e?.message || String(e)).join("; ");
+  }
+  return err?.code || "Unknown upstream error";
+}
 
 /**
  * Clean malformed URLs (e.g. "https:///subbl.krussdomi.com/..." or "https:////bl.krussdomi.com/...")
@@ -347,6 +361,8 @@ router.get("/proxy", async (req: Request, res: Response) => {
         if (isSubtitle) {
           const response = await axios.get(url, {
             headers: headerAttempts[i],
+            httpAgent: ipv4HttpAgent,
+            httpsAgent: ipv4HttpsAgent,
             responseType: "text",
             timeout: 15000,
           });
@@ -367,6 +383,8 @@ router.get("/proxy", async (req: Request, res: Response) => {
         if (isPlaylist) {
           const response = await axios.get(url, {
             headers: headerAttempts[i],
+            httpAgent: ipv4HttpAgent,
+            httpsAgent: ipv4HttpsAgent,
             responseType: "text",
             timeout: 15000,
           });
@@ -390,6 +408,8 @@ router.get("/proxy", async (req: Request, res: Response) => {
         // Binary mode for segments (.jpg, .ts, .m4s) and .mp4 streams
         const response = await axios.get(url, {
           headers: headerAttempts[i],
+          httpAgent: ipv4HttpAgent,
+          httpsAgent: ipv4HttpsAgent,
           responseType: "stream",
           timeout: 30000,
           validateStatus: (status) => status >= 200 && status < 300,
@@ -444,7 +464,7 @@ router.get("/proxy", async (req: Request, res: Response) => {
       }
     }
   } catch (error: any) {
-    console.error("[StreamProxy] Error proxying stream:", error.message);
+    console.error("[StreamProxy] Error proxying stream:", formatAxiosError(error));
     if (!res.headersSent) {
       res.status(502).send("Failed to proxy streaming resource");
     }
@@ -461,6 +481,8 @@ router.get("/debug/proxy-test", async (req: Request, res: Response) => {
     try {
       const resp = await axios.get(target, {
         headers: headerAttempts[i],
+        httpAgent: ipv4HttpAgent,
+        httpsAgent: ipv4HttpsAgent,
         responseType: "stream",
         timeout: 8000,
         validateStatus: (s) => s >= 200 && s < 300,
@@ -469,7 +491,7 @@ router.get("/debug/proxy-test", async (req: Request, res: Response) => {
       resp.data.destroy();
       return res.json({ success: true, results });
     } catch (err: any) {
-      results.push({ attempt: i, ok: false, status: err.response?.status, error: err.message, ms: Date.now() - started });
+      results.push({ attempt: i, ok: false, status: err.response?.status, error: formatAxiosError(err), ms: Date.now() - started });
     }
   }
   res.status(502).json({ success: false, results });
