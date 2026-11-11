@@ -90,16 +90,21 @@ function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
 
   // 1. AnimeHeaven (animeheaven.me) blocks cross-site browser requests (400 Bad Request)
   // and caps fetch()-based proxies to a 600KB teaser clip.
-  // Route through Render Node/Express backend which serves the full 1080p video reliably.
+  // In production with Cloudflare Worker (which uses raw TLS sockets + Render 307 fallback),
+  // route AnimeHeaven through STREAM_PROXY_BASE so Render uses 0 MB of video bandwidth.
   if (rawUrl.includes("animeheaven")) {
-    if (rawUrl.startsWith("/api/stream/proxy")) {
-      return `${RENDER_BASE}${rawUrl}`;
-    }
-    if (rawUrl.startsWith("http")) {
-      if (rawUrl.includes("/api/stream/proxy")) {
-        return rawUrl;
+    if (!STREAM_PROXY_BASE.includes("workers.dev")) {
+      if (rawUrl.startsWith("/api/stream/proxy")) {
+        return `${RENDER_BASE}${rawUrl}`;
       }
-      return `${RENDER_STREAM_PROXY}?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://animeheaven.me/")}`;
+      if (rawUrl.startsWith("http")) {
+        if (rawUrl.includes("/api/stream/proxy")) {
+          return rawUrl;
+        }
+        return `${RENDER_STREAM_PROXY}?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://animeheaven.me/")}`;
+      }
+    } else if (rawUrl.startsWith("http") && !rawUrl.includes("/api/stream/proxy")) {
+      return `${STREAM_PROXY_BASE}?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://animeheaven.me/")}`;
     }
   }
 
