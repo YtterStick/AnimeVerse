@@ -115,13 +115,30 @@ function rewriteThumbnailVtt(
  * and optionally pin the desired audio track ("jpn" for SUB, "eng" for DUB)
  * and/or pin a specific resolution (e.g. "1080p", "720p", "360p").
  */
+function sanitizeSegProxyBase(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = new URL(raw.trim());
+    const host = parsed.hostname.toLowerCase();
+    const isAllowed =
+      (parsed.protocol === "https:" && host.endsWith(".workers.dev")) ||
+      host === "localhost" ||
+      host === "127.0.0.1";
+    if (!isAllowed) return undefined;
+    return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, "");
+  } catch {
+    return undefined;
+  }
+}
+
 function rewriteM3U8(
   content: string,
   parentUrl: string,
   proxyBaseUrl: string,
   audioPref?: string,
   customReferer?: string,
-  qualityPref?: string
+  qualityPref?: string,
+  segmentProxyBase?: string
 ): string {
   let rawLines = content.replace(/\r\n/g, "\n").split("\n");
   const parentBase = parentUrl.substring(0, parentUrl.lastIndexOf("/") + 1);
@@ -209,9 +226,24 @@ function rewriteM3U8(
     if (isDirectCorsSafeSegment(targetUrl)) {
       return targetUrl;
     }
+    const isChildPlaylist =
+      !/\.(?:jpg|jpeg|png|webp|ts|m4s|aac|key|mp4|vtt|srt)(?:[?#]|$)/i.test(targetUrl) &&
+      /(?:\.m3u8(?:[?#]|$)|\/playlist\/|\/manifest\/)/i.test(targetUrl);
+
+    if (segmentProxyBase && !isChildPlaylist) {
+      let segLink = `${segmentProxyBase}/?url=${encodeURIComponent(targetUrl)}`;
+      if (customReferer) {
+        segLink += `&referer=${encodeURIComponent(customReferer)}`;
+      }
+      return segLink;
+    }
+
     let link = `${proxyBaseUrl}?url=${encodeURIComponent(targetUrl)}`;
     if (customReferer) {
       link += `&referer=${encodeURIComponent(customReferer)}`;
+    }
+    if (segmentProxyBase && isChildPlaylist) {
+      link += `&segProxy=${encodeURIComponent(segmentProxyBase)}`;
     }
     return link;
   };
@@ -305,6 +337,15 @@ router.get("/proxy", async (req: Request, res: Response) => {
     const audioPref = typeof req.query.audio === "string" ? req.query.audio : undefined;
     const qualityPref = typeof req.query.quality === "string" ? req.query.quality : undefined;
     const customReferer = typeof req.query.referer === "string" ? req.query.referer : undefined;
+    const segProxyBase = sanitizeSegProxyBase(
+      typeof req.query.segProxy === "string" ? req.query.segProxy : undefined
+    );
+    const forwardedProto = String(req.get("x-forwarded-proto") || req.protocol || "https")
+      .split(",")[0]
+      .trim();
+    const hostHeader = req.get("host");
+    const playlistProxyBase =
+      segProxyBase && hostHeader ? `${forwardedProto}://${hostHeader}/api/stream/proxy` : "/api/stream/proxy";
 
     if (!rawUrl || typeof rawUrl !== "string") {
       return res.status(400).send("Missing target URL");
@@ -344,7 +385,10 @@ router.get("/proxy", async (req: Request, res: Response) => {
     }
 
     const isSubtitle = /\.(vtt|srt|ass|ssa)(?:[?#]|$)/i.test(url);
-    const isPlaylist = !isSubtitle && /(?:\.m3u8(?:[?#]|$)|\/playlist\/)/i.test(url);
+    const isPlaylist =
+      !isSubtitle &&
+      !/\.(?:jpg|jpeg|png|webp|ts|m4s|mp4)(?:[?#]|$)/i.test(url) &&
+      /(?:\.m3u8(?:[?#]|$)|\/playlist\/|\/manifest\/)/i.test(url);
     const isMp4 = /video\.mp4|\.mp4(?:[?#]|$)/i.test(url);
 
     // If client is requesting an MP4 and didn't provide a Range header,
@@ -373,7 +417,8 @@ router.get("/proxy", async (req: Request, res: Response) => {
           const rawText = String(response.data || "");
           const isThumbnailVtt = /#xywh=|\.(?:jpg|jpeg|png|webp)/i.test(rawText);
           if (isThumbnailVtt) {
-            res.send(rewriteThumbnailVtt(rawText, url, "/api/stream/proxy", referer));
+            const thumbProxy = segProxyBase ? `${segProxyBase}/` : "/api/stream/proxy";
+            res.send(rewriteThumbnailVtt(rawText, url, thumbProxy, referer));
           } else {
             res.send(ensureWebVtt(rawText));
           }
@@ -396,10 +441,11 @@ router.get("/proxy", async (req: Request, res: Response) => {
           const rewritten = rewriteM3U8(
             String(response.data || ""),
             url,
-            "/api/stream/proxy",
+            playlistProxyBase,
             audioPref,
             referer,
-            qualityPref
+            qualityPref,
+            segProxyBase
           );
           res.send(rewritten);
           return;

@@ -1,5 +1,5 @@
 import type { StreamServer, SubtitleTrack } from "@/types";
-import { BACKEND_URL, STREAM_PROXY_BASE } from "./api";
+import { BACKEND_URL, STREAM_PROXY_BASE, buildStreamProxyUrl } from "./api";
 import { getCleanServerName } from "./serverNames";
 
 const decodeHtml = (str: string) => {
@@ -20,12 +20,8 @@ const sanitizeUrl = (raw: string) => {
     .replace(/^http:\/\//i, "https://");
 };
 
-const buildProxyUrl = (url: string, audio?: "jpn" | "eng", quality?: string) => {
-  let full = `${STREAM_PROXY_BASE}?url=${encodeURIComponent(sanitizeUrl(url))}`;
-  if (audio) full += `&audio=${audio}`;
-  if (quality) full += `&quality=${encodeURIComponent(quality)}`;
-  return full;
-};
+const buildProxyUrl = (url: string, audio?: "jpn" | "eng", quality?: string) =>
+  buildStreamProxyUrl(sanitizeUrl(url), { audio, quality });
 
 /**
  * Direct client-side KickAssAnime resolver.

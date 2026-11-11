@@ -545,9 +545,17 @@ function parseTotalBytesFromHeaders(headers, status) {
   return 0;
 }
 
+function buildRenderPlaylistFallbackUrl({ url, referer, audioPref, qualityPref, workerOrigin }) {
+  let target = `${RENDER_STREAM_PROXY}?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}&segProxy=${encodeURIComponent(workerOrigin)}`;
+  if (audioPref) target += `&audio=${encodeURIComponent(audioPref)}`;
+  if (qualityPref) target += `&quality=${encodeURIComponent(qualityPref)}`;
+  return target;
+}
+
 async function formatProxiedResponse({
   upstream,
   url,
+  workerOrigin,
   workerProxyBase,
   referer,
   audioPref,
@@ -596,6 +604,23 @@ async function formatProxiedResponse({
           ...CORS_HEADERS,
           "Content-Type": "application/vnd.apple.mpegurl",
           "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+      });
+    }
+
+    if (isPlaylistUrl) {
+      return new Response(null, {
+        status: 307,
+        headers: {
+          ...CORS_HEADERS,
+          Location: buildRenderPlaylistFallbackUrl({
+            url,
+            referer,
+            audioPref,
+            qualityPref,
+            workerOrigin,
+          }),
+          "Cache-Control": "no-store",
         },
       });
     }
@@ -693,11 +718,15 @@ export default {
       }
 
       const method = request.method === "HEAD" ? "HEAD" : "GET";
-      const workerProxyBase = `${reqUrl.origin}/`;
+      const workerOrigin = reqUrl.origin;
+      const workerProxyBase = `${workerOrigin}/`;
       const referer = resolveRefererForTarget(targetUrl, customReferer);
       const isAnimeHeaven = targetUrl.hostname.toLowerCase().includes("animeheaven");
       const isSubtitle = /\.(vtt|srt|ass|ssa)(?:[?#]|$)/i.test(url);
-      const isPlaylistUrl = !isSubtitle && /(?:\.m3u8(?:[?#]|$)|\/playlist\/)/i.test(url);
+      const isPlaylistUrl =
+        !isSubtitle &&
+        !/\.(?:jpg|jpeg|png|webp|ts|m4s|mp4)(?:[?#]|$)/i.test(url) &&
+        /(?:\.m3u8(?:[?#]|$)|\/playlist\/|\/manifest\/)/i.test(url);
       const isMp4 = /video\.mp4|\.mp4(?:[?#]|$)/i.test(url);
 
       let rangeHeader = request.headers.get("range") || undefined;
@@ -719,6 +748,7 @@ export default {
             return formatProxiedResponse({
               upstream: socketRes,
               url,
+              workerOrigin,
               workerProxyBase,
               referer,
               audioPref,
@@ -778,6 +808,7 @@ export default {
         return formatProxiedResponse({
           upstream,
           url,
+          workerOrigin,
           workerProxyBase,
           referer,
           audioPref,
@@ -796,6 +827,7 @@ export default {
             return formatProxiedResponse({
               upstream: socketRes,
               url,
+              workerOrigin,
               workerProxyBase,
               referer,
               audioPref,
@@ -810,6 +842,24 @@ export default {
         } catch {
           // Ignore socket error (e.g. restricted Cloudflare proxy IP) and return upstream status
         }
+      }
+
+      // Fallback to Render playlist proxy if upstream rate-limits or rejects Cloudflare Worker IPs on .m3u8 playlists
+      if (isPlaylistUrl && (lastStatus === 403 || lastStatus === 429 || lastStatus >= 500)) {
+        return new Response(null, {
+          status: 307,
+          headers: {
+            ...CORS_HEADERS,
+            Location: buildRenderPlaylistFallbackUrl({
+              url,
+              referer,
+              audioPref,
+              qualityPref,
+              workerOrigin,
+            }),
+            "Cache-Control": "no-store",
+          },
+        });
       }
 
       return new Response("Upstream streaming source rejected request", {
