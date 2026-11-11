@@ -82,8 +82,9 @@ function createResilientHlsLoader(): any {
     load(context: any, config: any, callbacks: any) {
       const originalUrl: string = context.url;
       const targetHost = extractProxyTargetHost(originalUrl);
+      const renderFallbackUrl = toRenderFallbackProxyUrl(originalUrl);
       const preemptiveFallback = isWorkerHostTemporarilyBypassed(originalUrl)
-        ? toRenderFallbackProxyUrl(originalUrl)
+        ? renderFallbackUrl
         : null;
 
       if (preemptiveFallback) {
@@ -111,11 +112,25 @@ function createResilientHlsLoader(): any {
 
       const wrappedCallbacks = {
         ...callbacks,
+        onSuccess: (response: any, stats: any, ctx: any, networkDetails: any) => {
+          // If Cloudflare Worker returned a 307 redirect to Render to avoid upstream WAF 403s,
+          // xhr.responseURL points to Render's /api/stream/proxy endpoint. Cache the host bypass
+          // briefly so subsequent chunks skip the extra 307 round-trip without logging 403s.
+          if (
+            renderFallbackUrl &&
+            targetHost &&
+            typeof response?.url === "string" &&
+            response.url.includes("/api/stream/proxy")
+          ) {
+            workerBlockedHostsUntil.set(targetHost, Date.now() + WORKER_HOST_BYPASS_TTL_MS);
+          }
+          callbacks.onSuccess?.(response, stats, ctx, networkDetails);
+        },
         onError: (error: { code: number; text: string }, ctx: any, networkDetails: any, stats: any) => {
           const shouldTryRender =
             !fallbackAttempted &&
             (error.code === 403 || error.code === 429 || error.code >= 500 || error.code === 0);
-          const fallbackUrl = shouldTryRender ? toRenderFallbackProxyUrl(originalUrl) : null;
+          const fallbackUrl = shouldTryRender ? renderFallbackUrl : null;
 
           if (!fallbackUrl) {
             callbacks.onError?.(error, ctx, networkDetails, stats);

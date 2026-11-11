@@ -588,11 +588,24 @@ function parseTotalBytesFromHeaders(headers, status) {
   return 0;
 }
 
-function buildRenderPlaylistFallbackUrl({ url, referer, audioPref, qualityPref, workerOrigin }) {
-  let target = `${RENDER_STREAM_PROXY}?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}&segProxy=${encodeURIComponent(workerOrigin)}`;
+function buildRenderFallbackUrl({ url, referer, audioPref, qualityPref, workerOrigin, includePlaylistParams = false }) {
+  let target = `${RENDER_STREAM_PROXY}?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
+  if (!includePlaylistParams) return target;
+  if (workerOrigin) target += `&segProxy=${encodeURIComponent(workerOrigin)}`;
   if (audioPref) target += `&audio=${encodeURIComponent(audioPref)}`;
   if (qualityPref) target += `&quality=${encodeURIComponent(qualityPref)}`;
   return target;
+}
+
+function buildRenderRedirectResponse(params) {
+  return new Response(null, {
+    status: 307,
+    headers: {
+      ...CORS_HEADERS,
+      Location: buildRenderFallbackUrl(params),
+      "Cache-Control": "no-store",
+    },
+  });
 }
 
 async function formatProxiedResponse({
@@ -652,19 +665,13 @@ async function formatProxiedResponse({
     }
 
     if (isPlaylistUrl) {
-      return new Response(null, {
-        status: 307,
-        headers: {
-          ...CORS_HEADERS,
-          Location: buildRenderPlaylistFallbackUrl({
-            url,
-            referer,
-            audioPref,
-            qualityPref,
-            workerOrigin,
-          }),
-          "Cache-Control": "no-store",
-        },
+      return buildRenderRedirectResponse({
+        url,
+        referer,
+        audioPref,
+        qualityPref,
+        workerOrigin,
+        includePlaylistParams: true,
       });
     }
 
@@ -807,15 +814,7 @@ export default {
           // Fall through to Render fallback
         }
 
-        const renderFallbackUrl = `${RENDER_STREAM_PROXY}?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
-        return new Response(null, {
-          status: 307,
-          headers: {
-            ...CORS_HEADERS,
-            Location: renderFallbackUrl,
-            "Cache-Control": "no-store",
-          },
-        });
+        return buildRenderRedirectResponse({ url, referer });
       }
 
       // Standard fetch() ladder (Origin + Referer preserved on Krussdomi/.xyz CDNs to avoid WAF 403s)
@@ -892,21 +891,21 @@ export default {
         }
       }
 
-      // Fallback to Render proxy if upstream rate-limits/blocks Cloudflare Worker on small text resources (.m3u8 / .vtt)
-      if ((isPlaylistUrl || isSubtitle) && (lastStatus === 403 || lastStatus === 429 || lastStatus >= 500)) {
-        return new Response(null, {
-          status: 307,
-          headers: {
-            ...CORS_HEADERS,
-            Location: buildRenderPlaylistFallbackUrl({
-              url,
-              referer,
-              audioPref,
-              qualityPref,
-              workerOrigin,
-            }),
-            "Cache-Control": "no-store",
-          },
+      // Fallback to Render proxy if upstream rate-limits or WAF-blocks this Cloudflare edge POP.
+      // Returning 307 instead of 403 lets the browser redirect transparently to Render with zero console errors.
+      const shouldFallbackToRender =
+        lastStatus === 403 ||
+        lastStatus === 429 ||
+        ((isPlaylistUrl || isSubtitle) && lastStatus >= 500);
+
+      if (shouldFallbackToRender) {
+        return buildRenderRedirectResponse({
+          url,
+          referer,
+          audioPref,
+          qualityPref,
+          workerOrigin,
+          includePlaylistParams: isPlaylistUrl || isSubtitle,
         });
       }
 
