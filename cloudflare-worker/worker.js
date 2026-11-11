@@ -7,6 +7,9 @@ import { connect } from "cloudflare:sockets";
  */
 
 const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+
+const FIREFOX_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
 
 const RENDER_STREAM_PROXY = "https://animeverse-z6p4.onrender.com/api/stream/proxy";
@@ -15,7 +18,8 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "Range, Content-Type, Accept, Origin",
-  "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges, Content-Type",
+  "Access-Control-Expose-Headers":
+    "Content-Length, Content-Range, Accept-Ranges, Content-Type, X-Upstream-Status, X-Proxy-Source",
 };
 
 function sanitizeRemoteUrl(rawUrl) {
@@ -252,6 +256,18 @@ function resolveRefererForTarget(targetUrl, customReferer) {
   return `${targetUrl.origin}/`;
 }
 
+function requiresOriginReferer(hostname) {
+  const lower = hostname.toLowerCase();
+  return (
+    lower.includes("krussdomi") ||
+    lower.includes("advancedairesearchlab") ||
+    lower.includes("habibikun") ||
+    lower.includes("babybayw") ||
+    lower.includes("narutokun") ||
+    lower.endsWith(".xyz")
+  );
+}
+
 function buildProxyHeaders(targetUrl, referer, rangeHeader) {
   const origin = targetUrl.origin;
   const refererOrigin = (() => {
@@ -263,6 +279,10 @@ function buildProxyHeaders(targetUrl, referer, rangeHeader) {
   })();
 
   const baseRange = rangeHeader ? { Range: rangeHeader } : {};
+  const browserAccept = {
+    Accept: "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
 
   // AnimeHeaven requires Cookie: key=<token> extracted from query params
   const extraHeaders = {};
@@ -273,38 +293,61 @@ function buildProxyHeaders(targetUrl, referer, rangeHeader) {
     }
   }
 
-  return [
+  const attempts = [
     {
       Referer: referer,
       Origin: refererOrigin,
       "User-Agent": USER_AGENT,
+      ...browserAccept,
       ...extraHeaders,
       ...baseRange,
     },
     {
       Referer: referer,
-      "User-Agent": USER_AGENT,
-      ...extraHeaders,
-      ...baseRange,
-    },
-    {
-      Referer: "https://krussdomi.com/",
-      Origin: "https://krussdomi.com",
-      "User-Agent": USER_AGENT,
-      ...baseRange,
-    },
-    {
-      Referer: `${origin}/`,
-      "User-Agent": USER_AGENT,
-      ...extraHeaders,
-      ...baseRange,
-    },
-    {
-      "User-Agent": USER_AGENT,
+      Origin: refererOrigin,
+      "User-Agent": FIREFOX_USER_AGENT,
+      ...browserAccept,
       ...extraHeaders,
       ...baseRange,
     },
   ];
+
+  if (referer !== "https://krussdomi.com/") {
+    attempts.push({
+      Referer: "https://krussdomi.com/",
+      Origin: "https://krussdomi.com",
+      "User-Agent": USER_AGENT,
+      ...browserAccept,
+      ...baseRange,
+    });
+  }
+
+  // Upstreams behind Cloudflare WAF (krussdomi / .xyz) return 403 whenever Origin is stripped,
+  // so only omit Origin on non-Krussdomi hosts to avoid masking 404s or triggering WAF blocks.
+  if (!requiresOriginReferer(targetUrl.hostname)) {
+    attempts.push(
+      {
+        Referer: referer,
+        "User-Agent": USER_AGENT,
+        ...browserAccept,
+        ...extraHeaders,
+        ...baseRange,
+      },
+      {
+        Referer: `${origin}/`,
+        "User-Agent": USER_AGENT,
+        ...extraHeaders,
+        ...baseRange,
+      },
+      {
+        "User-Agent": USER_AGENT,
+        ...extraHeaders,
+        ...baseRange,
+      }
+    );
+  }
+
+  return attempts;
 }
 
 function concatBytes(a, b) {
@@ -775,7 +818,8 @@ export default {
         });
       }
 
-      // Standard fetch() ladder (attempt 1 sends BOTH Referer and Origin, which krussdomi/advancedairesearchlab requires)
+      // Standard fetch() ladder (Origin + Referer preserved on Krussdomi/.xyz CDNs to avoid WAF 403s)
+      const originRequired = requiresOriginReferer(targetUrl.hostname);
       let lastStatus = 502;
       for (let i = 0; i < headerAttempts.length; i++) {
         let upstream;
@@ -784,7 +828,7 @@ export default {
             method,
             headers: headerAttempts[i],
             redirect: "follow",
-            signal: AbortSignal.timeout(18000),
+            signal: AbortSignal.timeout(15000),
           });
         } catch {
           if (i < headerAttempts.length - 1) continue;
@@ -794,9 +838,13 @@ export default {
         if (!upstream.ok) {
           lastStatus = upstream.status;
           await upstream.body?.cancel?.().catch(() => {});
+          // Genuine 404 from an Origin-authenticated CDN is not a header error; don't overwrite it.
+          if (upstream.status === 404 && originRequired) {
+            break;
+          }
           const retryable =
             upstream.status === 403 ||
-            upstream.status === 404 ||
+            (!originRequired && upstream.status === 404) ||
             upstream.status === 429 ||
             upstream.status >= 500;
           if (i < headerAttempts.length - 1 && retryable) {
@@ -819,8 +867,8 @@ export default {
         });
       }
 
-      // Final socket fallback if fetch() returned 403 due to Cf-Worker header rejection
-      if (lastStatus === 403) {
+      // Final socket fallback if fetch() returned 403 due to Cf-Worker header rejection on non-CF hosts
+      if (lastStatus === 403 && !originRequired) {
         try {
           const socketRes = await fetchDirectSocket(url, headerAttempts[0], method);
           if (socketRes.ok) {
@@ -844,8 +892,8 @@ export default {
         }
       }
 
-      // Fallback to Render playlist proxy if upstream rate-limits or rejects Cloudflare Worker IPs on .m3u8 playlists
-      if (isPlaylistUrl && (lastStatus === 403 || lastStatus === 429 || lastStatus >= 500)) {
+      // Fallback to Render proxy if upstream rate-limits/blocks Cloudflare Worker on small text resources (.m3u8 / .vtt)
+      if ((isPlaylistUrl || isSubtitle) && (lastStatus === 403 || lastStatus === 429 || lastStatus >= 500)) {
         return new Response(null, {
           status: 307,
           headers: {
@@ -864,7 +912,11 @@ export default {
 
       return new Response("Upstream streaming source rejected request", {
         status: lastStatus,
-        headers: CORS_HEADERS,
+        headers: {
+          ...CORS_HEADERS,
+          "X-Proxy-Source": "cloudflare-worker",
+          "X-Upstream-Status": String(lastStatus),
+        },
       });
     } catch (err) {
       return new Response(`Cloudflare Streaming Proxy error: ${err?.message || "Unknown error"}`, {

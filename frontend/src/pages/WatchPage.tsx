@@ -47,6 +47,8 @@ export function WatchPage() {
   const initializedEpisodeKeyRef = useRef<string>("");
   const preferredCategoryRef = useRef<string | null>(null);
   const lastAnimeIdRef = useRef<number>(animeId);
+  const failedServerIndicesRef = useRef<Set<number>>(new Set());
+  const hasFetchedBackendFallbackRef = useRef<boolean>(false);
   const lastLocalSaveRef = useRef<number>(0);
   const lastRemoteSaveRef = useRef<number>(0);
   const [activeRangeIndex, setActiveRangeIndex] = useState(0);
@@ -243,6 +245,8 @@ export function WatchPage() {
     setStreamError(null);
     setMultiStream(null);
     setSelectedServer(0);
+    failedServerIndicesRef.current = new Set();
+    hasFetchedBackendFallbackRef.current = false;
     setFailedServerIndices(new Set());
     setServerToast(null);
 
@@ -418,43 +422,87 @@ export function WatchPage() {
     // Do NOT discard this server or force-switch servers!
     if (currentPlaybackTimeRef.current > 5) return;
 
-    if (!multiStream || multiStream.servers.length <= 1) return;
+    if (!multiStream || multiStream.servers.length === 0) return;
 
-    setFailedServerIndices((prev) => {
-      const nextFailed = new Set(prev);
-      nextFailed.add(selectedServer);
+    const nextFailed = new Set(failedServerIndicesRef.current);
+    nextFailed.add(selectedServer);
+    failedServerIndicesRef.current = nextFailed;
+    setFailedServerIndices(nextFailed);
 
-      const currentServer = multiStream.servers[selectedServer];
-      const currentCategory = currentServer?.category || "SUB";
+    const currentServer = multiStream.servers[selectedServer];
+    const currentCategory = currentServer?.category || "SUB";
 
-      // 1. First look for another working server of the SAME category (SUB or DUB)
-      let nextIndex = multiStream.servers.findIndex(
-        (s, idx) => idx !== selectedServer && !nextFailed.has(idx) && (s.category || "SUB") === currentCategory
+    // 1. First look for another working server of the SAME category (SUB or DUB)
+    let nextIndex = multiStream.servers.findIndex(
+      (s, idx) => idx !== selectedServer && !nextFailed.has(idx) && (s.category || "SUB") === currentCategory
+    );
+
+    // 2. If none left in this category, look for ANY other working server
+    if (nextIndex === -1) {
+      nextIndex = multiStream.servers.findIndex(
+        (_s, idx) => idx !== selectedServer && !nextFailed.has(idx)
       );
+    }
 
-      // 2. If none left in this category, look for ANY other working server
-      if (nextIndex === -1) {
-        nextIndex = multiStream.servers.findIndex(
-          (_s, idx) => idx !== selectedServer && !nextFailed.has(idx)
-        );
-      }
+    if (nextIndex !== -1) {
+      const nextServer = multiStream.servers[nextIndex];
+      const curTime = Math.floor(currentPlaybackTimeRef.current);
+      if (curTime > 0) setInitialTime(curTime);
 
-      if (nextIndex !== -1) {
-        const nextServer = multiStream.servers[nextIndex];
-        const curTime = Math.floor(currentPlaybackTimeRef.current);
-        if (curTime > 0) setInitialTime(curTime);
+      setServerToast(
+        `Server "${getCleanServerName(currentServer?.name, selectedServer)}" is unavailable for this episode. Switched to "${getCleanServerName(nextServer.name, nextIndex)}".`
+      );
+      setSelectedServer(nextIndex);
+      return;
+    }
 
-        setServerToast(
-          `Server "${getCleanServerName(currentServer?.name, selectedServer)}" is unavailable for this episode. Switched to "${getCleanServerName(nextServer.name, nextIndex)}".`
-        );
-        setSelectedServer(nextIndex);
-      } else {
-        setServerToast("All servers for this episode are currently unavailable. Click Retry or try another episode.");
-      }
+    // 3. All client-resolved servers failed: automatically pull Render backup providers (e.g. AnimeHeaven MP4) once
+    if (!hasFetchedBackendFallbackRef.current) {
+      hasFetchedBackendFallbackRef.current = true;
+      const failedUrls = new Set(multiStream.servers.map((s) => s.url));
+      const requestedEpKey = `${animeId}:${episodeNum}`;
+      setStreamLoading(true);
+      setServerToast("Primary streaming servers failed. Trying backup servers...");
 
-      return nextFailed;
-    });
-  }, [multiStream, selectedServer]);
+      streamApi
+        .getStreamUrl(animeId, episodeNum, true)
+        .then((res) => {
+          if (initializedEpisodeKeyRef.current !== requestedEpKey) return;
+          setStreamLoading(false);
+
+          const servers = res.servers || [];
+          const freshIdx = servers.findIndex((s) => !failedUrls.has(s.url));
+          if (freshIdx !== -1) {
+            const nextMap = new Set<number>();
+            servers.forEach((s, idx) => {
+              if (failedUrls.has(s.url)) nextMap.add(idx);
+            });
+            failedServerIndicesRef.current = nextMap;
+            setFailedServerIndices(nextMap);
+            setMultiStream(res);
+            setSelectedServer(freshIdx);
+            setServerToast(
+              `Switched to backup server "${getCleanServerName(servers[freshIdx].name, freshIdx)}".`
+            );
+            return;
+          }
+
+          setServerToast(
+            "All servers for this episode are currently unavailable. Click Retry or try another episode."
+          );
+        })
+        .catch(() => {
+          if (initializedEpisodeKeyRef.current !== requestedEpKey) return;
+          setStreamLoading(false);
+          setServerToast(
+            "All servers for this episode are currently unavailable. Click Retry or try another episode."
+          );
+        });
+      return;
+    }
+
+    setServerToast("All servers for this episode are currently unavailable. Click Retry or try another episode.");
+  }, [multiStream, selectedServer, animeId, episodeNum]);
 
   const handleRetry = () => {
     // Preserve exact playback timestamp on retry so viewer never loses their place
@@ -464,6 +512,8 @@ export function WatchPage() {
     // Re-trigger the stream fetch with forceFresh = true
     setStreamLoading(true);
     setStreamError(null);
+    failedServerIndicesRef.current = new Set();
+    hasFetchedBackendFallbackRef.current = false;
     setFailedServerIndices(new Set());
     setServerToast(null);
 

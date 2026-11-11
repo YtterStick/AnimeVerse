@@ -85,6 +85,42 @@ export function buildStreamProxyUrl(
   return full;
 }
 
+/**
+ * Extracts the upstream target hostname from a proxied URL (?url=https://...).
+ */
+export function extractProxyTargetHost(proxyUrl: string): string | null {
+  try {
+    const parsed = new URL(proxyUrl, RENDER_BASE);
+    const target = parsed.searchParams.get("url");
+    if (!target) return null;
+    return new URL(target).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Rewrites a Cloudflare Worker proxy URL to the Render backup stream proxy (?url=...).
+ * Returns null if the URL is already targeting the Render/local proxy or lacks a target url.
+ */
+export function toRenderFallbackProxyUrl(proxyUrl: string): string | null {
+  try {
+    const parsed = new URL(proxyUrl, RENDER_BASE);
+    if (parsed.pathname.includes("/api/stream/proxy")) {
+      return null;
+    }
+    const target = parsed.searchParams.get("url");
+    if (!target) return null;
+    const isWorkerOrigin =
+      parsed.hostname.endsWith("workers.dev") ||
+      (Boolean(STREAM_PROXY_BASE) && proxyUrl.startsWith(STREAM_PROXY_BASE));
+    if (!isWorkerOrigin) return null;
+    return `${RENDER_STREAM_PROXY}?${parsed.searchParams.toString()}`;
+  } catch {
+    return null;
+  }
+}
+
 function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
   if (!rawUrl) return rawUrl;
 

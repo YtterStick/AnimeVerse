@@ -16,9 +16,135 @@ import { defaultLayoutIcons, DefaultVideoLayout, DefaultTooltip } from "@vidstac
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
 import type { SubtitleTrack } from "@/types";
-import type { SkipInterval } from "@/lib/api";
+import {
+  extractProxyTargetHost,
+  toRenderFallbackProxyUrl,
+  type SkipInterval,
+} from "@/lib/api";
 import { parseCues, refineSkips, buildChaptersVtt } from "@/lib/skipTimes";
 import { getCleanServerName } from "@/lib/serverNames";
+
+const WORKER_HOST_BYPASS_TTL_MS = 2 * 60_000;
+const workerBlockedHostsUntil = new Map<string, number>();
+
+function isWorkerHostTemporarilyBypassed(proxyUrl: string): boolean {
+  const host = extractProxyTargetHost(proxyUrl);
+  if (!host) return false;
+  const until = workerBlockedHostsUntil.get(host);
+  if (!until) return false;
+  if (Date.now() >= until) {
+    workerBlockedHostsUntil.delete(host);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Creates a resilient hls.js XHR loader that fails over a single blocked Cloudflare Worker
+ * chunk/playlist (403/429/5xx) immediately to Render's IPv4 proxy without stalling 60s on retries.
+ */
+function createResilientHlsLoader(): any {
+  const DefaultLoader = Hls.DefaultConfig.loader as any;
+
+  return class ProxyFallbackLoader {
+    private hlsConfig: any;
+    private delegate: any;
+
+    constructor(hlsConfig: any) {
+      this.hlsConfig = hlsConfig;
+      this.delegate = new DefaultLoader(hlsConfig);
+    }
+
+    get context() {
+      return this.delegate?.context ?? null;
+    }
+
+    get stats() {
+      return this.delegate?.stats;
+    }
+
+    getCacheAge() {
+      return this.delegate?.getCacheAge?.() ?? null;
+    }
+
+    getResponseHeader(name: string) {
+      return this.delegate?.getResponseHeader?.(name) ?? null;
+    }
+
+    abort() {
+      this.delegate?.abort?.();
+    }
+
+    destroy() {
+      this.delegate?.destroy?.();
+    }
+
+    load(context: any, config: any, callbacks: any) {
+      const originalUrl: string = context.url;
+      const targetHost = extractProxyTargetHost(originalUrl);
+      const preemptiveFallback = isWorkerHostTemporarilyBypassed(originalUrl)
+        ? toRenderFallbackProxyUrl(originalUrl)
+        : null;
+
+      if (preemptiveFallback) {
+        context.url = preemptiveFallback;
+        let retriedWorker = false;
+        this.delegate.load(context, config, {
+          ...callbacks,
+          onError: (error: { code: number; text: string }, ctx: any, networkDetails: any, stats: any) => {
+            if (!retriedWorker && targetHost) {
+              retriedWorker = true;
+              workerBlockedHostsUntil.delete(targetHost);
+              this.delegate?.destroy?.();
+              this.delegate = new DefaultLoader(this.hlsConfig);
+              ctx.url = originalUrl;
+              this.delegate.load(ctx, config, callbacks);
+              return;
+            }
+            callbacks.onError?.(error, ctx, networkDetails, stats);
+          },
+        });
+        return;
+      }
+
+      let fallbackAttempted = false;
+
+      const wrappedCallbacks = {
+        ...callbacks,
+        onError: (error: { code: number; text: string }, ctx: any, networkDetails: any, stats: any) => {
+          const shouldTryRender =
+            !fallbackAttempted &&
+            (error.code === 403 || error.code === 429 || error.code >= 500 || error.code === 0);
+          const fallbackUrl = shouldTryRender ? toRenderFallbackProxyUrl(originalUrl) : null;
+
+          if (!fallbackUrl) {
+            callbacks.onError?.(error, ctx, networkDetails, stats);
+            return;
+          }
+
+          fallbackAttempted = true;
+          this.delegate?.destroy?.();
+          this.delegate = new DefaultLoader(this.hlsConfig);
+          ctx.url = fallbackUrl;
+
+          this.delegate.load(ctx, config, {
+            ...callbacks,
+            onSuccess: (response: any, fbStats: any, fbCtx: any, fbDetails: any) => {
+              // Worker blocked this upstream CDN host from the user's edge POP while Render succeeded:
+              // bypass Worker for this specific CDN hostname briefly to stop repeated 403 console errors.
+              if ((error.code === 403 || error.code === 429) && targetHost) {
+                workerBlockedHostsUntil.set(targetHost, Date.now() + WORKER_HOST_BYPASS_TTL_MS);
+              }
+              callbacks.onSuccess?.(response, fbStats, fbCtx, fbDetails);
+            },
+          });
+        },
+      };
+
+      this.delegate.load(context, config, wrappedCallbacks);
+    }
+  };
+}
 
 function formatTime(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
@@ -232,22 +358,23 @@ export function VideoPlayer({
       // Pass bundled Hls constructor synchronously so setup() + autoPlay never race an async script load
       provider.library = Hls;
       provider.config = {
+        loader: createResilientHlsLoader(),
         maxBufferLength: 120,
         maxMaxBufferLength: 300,
         backBufferLength: 60,
         maxBufferHole: 0.5,
         nudgeOffset: 0.2,
         nudgeMaxRetry: 10,
-        manifestLoadingTimeOut: 20000,
-        manifestLoadingMaxRetry: 6,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingTimeOut: 20000,
-        levelLoadingMaxRetry: 6,
-        levelLoadingRetryDelay: 1000,
-        fragLoadingTimeOut: 25000,
-        fragLoadingMaxRetry: 10,
-        fragLoadingRetryDelay: 1000,
-        fragLoadingMaxRetryTimeout: 16000,
+        manifestLoadingTimeOut: 15000,
+        manifestLoadingMaxRetry: 3,
+        manifestLoadingRetryDelay: 800,
+        levelLoadingTimeOut: 15000,
+        levelLoadingMaxRetry: 3,
+        levelLoadingRetryDelay: 800,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 4,
+        fragLoadingRetryDelay: 800,
+        fragLoadingMaxRetryTimeout: 4000,
         startFragPrefetch: true,
       };
       provider.onInstance((hls) => {
