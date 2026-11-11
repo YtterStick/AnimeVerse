@@ -23,9 +23,9 @@ This Cloudflare Worker handles 100% of AniVerse video streams, MP4 files, HLS pl
 ### Step 3: Copy Your Worker URL
 Cloudflare gives you a live public URL (e.g. `https://aniverse-stream.<your-subdomain>.workers.dev`).
 
-Send that URL here or add it to your Vercel Environment Variables:
-* Key: `VITE_STREAM_PROXY_URL`
-* Value: `https://aniverse-stream.<your-subdomain>.workers.dev`
+Send that URL here or add it to your Cloudflare Pages **Environment Variables**:
+* `VITE_STREAM_PROXY_URL` = `https://aniverse-stream.<your-subdomain>.workers.dev`
+* `VITE_API_URL` = `https://animeverse-z6p4.onrender.com`
 
-Once added, **0 bytes of video bandwidth** will ever touch Render!
+Once configured, **0 bytes of video bandwidth** will touch Vercel or Render!
 

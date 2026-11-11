@@ -1,6 +1,5 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Analytics } from "@vercel/analytics/react";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { Layout } from "@/components/layout/Layout";
 import { HomePage } from "@/pages/HomePage";
@@ -48,7 +47,6 @@ export function App() {
           <Route path="auth/callback" element={<Suspense fallback={<PageLoader />}><AuthCallbackPage /></Suspense>} />
         </Route>
       </Routes>
-      <Analytics />
     </BrowserRouter>
   );
 }

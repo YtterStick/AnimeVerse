@@ -12,25 +12,32 @@ import { anilistBrowserFallback } from "./anilistBrowserFallback";
 import { resolveKaaClient } from "./kaaDirectResolver";
 import { resolveKnownStream } from "./knownStreamResolver";
 
-export const BACKEND_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const DEFAULT_PRODUCTION_BACKEND = "https://animeverse-z6p4.onrender.com";
+const DEFAULT_CLOUDFLARE_STREAM_PROXY = "https://aniverse-stream.andreidilag12.workers.dev";
+
+export const BACKEND_URL = (
+  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "" : DEFAULT_PRODUCTION_BACKEND)
+).replace(/\/+$/, "");
 const API_BASE = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
 
 /**
- * In production (Vercel), stream/subtitle/playlist proxying runs on our Vercel Edge
- * In production (Vercel), stream/subtitle/playlist proxying can route via Cloudflare Worker
- * (`VITE_STREAM_PROXY_URL`) for 100% unlimited bandwidth, or fallback to Vercel Edge (`/api/proxy`).
- * In local Vite dev (`import.meta.env.DEV`), fall back to the local Express backend proxy.
+ * In production (Cloudflare Pages), stream/subtitle/playlist proxying routes through our
+ * Cloudflare Worker (`VITE_STREAM_PROXY_URL` or default `aniverse-stream` worker) for unlimited bandwidth.
+ * In local Vite dev (`import.meta.env.DEV`), falls back to the local Express backend proxy unless overridden.
  */
-export const STREAM_PROXY_BASE = import.meta.env.DEV
-  ? BACKEND_URL
-    ? `${BACKEND_URL}/api/stream/proxy`
-    : "/api/stream/proxy"
-  : "/api/proxy";
+const CONFIGURED_STREAM_PROXY = (import.meta.env.VITE_STREAM_PROXY_URL || "").replace(/\/+$/, "");
+export const STREAM_PROXY_BASE = CONFIGURED_STREAM_PROXY
+  ? CONFIGURED_STREAM_PROXY
+  : import.meta.env.DEV
+    ? BACKEND_URL
+      ? `${BACKEND_URL}/api/stream/proxy`
+      : "/api/stream/proxy"
+    : DEFAULT_CLOUDFLARE_STREAM_PROXY;
 
 /**
  * Tracks whether Render recently timed out or returned 502/503 while waking up.
  * While `Date.now() < renderColdUntil`, read-only anime/stream calls bypass the
- * 3.8s wait and resolve directly in ~0.5s via AniList/Jikan/Edge while `/api/keepalive`
+ * 3.8s wait and resolve directly in ~0.5s via AniList/Jikan/Worker while `/api/health`
  * finishes waking Render in the background.
  */
 let renderColdUntil = 0;
@@ -41,20 +48,20 @@ function markRenderColdAndWake(): void {
   renderColdUntil = now + 25_000;
   if (now - lastWakeTriggerAt > 20_000) {
     lastWakeTriggerAt = now;
-    const wakeUrl = import.meta.env.DEV ? `${API_BASE}/health` : "/api/keepalive";
+    const wakeUrl = `${API_BASE}/health`;
     fetch(wakeUrl, { cache: "no-store" }).catch(() => {});
   }
 }
 
-const RENDER_BASE = BACKEND_URL || "https://animeverse-z6p4.onrender.com";
+const RENDER_BASE = BACKEND_URL || DEFAULT_PRODUCTION_BACKEND;
 const RENDER_STREAM_PROXY = `${RENDER_BASE}/api/stream/proxy`;
 
 function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
   if (!rawUrl) return rawUrl;
 
   // 1. AnimeHeaven (animeheaven.me) blocks cross-site browser requests (400 Bad Request)
-  // and caps Cloudflare Workers / Vercel Edge to a 600KB teaser clip.
-  // It MUST be proxied through our Node/Express backend on Render which serves the full 1080p video.
+  // and caps fetch()-based proxies to a 600KB teaser clip.
+  // Route through Render Node/Express backend which serves the full 1080p video reliably.
   if (rawUrl.includes("animeheaven")) {
     if (rawUrl.startsWith("/api/stream/proxy")) {
       return `${RENDER_BASE}${rawUrl}`;
@@ -67,14 +74,16 @@ function rewriteStreamUrlToEdgeProxy(rawUrl: string): string {
     }
   }
 
-  // 2. All other providers, HLS video segments, storyboards (advancedairesearchlab.xyz),
-  // and subtitles route through Vercel Edge Proxy (/api/proxy).
-  // This takes heavy thumbnail/HLS bandwidth OFF Render and completely avoids Cloudflare 403 blocks!
+  // 2. All other providers, HLS video segments, storyboards (advancedairesearchlab.xyz / babybayw.xyz),
+  // and subtitles route through Cloudflare Worker (STREAM_PROXY_BASE) with unlimited bandwidth.
   if (rawUrl.startsWith("/api/stream/proxy")) {
     return `${STREAM_PROXY_BASE}${rawUrl.slice("/api/stream/proxy".length)}`;
   }
   if (BACKEND_URL && rawUrl.startsWith(`${BACKEND_URL}/api/stream/proxy`)) {
     return `${STREAM_PROXY_BASE}${rawUrl.slice(`${BACKEND_URL}/api/stream/proxy`.length)}`;
+  }
+  if (RENDER_BASE && rawUrl.startsWith(`${RENDER_BASE}/api/stream/proxy`)) {
+    return `${STREAM_PROXY_BASE}${rawUrl.slice(`${RENDER_BASE}/api/stream/proxy`.length)}`;
   }
   if (!rawUrl.startsWith("http") && BACKEND_URL) {
     return `${BACKEND_URL}${rawUrl}`;
