@@ -3,7 +3,11 @@ import crypto from "crypto";
 import { optionalAuth, isAdminUser, AuthRequest } from "../middleware/auth";
 import env from "../config/env";
 import supabase from "../config/supabase";
-import { detectExplicitContent, moderateCommentContent } from "../utils/contentModeration";
+import {
+  detectExplicitContent,
+  detectSpoilerContent,
+  moderateCommentContent,
+} from "../utils/contentModeration";
 
 const router = Router();
 
@@ -130,7 +134,7 @@ function normalizeRecord(
         author_avatar: typeof c.author_avatar === "string" ? c.author_avatar : null,
         is_guest: Boolean(c.is_guest),
         content: c.content,
-        is_spoiler: Boolean(c.is_spoiler),
+        is_spoiler: Boolean(c.is_spoiler) || detectSpoilerContent(c.content),
         liked_by: Array.isArray(c.liked_by)
           ? Array.from(new Set(c.liked_by.filter((id): id is string => typeof id === "string")))
           : [],
@@ -395,7 +399,7 @@ function toPublicDiscussion(
     author_avatar: c.author_avatar,
     is_guest: c.is_guest,
     content: c.content,
-    is_spoiler: c.is_spoiler,
+    is_spoiler: Boolean(c.is_spoiler) || detectSpoilerContent(c.content),
     likes_count: c.liked_by.length,
     liked_by_me: Boolean(currentActorKey && c.liked_by.includes(currentActorKey)),
     can_delete: Boolean(isAdmin || (currentActorKey && c.actor_key === currentActorKey)),

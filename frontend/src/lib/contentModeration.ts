@@ -307,27 +307,245 @@ const SPOILER_PATTERNS: RegExp[] = [
   /\/spoiler\b/i,
   /\bspoilers?\b/i,
   /\bspoiler\s*alert\b/i,
-  /\b(?:he|she|they|mc|protagonist|villain|everyone|main character)\s+(?:dies|died|gets?\s+killed|betrays?|is killed|was killed|turns?\s+evil)\b/i,
-  /\b(?:dies|died|killed off|betrays?)\s+in\s+(?:ep|episode|chapter|season|the\s+end|manga|finale)\b/i,
-  /\bgets?\s+killed\b/i,
-  /\b(?:killed|murdered)\s+by\b/i,
-  /\b(?:sacrifices?\s+(?:himself|herself|themselves)|sacrificed)\b/i,
+  /\b(?:he|she|they|mc|protagonist|villain|everyone|main character)\s+(?:dies|died|gets?\s+killed|betrays?|betrayed|is killed|was killed|turns?\s+evil)\b/i,
+  /\b(?:dies|died|killed off|betrays?|betrayed|defeated|sealed\s+away)\s+in\s+(?:ep|episode|chapter|season|the\s+end|manga|finale|arc)\b/i,
+  /\b(?:gets?|got)\s+(?:killed|murdered|executed|beheaded|stabbed|poisoned|betrayed|sealed|brainwashed|possessed|banished|kidnapped|captured)\b/i,
+  /\b(?:killed|murdered|betrayed|defeated|brainwashed|possessed|resurrected|revived)\s+by\b/i,
+  /\b(?:sacrifices?\s+(?:himself|herself|themselves|everything|his\s+life|her\s+life|their\s+lives)|sacrificed)\b/i,
   /\bplot\s+twist\b/i,
-  /\b(?:ending|finale)\s+(?:twist|revealed|leak|leaked)\b/i,
-  /\bturns?\s+out\s+(?:he|she|they|it)\s+(?:is|was)\b/i,
-  /\b(?:is|was)\s+(?:secretly|actually)\s+(?:the|a)\s+(?:traitor|spy|villain|king|demon|dead|alive|killer|boss)\b/i,
-  /\bactually\s+(?:dies|died|alive|dead|the\s+(?:traitor|villain|killer|boss|mastermind))\b/i,
+  /\b(?:ending|finale)\s+(?:twist|revealed|leak|leaked|explained)\b/i,
+  /\bturns?\s+out\s+(?:that\s+)?(?:he|she|they|it|[A-Z][a-z]+)\s+(?:is|was|had|actually)\b/i,
+  /\b(?:is|was|are|were)\s+(?:secretly|actually)\s+(?:the|a|an)?\s*(?:traitor|spy|villain|king|queen|demon|dead|alive|killer|boss|mastermind|imposter|father|mother|brother|sister|son|daughter|twin|clone)\b/i,
+  /\bactually\s+(?:dies|died|alive|dead|survives|survived|betrays|betrayed|kills|killed|is\s+the|was\s+the)\b/i,
   /\bin\s+the\s+(?:manga|light\s+novel|web\s+novel)\b/i,
   /\b(?:manga|novel)\s+(?:spoilers?|readers?)\b/i,
   /\bin\s+(?:the\s+)?(?:next|future|later|last|final)\s+(?:ep|episode|chapter|arc|season)\b/i,
-  /\b(?:ep|episode|chapter)\s*\d+\s+(?:twist|death|reveal|ending)\b/i,
-  /\bfinal\s+(?:boss|villain|episode\s+twist)\b/i,
-  /\b(?:mamamatay|mamatay|namatay|patay|pinatay)\s+(?:na|pala|si|sila|yung|ang|dito|sa\s+dulo)\b/i,
-  /\b(?:taksil|traidor)\s+(?:pala|si)\b/i,
-  /\b(?:si|yung)\s+[a-z]+\s+(?:ang\s+)?(?:kalaban|taksil|traidor|killer|nagpapatay)\b/i,
-  /\b(?:nabuhay|muling\s+nabuhay|magiging\s+villain|naging\s+kalaban)\b/i,
+  /\b(?:ep|episode|chapter)\s*\d+\s+(?:twist|death|reveal|ending|spoiler)\b/i,
+  /\bfinal\s+(?:boss|villain|episode\s+twist|form)\b/i,
+  /\b(?:mamamatay|mamatay|namamatay|namatay|patay|pinatay)\s+(?:na|pala|si|sila|yung|ang|dito|sa\s+dulo)\b/i,
+  /\b(?:taksil|traidor|traitor|kalaban|buhay|patay|impostor|espiya|spy)\s+(?:pala|si)\b/i,
+  /\b(?:si|yung)\s+[a-z]+\s+(?:pala\s+)?(?:ang\s+)?(?:kalaban|taksil|traidor|killer|nagpapatay|mastermind)\b/i,
+  /\b(?:nabuhay|muling\s+nabuhay|magiging\s+villain|naging\s+kalaban|tinalo\s+si|natalo\s+si)\b/i,
+  /\b(?:pinagawa|inutusan|pinilit|linoko|trinaydor|iniligtas|sinaksak|napatay)\s+(?:si|ni|kay)\b/i,
+  /\b(?:nagising|lumabas|nabunyag|nalaman)\s+(?:na\s+)?(?:ang|yung)\s+(?:kapangyarihan|sikreto|nakaraan|katotohanan|tunay)\b/i,
   /\bsa\s+(?:manga|novel|ending|dulo|huli|next\s+ep)\s*(?:mamamatay|namatay|maging|naging|pala)\b/i,
+  /\b(?:hindi|di)\s+(?:ko|mo|namin)?\s*(?:akalain|inakala|inaasahan)\s+na\b/i,
 ];
+
+const SAFE_ACTUALLY_FOLLOWERS = new Set([
+  "so",
+  "really",
+  "very",
+  "quite",
+  "pretty",
+  "kind",
+  "sort",
+  "not",
+  "good",
+  "great",
+  "nice",
+  "cool",
+  "fun",
+  "funny",
+  "bad",
+  "mid",
+  "peak",
+  "fire",
+  "worth",
+  "true",
+  "sounds",
+  "sounded",
+  "looks",
+  "looked",
+  "feels",
+  "felt",
+  "seems",
+  "seemed",
+  "liked",
+  "like",
+  "loved",
+  "love",
+  "enjoyed",
+  "enjoy",
+  "watched",
+  "watch",
+  "hated",
+  "hate",
+  "thought",
+  "think",
+  "wanted",
+  "want",
+  "needed",
+  "need",
+  "forgot",
+  "forget",
+  "remember",
+  "remembered",
+  "started",
+  "just",
+  "only",
+  "also",
+  "even",
+  "still",
+  "already",
+  "never",
+  "always",
+  "the",
+  "this",
+  "that",
+  "for",
+  "about",
+  "with",
+  "into",
+  "from",
+  "here",
+  "there",
+  "one",
+  "two",
+  "make",
+  "makes",
+  "made",
+  "have",
+  "has",
+  "had",
+  "getting",
+  "going",
+  "gonna",
+]);
+
+const NON_CHARACTER_CAPITALS = new Set([
+  "Episode",
+  "Season",
+  "Chapter",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+  "English",
+  "Japanese",
+  "Sub",
+  "Dub",
+  "AniVerse",
+  "Anime",
+  "Manga",
+  "Opening",
+  "Ending",
+  "God",
+  "Bro",
+  "Man",
+  "The",
+  "And",
+  "But",
+  "For",
+  "This",
+  "That",
+  "What",
+  "When",
+  "Why",
+  "How",
+  "Can",
+  "Not",
+  "Yes",
+]);
+
+const NON_SPOILER_DISBELIEF =
+  /\b(?:can'?t|cannot|couldn'?t|hard\s+to)\s+believe\s+(?:how\s+(?:good|great|amazing|awesome|cool|insane|fire|peak|cute|funny|sad|beautiful)|it'?s\s+(?:already|finally)\s+over)\b/i;
+
+const PLOT_ACTION_VERBS_REGEX =
+  /\b(?:tasks?|tasked|tasking|forces?|forced|forcing|compels?|compelled|orders?|ordered|ordering|commands?|commanded|confronts?|confronted|confronting|reveals?|revealed|revealing|confesses?|confessed|exposes?|exposed|discovers?|discovered|learns?|learned|realizes?|realized|unlocks?|unlocked|awakens?|awakened|awakening|unleashes?|unleashed|transforms?|transformed|evolves?|evolved|absorbs?|absorbed|steals?|stole|stolen|escapes?|escaped|traps?|trapped|captures?|captured|kidnaps?|kidnapped|imprisons?|imprisoned|banishes?|banished|assassinates?|assassinated|executes?|executed|ambushes?|ambushed|defeats?|defeated|overpowers?|overpowered|beats?|destroys?|destroyed|slays?|slain|slices?|sliced|stabs?|stabbed|shoots?|shot|poisons?|poisoned|curses?|cursed|seals?|sealed|unseals?|unsealed|revives?|revived|resurrects?|resurrected|heals?|healed|rescues?|rescued|sacrifices?|sacrificed|betrays?|betrayed|tricks?|tricked|manipulates?|manipulated|controls?|controlled|brainwashes?|brainwashed|possesses?|possessed|swaps?|swapped|kills?|killed|murders?|murdered|dies|died|loses\s+to|wins\s+against)\b/gi;
+
+const PLOT_CONSEQUENCE_PATTERNS: RegExp[] = [
+  /\bforcing\s+(?:him|her|them|everyone|[a-z]+)\s+to\b/i,
+  /\btasks?\s+(?:him|her|them|[a-z]+)\s+with\b/i,
+  /\b(?:causing|compelling|tricking|manipulating|blackmailing)\s+(?:him|her|them|[a-z]+)\s+(?:to|into)\b/i,
+  /\b(?:finds?|found)\s+out\s+(?:that|who|what|about|the)\b/i,
+  /\bends?\s+up\s+[a-z]+ing\b/i,
+  /\bright\s+before\b/i,
+  /\bonly\s+to\s+(?:find|realize|discover|lose|die)\b/i,
+  /\bconfront(?:s|ed|ing)?\s+(?:his|her|their|its|own)\s+(?:past|fears?|fate|destiny|truth)\b/i,
+];
+
+const DIRECT_TARGET_ACTION_REGEX =
+  /\b(?:tasks?|forces?|forcing|confronts?|reveals?|defeats?|overpowers?|beats?|destroys?|slices?|stabs?|shoots?|poisons?|curses?|seals?|revives?|rescues?|saves?|sacrifices?|betrays?|tricks?|manipulates?|controls?|brainwashes?|possesses?|kills?|murders?|unlocks?|awakens?)\s+(?:him|her|them|[A-Z][a-z]{2,}|the\s+[A-Z][a-z]{2,})\b/;
+
+const PLOT_STAKES_NOUNS_REGEX =
+  /\b(?:past|own\s+past|curse|curse-breaking|potion|ingredients|prophecy|truth|secret|identity|bloodline|memories|backstory|seal|weakness|betrayal|downfall|origin|mastermind|traitor|imposter|villain|boss|climax|twist|ending\s+scene|post[- ]credits|cliffhanger)\b/gi;
+
+function scorePlotSpoilerSignals(cleaned: string): number {
+  const text = cleaned.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+  let score = 0;
+
+  // 1. Reaction-to-event opener
+  const hasDisbelief =
+    (/\b(?:can'?t|cannot|couldn'?t|hard\s+to|still\s+can'?t)\s+believe\b/i.test(text) &&
+      !NON_SPOILER_DISBELIEF.test(text)) ||
+    /\b(?:didn'?t|did\s+not|never)\s+(?:expect|see\s+that\s+coming|think\s+that|realize)\b/i.test(text) ||
+    /\bwho\s+(?:knew|would'?ve\s+thought)\b/i.test(text) ||
+    /\bshocked\s+(?:that|when)\b/i.test(text);
+  if (hasDisbelief) {
+    score += 1.5;
+  }
+
+  // 2. "actually <plot verb>" modifier
+  const actuallyMatches = text.match(/\bactually\s+([a-z]{3,})\b/gi) || [];
+  const hasActuallyAction = actuallyMatches.some((pair) => {
+    const follower = pair.split(/\s+/)[1]?.toLowerCase() || "";
+    return follower.length >= 3 && !SAFE_ACTUALLY_FOLLOWERS.has(follower);
+  });
+  if (hasActuallyAction) {
+    score += 1.5;
+  }
+
+  // 3. Plot narration verbs, causal clauses, and direct character targeting
+  const verbMatches = new Set(
+    (text.match(PLOT_ACTION_VERBS_REGEX) || []).map((v) => v.toLowerCase())
+  );
+  if (verbMatches.size >= 2) {
+    score += 2.5;
+  } else if (verbMatches.size === 1) {
+    score += 1.5;
+  }
+
+  if (PLOT_CONSEQUENCE_PATTERNS.some((pattern) => pattern.test(text))) {
+    score += 1.0;
+  }
+  if (DIRECT_TARGET_ACTION_REGEX.test(text)) {
+    score += 1.0;
+  }
+
+  // 4. Story/lore stakes nouns (ignoring OP/ED song references)
+  const textWithoutMusic = text.replace(/\b(?:opening|ending)\s+(?:song|theme|credits)\b/gi, "");
+  const stakesMatches = new Set(
+    (textWithoutMusic.match(PLOT_STAKES_NOUNS_REGEX) || []).map((n) => n.toLowerCase())
+  );
+  if (stakesMatches.size >= 2) {
+    score += 1.5;
+  } else if (stakesMatches.size === 1) {
+    score += 0.5;
+  }
+
+  // 5. Named entities mid-sentence paired with multi-word narration
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length >= 8) {
+    const midSentenceCapitals = new Set<string>();
+    for (let i = 1; i < words.length; i++) {
+      const cleanToken = words[i].replace(/[^A-Za-z']/g, "");
+      if (/^[A-Z][a-z]{2,}$/.test(cleanToken) && !NON_CHARACTER_CAPITALS.has(cleanToken)) {
+        midSentenceCapitals.add(cleanToken);
+      }
+    }
+    if (midSentenceCapitals.size >= 2) {
+      score += 1.0;
+    } else if (midSentenceCapitals.size === 1) {
+      score += 0.5;
+    }
+  }
+
+  return score;
+}
 
 function stripDiacritics(input: string): string {
   return input
@@ -442,7 +660,10 @@ export function detectExplicitContent(rawText: string): boolean {
 export function detectSpoilerContent(rawText: string): boolean {
   const cleaned = rawText.trim();
   if (!cleaned) return false;
-  return SPOILER_PATTERNS.some((pattern) => pattern.test(cleaned));
+  if (SPOILER_PATTERNS.some((pattern) => pattern.test(cleaned))) {
+    return true;
+  }
+  return scorePlotSpoilerSignals(cleaned) >= 3.0;
 }
 
 export function moderateCommentContent(
