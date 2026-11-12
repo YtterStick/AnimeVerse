@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLayout } from "@/contexts/LayoutContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,10 +10,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Heart, History, LogOut, ShieldAlert, User as UserIcon } from "lucide-react";
+import { Heart, History, LogOut, ShieldAlert, Tv, User as UserIcon } from "lucide-react";
 
 export function UserMenu() {
   const { user, signOut, displayName, avatarUrl, isAdmin } = useAuth();
+  const { tvMode, toggleTvMode } = useLayout();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -82,8 +84,27 @@ export function UserMenu() {
         <DropdownMenuItem asChild className="focus:bg-primary/15 focus:text-primary cursor-pointer rounded-lg px-2.5 py-2 text-xs font-medium">
           <Link to="/profile" className="flex items-center w-full">
             <UserIcon className="w-4 h-4 mr-2.5 text-primary" />
-            Profile &amp; Avatar
+            Profile &amp; Settings
           </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem
+          onClick={toggleTvMode}
+          className="focus:bg-purple-500/15 focus:text-purple-300 cursor-pointer rounded-lg px-2.5 py-2 text-xs font-medium flex items-center justify-between"
+        >
+          <div className="flex items-center">
+            <Tv className="w-4 h-4 mr-2.5 text-purple-400" />
+            <span>TV Mode Layout</span>
+          </div>
+          <span
+            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+              tvMode
+                ? "bg-purple-500/30 text-purple-200 border border-purple-500/50"
+                : "bg-secondary text-muted-foreground"
+            }`}
+          >
+            {tvMode ? "ON" : "OFF"}
+          </span>
         </DropdownMenuItem>
         
         <DropdownMenuItem asChild className="focus:bg-secondary/60 focus:text-foreground cursor-pointer rounded-lg px-2.5 py-2 text-xs">

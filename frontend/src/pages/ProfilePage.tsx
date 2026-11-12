@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLayout } from "@/contexts/LayoutContext";
 import { useWatchHistory, useWatchlist } from "@/hooks/useWatchHistory";
 import { getAvatarByUrl, DEFAULT_AVATAR } from "@/lib/avatars";
 import { AvatarPickerModal } from "@/components/profile/AvatarPickerModal";
@@ -14,10 +15,14 @@ import {
   Heart,
   LogOut,
   Check,
+  Tv,
+  Monitor,
+  Sliders,
 } from "lucide-react";
 
 export function ProfilePage() {
   const { user, signOut, displayName, avatarUrl, updateProfile } = useAuth();
+  const { tvMode, setTvMode } = useLayout();
   const { history } = useWatchHistory();
   const { watchlist } = useWatchlist();
 
@@ -261,6 +266,117 @@ export function ProfilePage() {
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Viewing & Layout Settings */}
+      <div className="rounded-3xl bg-card border border-border/40 p-5 sm:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/40 pb-4">
+          <div className="space-y-1">
+            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-primary" />
+              Viewing &amp; Layout Settings
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Choose your preferred layout for streaming on mobile, desktop, or big-screen TVs.
+            </p>
+          </div>
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-secondary border border-border/50 text-muted-foreground w-fit">
+            Device Preference
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+          {/* Standard Layout Option */}
+          <button
+            type="button"
+            onClick={() => {
+              setTvMode(false);
+              showToast("Switched to Standard Layout");
+            }}
+            className={`text-left p-4 rounded-2xl border transition-all cursor-pointer relative space-y-2.5 ${
+              !tvMode
+                ? "bg-primary/10 border-primary shadow-lg shadow-primary/10 ring-1 ring-primary"
+                : "bg-secondary/30 border-border/50 hover:border-border hover:bg-secondary/50"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    !tvMode
+                      ? "bg-primary text-white"
+                      : "bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  <Monitor className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Standard Mode</h3>
+                  <span className="text-[10px] text-muted-foreground">
+                    Best for PC &amp; Phones
+                  </span>
+                </div>
+              </div>
+              {!tvMode && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-primary text-white">
+                  <Check className="w-3 h-3" />
+                  Active
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Balanced layout with the player on the left and a vertical episode list on the right.
+            </p>
+          </button>
+
+          {/* TV Mode Option */}
+          <button
+            type="button"
+            onClick={() => {
+              setTvMode(true);
+              showToast("TV Mode enabled! Cinema player + horizontal episode shelf active.");
+            }}
+            className={`text-left p-4 rounded-2xl border transition-all cursor-pointer relative space-y-2.5 ${
+              tvMode
+                ? "bg-purple-500/15 border-purple-500 shadow-lg shadow-purple-500/15 ring-1 ring-purple-500"
+                : "bg-secondary/30 border-border/50 hover:border-border hover:bg-secondary/50"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    tvMode
+                      ? "bg-purple-500 text-white"
+                      : "bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  <Tv className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                    TV / Cinema Mode
+                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded bg-purple-500/30 text-purple-200">
+                      10ft UI
+                    </span>
+                  </h3>
+                  <span className="text-[10px] text-muted-foreground">
+                    Couch &amp; Big Screen Viewing
+                  </span>
+                </div>
+              </div>
+              {tvMode && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-purple-500 text-white">
+                  <Check className="w-3 h-3" />
+                  Active
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Maximized cinema player, large horizontal episode carousel, and remote-friendly navigation.
+            </p>
+          </button>
         </div>
       </div>
 

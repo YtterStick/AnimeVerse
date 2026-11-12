@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag, Heart, Coffee } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag, Heart, Coffee, Tv } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
@@ -15,6 +15,7 @@ import { AnimeSeasons } from "@/components/anime/AnimeSeasons";
 import { EpisodeComments } from "@/components/anime/EpisodeComments";
 import type { MultiStreamResult } from "@/types";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
+import { useLayout } from "@/contexts/LayoutContext";
 import { getCleanServerName } from "@/lib/serverNames";
 
 export function WatchPage() {
@@ -23,6 +24,8 @@ export function WatchPage() {
   const episodeNum = parseInt(episode || "", 10);
 
   const navigate = useNavigate();
+  const { tvMode, toggleTvMode } = useLayout();
+  const tvCarouselRef = useRef<HTMLDivElement | null>(null);
   const { anime, loading: animeLoading } = useAnimeDetail(animeId);
   const { episodes, loading: episodesLoading } = useAnimeEpisodes(animeId);
   const { saveProgress, isAuthenticated } = useSaveProgress();
@@ -224,6 +227,15 @@ export function WatchPage() {
     return filtered;
   }, [episodes, ranges, activeRangeIndex, episodeSearch]);
 
+  const scrollTvCarousel = useCallback((direction: "left" | "right") => {
+    if (tvCarouselRef.current) {
+      tvCarouselRef.current.scrollBy({
+        left: direction === "left" ? -420 : 420,
+        behavior: "smooth",
+      });
+    }
+  }, []);
+
   // Auto-scroll to center the currently active episode in view (defer while in fullscreen)
   useEffect(() => {
     const scrollActiveEpisode = () => {
@@ -231,6 +243,7 @@ export function WatchPage() {
         activeEpisodeRef.current.scrollIntoView({
           behavior: "smooth",
           block: "nearest",
+          inline: "center",
         });
       }
     };
@@ -240,7 +253,7 @@ export function WatchPage() {
       clearTimeout(timer);
       document.removeEventListener("fullscreenchange", scrollActiveEpisode);
     };
-  }, [episodeNum, activeRangeIndex, displayedEpisodes, viewMode]);
+  }, [episodeNum, activeRangeIndex, displayedEpisodes, viewMode, tvMode]);
 
   useEffect(() => {
     const el = recommendationsScrollRef.current;
@@ -664,10 +677,18 @@ export function WatchPage() {
           </div>
         )}
 
-        {/* Top Section: Player & Server (8 cols) and Episode List Card (4 cols) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start">
-          {/* Left Column: Player & Server */}
-          <div className="lg:col-span-8 xl:col-span-8 2xl:col-span-9 space-y-4 min-w-0">
+        {/* Top Section: Player & Server (full-width in TV mode, 8 cols in standard mode) */}
+        <div
+          className={`grid grid-cols-1 ${
+            tvMode ? "lg:grid-cols-1 max-w-6xl mx-auto" : "lg:grid-cols-12"
+          } gap-5 lg:gap-6 items-start`}
+        >
+          {/* Main Player Column */}
+          <div
+            className={`${
+              tvMode ? "w-full" : "lg:col-span-8 xl:col-span-8 2xl:col-span-9"
+            } space-y-4 min-w-0`}
+          >
             {/* Video Player Interface — kept persistently mounted so Fullscreen never exits across episodes */}
             <VideoPlayer
               src={activeServer?.url || ""}
@@ -807,6 +828,21 @@ export function WatchPage() {
                 <Flag className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400" />
                 Report
               </button>
+
+              {/* TV Mode Layout Toggle */}
+              <button
+                type="button"
+                onClick={toggleTvMode}
+                className={`flex items-center gap-1 sm:gap-1.5 h-7 sm:h-8 px-2.5 sm:px-3 rounded-full border text-[11px] sm:text-xs font-semibold cursor-pointer select-none transition-all ${
+                  tvMode
+                    ? "bg-purple-500/20 hover:bg-purple-500/30 border-purple-500/50 text-purple-200 shadow-sm shadow-purple-500/20"
+                    : "bg-secondary/50 hover:bg-secondary/80 border-border/40 text-muted-foreground hover:text-white"
+                }`}
+                title={tvMode ? "TV Mode is Active (Cinema layout). Click to switch to Standard layout." : "Switch to TV Cinema Mode"}
+              >
+                <Tv className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-400" />
+                <span>{tvMode ? "TV Mode (ON)" : "TV Mode"}</span>
+              </button>
             </div>
           </div>
 
@@ -816,6 +852,140 @@ export function WatchPage() {
               activeIndex={selectedServer}
               onSelect={handleServerChange}
             />
+          )}
+
+          {/* TV Mode Episode Shelf (Cinema Carousel) */}
+          {tvMode && (
+            <div className="rounded-2xl border border-purple-500/30 bg-card/60 backdrop-blur-md shadow-2xl p-4 sm:p-5 space-y-3.5 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-border/30">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300">
+                    <Tv className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-white text-sm sm:text-base flex items-center gap-2">
+                      Episode Shelf
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 uppercase tracking-wider">
+                        TV Mode ({episodes.length})
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      Couch-friendly carousel • Select with remote / arrow keys or scroll
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Range Selector Pills for long series */}
+                  {ranges.length > 1 && !episodeSearch && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar max-w-xs sm:max-w-md py-0.5">
+                      {ranges.map(([start, end], idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setActiveRangeIndex(idx)}
+                          className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer shrink-0 border ${
+                            idx === activeRangeIndex
+                              ? "bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/30"
+                              : "bg-secondary/60 text-muted-foreground border-border/40 hover:text-white hover:bg-secondary"
+                          }`}
+                        >
+                          {start}-{end}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Left / Right Carousel scroll buttons */}
+                  <div className="flex items-center gap-1 shrink-0 ml-auto">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => scrollTvCarousel("left")}
+                      className="h-8 w-8 p-0 rounded-lg border border-border/50 text-white hover:bg-purple-500/20 cursor-pointer"
+                      title="Scroll previous episodes"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => scrollTvCarousel("right")}
+                      className="h-8 w-8 p-0 rounded-lg border border-border/50 text-white hover:bg-purple-500/20 cursor-pointer"
+                      title="Scroll next episodes"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Horizontal Episode Carousel */}
+              <div
+                ref={tvCarouselRef}
+                className="flex items-stretch gap-3 overflow-x-auto hide-scrollbar py-2 px-0.5 scroll-smooth select-none focus:outline-none"
+                tabIndex={0}
+                role="region"
+                aria-label="Episodes carousel"
+              >
+                {displayedEpisodes.map((ep) => {
+                  const isActive = ep.episode_number === episodeNum;
+                  const { isWatched, progressPercent } = getEpisodeWatchStatus(
+                    animeId,
+                    ep.episode_number,
+                    history
+                  );
+
+                  return (
+                    <button
+                      key={ep.episode_number}
+                      ref={isActive ? activeEpisodeRef : null}
+                      type="button"
+                      onClick={() => navigate(`/watch/${animeId}/${ep.episode_number}`)}
+                      className={`group relative flex flex-col justify-between shrink-0 w-44 sm:w-52 p-3 sm:p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
+                        isActive
+                          ? "bg-purple-600/25 border-purple-400 shadow-xl shadow-purple-500/25 ring-2 ring-purple-500 scale-[1.02]"
+                          : "bg-secondary/40 border-border/50 hover:bg-secondary/70 hover:border-purple-400/50 hover:scale-[1.01]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-1.5">
+                        <span
+                          className={`text-xs sm:text-sm font-black px-2 py-0.5 rounded-lg ${
+                            isActive
+                              ? "bg-purple-500 text-white"
+                              : "bg-secondary/80 text-white/90 group-hover:bg-purple-500/30 group-hover:text-purple-200"
+                          }`}
+                        >
+                          EP {ep.episode_number}
+                        </span>
+                        {isWatched && (
+                          <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded-md">
+                            <Check className="w-3 h-3" />
+                            Watched
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs font-semibold text-gray-200 line-clamp-2 mt-2 leading-snug group-hover:text-white">
+                        {ep.title || `Episode ${ep.episode_number}`}
+                      </p>
+
+                      {/* Progress Bar for partially watched */}
+                      {progressPercent > 0 && !isWatched && (
+                        <div className="w-full bg-secondary rounded-full h-1 mt-2.5 overflow-hidden">
+                          <div
+                            className="bg-primary h-full rounded-full transition-all"
+                            style={{ width: `${progressPercent * 100}%` }}
+                          />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
 
@@ -848,8 +1018,9 @@ export function WatchPage() {
         </div>
       </div>
 
-      {/* Right Column: Self-contained Episode List Card */}
-      <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 min-w-0">
+      {/* Right Column: Self-contained Episode List Card (Standard layout only) */}
+      {!tvMode && (
+        <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 min-w-0">
         <div className="rounded-2xl border border-border/40 bg-card/40 backdrop-blur-md shadow-xl flex flex-col overflow-hidden h-[280px] sm:h-[340px] lg:h-[620px] 2xl:h-[680px]">
           {/* Card Header */}
           <div className="p-3 sm:p-3.5 flex items-center justify-between border-b border-border/40 bg-card/60 select-none shrink-0 gap-2">
@@ -1031,6 +1202,7 @@ export function WatchPage() {
           </ScrollArea>
         </div>
       </div>
+      )}
     </div>
 
     {/* Bottom Section: Synopsis, Comments, Related, More Like This */}

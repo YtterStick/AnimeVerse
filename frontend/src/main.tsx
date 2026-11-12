@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { AuthProvider } from "./contexts/AuthContext";
 import { TitleLanguageProvider } from "./contexts/TitleLanguageContext";
 import { ToastProvider } from "./contexts/ToastContext";
+import { LayoutProvider } from "./contexts/LayoutContext";
 import { App } from "./App";
 import "./index.css";
 
@@ -16,7 +17,9 @@ createRoot(rootElement).render(
     <AuthProvider>
       <TitleLanguageProvider>
         <ToastProvider>
-          <App />
+          <LayoutProvider>
+            <App />
+          </LayoutProvider>
         </ToastProvider>
       </TitleLanguageProvider>
     </AuthProvider>

@@ -40,6 +40,19 @@
   --animate-scale-in: scaleIn 0.2s ease-out;
 }
 
+/* TV Mode / Leanback 10-foot Viewing Enhancements */
+html.tv-mode {
+  font-size: 16.5px;
+}
+
+html.tv-mode button:focus-visible,
+html.tv-mode a:focus-visible,
+html.tv-mode input:focus-visible {
+  outline: 3px solid #9333ea !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 20px rgba(147, 51, 234, 0.5) !important;
+}
+
 /* ============================================
    Base Styles
    ============================================ */
