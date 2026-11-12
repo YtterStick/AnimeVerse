@@ -15,6 +15,13 @@ export interface SubtitleTrack {
   type?: "vtt" | "srt" | "ssa" | "ass" | "json";
 }
 
+export interface SkipInterval {
+  type: "op" | "ed" | "recap" | string;
+  start: number;
+  end: number;
+  episodeLength: number;
+}
+
 export interface StreamServer {
   id: string;            // unique identifier for the server
   name: string;          // e.g. "CatStream", "VidPlay"
@@ -25,6 +32,7 @@ export interface StreamServer {
   headers?: Record<string, string>;
   subtitles?: SubtitleTrack[];
   thumbnails?: string;
+  skips?: SkipInterval[];
 }
 
 export interface MultiStreamResult {

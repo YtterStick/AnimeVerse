@@ -77,7 +77,11 @@ export function useSaveProgress() {
           episode_number: numEp,
         });
       } catch (err) {
-        console.error("Failed to save progress:", err);
+        // Local progress is already persisted every 2s; avoid noisy console errors on transient drops
+        const msg = err instanceof Error ? err.message : String(err || "");
+        if (!/failed to fetch|network|abort|timeout|connection/i.test(msg)) {
+          console.warn("Progress sync skipped:", msg);
+        }
       }
     },
     [session?.access_token]

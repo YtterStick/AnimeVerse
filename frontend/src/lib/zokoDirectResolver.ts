@@ -1,4 +1,4 @@
-import type { StreamServer, SubtitleTrack } from "@/types";
+import type { SkipInterval, StreamServer, SubtitleTrack } from "@/types";
 
 export interface ZokoResolverOptions {
   buildProxyUrls: (targetUrl: string, referer?: string) => string[];
@@ -127,6 +127,24 @@ function normalizeZokoSubtitles(
   return scored.map((item) => item.track);
 }
 
+function normalizeZokoSkips(rawSkip: ZokoEmbedPayload["skip"]): SkipInterval[] {
+  if (!rawSkip || typeof rawSkip !== "object") return [];
+  const entries: Array<[keyof NonNullable<ZokoEmbedPayload["skip"]>, "op" | "ed"]> = [
+    ["intro", "op"],
+    ["outro", "ed"],
+  ];
+  const skips: SkipInterval[] = [];
+  for (const [key, type] of entries) {
+    const seg = rawSkip[key];
+    const start = Number(seg?.start);
+    const end = Number(seg?.end);
+    if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start + 15) {
+      skips.push({ type, start, end, episodeLength: 0 });
+    }
+  }
+  return skips;
+}
+
 async function fetchZokoCategory(
   animeId: number,
   episodeNum: number,
@@ -152,6 +170,8 @@ async function fetchZokoCategory(
       const streamUrl = sanitizeUrl(payload?.src || "");
       if (!streamUrl || !streamUrl.startsWith("http")) continue;
 
+      const skips = normalizeZokoSkips(payload?.skip);
+
       return {
         id: `zoko-${mode}-0`,
         name: "Mirage HD",
@@ -160,6 +180,7 @@ async function fetchZokoCategory(
         type: "hls",
         quality: "Auto",
         subtitles: normalizeZokoSubtitles(payload?.subtitles, options),
+        ...(skips.length > 0 ? { skips } : {}),
       };
     } catch {
       // Try next proxy candidate
@@ -225,3 +246,4 @@ export async function resolveZokoClient(
   }
   return task;
 }
+

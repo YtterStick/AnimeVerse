@@ -4,6 +4,7 @@ import type {
   ApiResponse,
   Episode,
   MultiStreamResult,
+  SkipInterval,
   VideoReport,
   WatchHistoryEntry,
   WatchlistEntry,
@@ -12,7 +13,10 @@ import { anilistBrowserFallback } from "./anilistBrowserFallback";
 import { resolveKaaClient } from "./kaaDirectResolver";
 import { resolveKnownStream } from "./knownStreamResolver";
 import { resolveExternalEnglishSubtitles } from "./subtitleFallbackResolver";
+import { supabase, isSupabaseConfigured } from "./supabase";
 import { resolveZokoClient } from "./zokoDirectResolver";
+
+export type { SkipInterval };
 
 const DEFAULT_PRODUCTION_BACKEND = "https://animeverse-z6p4.onrender.com";
 const DEFAULT_CLOUDFLARE_STREAM_PROXY = "https://aniverse-stream.andreidilag12.workers.dev";
@@ -48,11 +52,22 @@ let lastWakeTriggerAt = 0;
 function markRenderColdAndWake(): void {
   const now = Date.now();
   renderColdUntil = now + 25_000;
-  if (now - lastWakeTriggerAt > 20_000) {
+  if (now - lastWakeTriggerAt > 45_000) {
     lastWakeTriggerAt = now;
     const wakeUrl = `${API_BASE}/health`;
     fetch(wakeUrl, { cache: "no-store" }).catch(() => {});
   }
+}
+
+function isTransientBackendError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err || "");
+  return (
+    err instanceof TypeError ||
+    (err instanceof DOMException && err.name === "AbortError") ||
+    /failed to fetch|network|abort|timeout|load failed|connection|API error:\s*(?:5\d\d|429)/i.test(
+      msg
+    )
+  );
 }
 
 const RENDER_BASE = BACKEND_URL || DEFAULT_PRODUCTION_BACKEND;
@@ -356,11 +371,47 @@ export const animeApi = {
 // Stream Endpoints
 // ============================================
 
+type SkipLookupResult = { found: boolean; skips: SkipInterval[] };
+const skipTimesCache = new Map<string, { expiresAt: number; data: SkipLookupResult }>();
+const skipTimesInFlight = new Map<string, Promise<SkipLookupResult>>();
+const SKIP_FOUND_TTL_MS = 6 * 60 * 60 * 1000;
+const SKIP_MISS_TTL_MS = 30 * 60 * 1000;
+
+function readSkipCache(cacheKey: string): SkipLookupResult | null {
+  const now = Date.now();
+  const mem = skipTimesCache.get(cacheKey);
+  if (mem && mem.expiresAt > now) return mem.data;
+
+  try {
+    const raw = window.sessionStorage?.getItem(`aniverse:skip:${cacheKey}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { expiresAt: number; data: SkipLookupResult };
+    if (parsed?.expiresAt > now && parsed.data) {
+      skipTimesCache.set(cacheKey, parsed);
+      return parsed.data;
+    }
+  } catch {
+    // Ignore storage unavailability
+  }
+  return null;
+}
+
+function writeSkipCache(cacheKey: string, data: SkipLookupResult): void {
+  const ttl = data.found ? SKIP_FOUND_TTL_MS : SKIP_MISS_TTL_MS;
+  const entry = { expiresAt: Date.now() + ttl, data };
+  skipTimesCache.set(cacheKey, entry);
+  try {
+    window.sessionStorage?.setItem(`aniverse:skip:${cacheKey}`, JSON.stringify(entry));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 async function fetchAniSkipDirect(
   animeId: number,
   episode: number,
   duration = 0
-): Promise<{ found: boolean; skips: SkipInterval[] }> {
+): Promise<SkipLookupResult> {
   try {
     const len = Math.max(0, Math.round(duration));
     const url = `https://api.aniskip.com/v2/skip-times/${animeId}/${episode}?types[]=op&types[]=ed&types[]=recap&types[]=mixed-op&types[]=mixed-ed&episodeLength=${len}`;
@@ -565,28 +616,152 @@ export const streamApi = {
     return res;
   },
 
-  /** Intro/outro/recap timestamps (seconds) directly from AniSkip (0 bytes on Render). */
-  getSkipTimes: async (animeId: number, episode: number, duration = 0) => {
-    return fetchAniSkipDirect(animeId, episode, duration);
+  /**
+   * Intro/outro/recap timestamps (seconds), cached per episode and routed through the backend
+   * 200-status wrapper when warm so AniSkip 404 misses never spam DevTools console errors.
+   */
+  getSkipTimes: async (
+    animeId: number,
+    episode: number,
+    duration = 0
+  ): Promise<SkipLookupResult> => {
+    const cacheKey = `${animeId}:${episode}`;
+    const cached = readSkipCache(cacheKey);
+    if (cached) return cached;
+
+    const existing = skipTimesInFlight.get(cacheKey);
+    if (existing) return existing;
+
+    const len = Math.max(0, Math.round(duration));
+    const task = (async (): Promise<SkipLookupResult> => {
+      if (Date.now() >= renderColdUntil) {
+        try {
+          const data = await fetchApi<SkipLookupResult>(
+            `/stream/skip-times/${animeId}/${episode}?duration=${len}`,
+            { timeoutMs: 3200, maxAttempts: 1 }
+          );
+          if (data && Array.isArray(data.skips)) {
+            writeSkipCache(cacheKey, data);
+            return data;
+          }
+        } catch (err) {
+          if (isTransientBackendError(err)) {
+            markRenderColdAndWake();
+          }
+        }
+      }
+
+      const direct = await fetchAniSkipDirect(animeId, episode, len);
+      writeSkipCache(cacheKey, direct);
+      return direct;
+    })().finally(() => {
+      skipTimesInFlight.delete(cacheKey);
+    });
+
+    skipTimesInFlight.set(cacheKey, task);
+    return task;
   },
 };
-
-export interface SkipInterval {
-  type: "op" | "ed" | "recap" | string;
-  start: number;
-  end: number;
-  episodeLength: number;
-}
 
 // ============================================
 // History Endpoints (requires auth)
 // ============================================
 
+async function getSupabaseSessionUserId(): Promise<string | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+async function getHistoryDirectSupabase(): Promise<WatchHistoryEntry[]> {
+  try {
+    const userId = await getSupabaseSessionUserId();
+    if (!userId) return [];
+    const { data, error } = await supabase
+      .from("watch_history")
+      .select("*")
+      .eq("user_id", userId)
+      .order("watched_at", { ascending: false });
+    if (error || !Array.isArray(data)) return [];
+    return data as WatchHistoryEntry[];
+  } catch {
+    return [];
+  }
+}
+
+async function saveProgressDirectSupabase(data: {
+  anime_id: number;
+  anime_title: string;
+  anime_image: string | null;
+  episode_number: number;
+  episode_title?: string | null;
+  progress_seconds: number;
+  duration_seconds: number;
+}): Promise<WatchHistoryEntry | null> {
+  try {
+    const userId = await getSupabaseSessionUserId();
+    if (!userId) return null;
+    const safeTitle = data.anime_title.trim() || `Anime #${data.anime_id}`;
+    const { data: saved, error } = await supabase
+      .from("watch_history")
+      .upsert(
+        {
+          user_id: userId,
+          anime_id: data.anime_id,
+          anime_title: safeTitle,
+          anime_image: data.anime_image || null,
+          episode_number: data.episode_number,
+          episode_title: data.episode_title || `Episode ${data.episode_number}`,
+          progress_seconds: data.progress_seconds || 0,
+          duration_seconds: data.duration_seconds || 0,
+          watched_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,anime_id,episode_number" }
+      )
+      .select()
+      .single();
+    if (error) return null;
+    return saved as WatchHistoryEntry;
+  } catch {
+    return null;
+  }
+}
+
+async function withHistoryFallback<T>(
+  renderRequest: () => Promise<T>,
+  supabaseFallback: () => Promise<T>
+): Promise<T> {
+  if (Date.now() < renderColdUntil) {
+    return supabaseFallback();
+  }
+  try {
+    return await renderRequest();
+  } catch (err) {
+    if (isTransientBackendError(err)) {
+      markRenderColdAndWake();
+      return supabaseFallback();
+    }
+    throw err;
+  }
+}
+
 export const historyApi = {
-  getHistory: (token: string) =>
-    fetchApi<WatchHistoryEntry[]>("/history", {
-      headers: withAuth(token),
-    }),
+  getHistory: (token: string): Promise<WatchHistoryEntry[]> =>
+    withHistoryFallback(
+      () =>
+        fetchApi<WatchHistoryEntry[]>("/history", {
+          headers: withAuth(token),
+          timeoutMs: 4500,
+          maxAttempts: 1,
+        }),
+      getHistoryDirectSupabase
+    ),
 
   saveProgress: (
     token: string,
@@ -599,12 +774,18 @@ export const historyApi = {
       progress_seconds: number;
       duration_seconds: number;
     }
-  ) =>
-    fetchApi<WatchHistoryEntry>("/history", {
-      method: "POST",
-      headers: withAuth(token),
-      body: JSON.stringify(data),
-    }),
+  ): Promise<WatchHistoryEntry | null> =>
+    withHistoryFallback(
+      () =>
+        fetchApi<WatchHistoryEntry>("/history", {
+          method: "POST",
+          headers: withAuth(token),
+          body: JSON.stringify(data),
+          timeoutMs: 4500,
+          maxAttempts: 1,
+        }),
+      () => saveProgressDirectSupabase(data)
+    ),
 
   deleteEntry: (token: string, id: string) =>
     fetchApi<void>(`/history/${id}`, {

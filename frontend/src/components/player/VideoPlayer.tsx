@@ -189,6 +189,7 @@ interface VideoPlayerProps {
   autoSkip?: boolean;
   /** Current episode number (used to prevent prologue skipping on episode 1) */
   episodeNumber?: number;
+  onQualitiesDetected?: (heights: number[]) => void;
   onError?: (errorDetail?: any) => void;
   onRetry?: () => void;
   onEnded?: () => void;
@@ -303,6 +304,7 @@ export function VideoPlayer({
   skips = [],
   autoSkip = false,
   episodeNumber,
+  onQualitiesDetected,
   onError,
   onRetry,
   onEnded,
@@ -315,6 +317,8 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const playerRef = useRef<any>(null);
   const hlsInstanceRef = useRef<Hls | null>(null);
+  const onQualitiesDetectedRef = useRef(onQualitiesDetected);
+  onQualitiesDetectedRef.current = onQualitiesDetected;
   const autoSkippedRef = useRef<Set<string>>(new Set());
   const hasSeekedInitialRef = useRef(false);
   const shouldAutoPlayOnLoadRef = useRef(true);
@@ -394,6 +398,18 @@ export function VideoPlayer({
       };
       provider.onInstance((hls) => {
         hlsInstanceRef.current = hls;
+        hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
+          const heights = Array.from(
+            new Set(
+              (data?.levels || [])
+                .map((lvl: any) => Number(lvl?.height))
+                .filter((h: number) => Number.isFinite(h) && h > 0)
+            )
+          ).sort((a, b) => a - b);
+          if (heights.length > 0) {
+            onQualitiesDetectedRef.current?.(heights);
+          }
+        });
       });
     } else {
       hlsInstanceRef.current = null;
@@ -658,6 +674,13 @@ export function VideoPlayer({
     seekToInitialIfReady();
     if (playerRef.current?.duration) {
       setDuration(playerRef.current.duration);
+    }
+    if (type !== "hls") {
+      const videoEl = playerRef.current?.el?.querySelector?.("video");
+      const vh = Number(videoEl?.videoHeight);
+      if (Number.isFinite(vh) && vh > 0) {
+        onQualitiesDetectedRef.current?.([vh]);
+      }
     }
   };
 

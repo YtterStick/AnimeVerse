@@ -104,18 +104,40 @@ export function WatchPage() {
     }
   }, [animeId, episodeNum]);
 
-  // Fetch intro/outro timestamps (AniSkip) for this episode
-  // Re-fetch with actual duration once known for more accurate timestamps
+  // Fetch intro/outro timestamps (AniSkip) once per episode after actual duration is known
+  // (or after a brief fallback delay if duration metadata is unavailable)
   const [videoDurationForSkips, setVideoDurationForSkips] = useState(0);
+  const [detectedQualities, setDetectedQualities] = useState<number[]>([]);
+
+  useEffect(() => {
+    setSkips([]);
+    setVideoDurationForSkips(0);
+    setDetectedQualities([]);
+  }, [animeId, episodeNum]);
+
   useEffect(() => {
     let cancelled = false;
-    setSkips([]);
     if (!animeId || !episodeNum) return;
-    streamApi.getSkipTimes(animeId, episodeNum, videoDurationForSkips).then((res) => {
-      if (!cancelled) setSkips(res.skips || []);
-    });
+
+    const runLookup = (dur: number) => {
+      streamApi.getSkipTimes(animeId, episodeNum, dur).then((res) => {
+        if (!cancelled && res.skips?.length) {
+          setSkips(res.skips);
+        }
+      });
+    };
+
+    if (videoDurationForSkips > 0) {
+      runLookup(videoDurationForSkips);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const fallbackTimer = window.setTimeout(() => runLookup(0), 3000);
     return () => {
       cancelled = true;
+      window.clearTimeout(fallbackTimer);
     };
   }, [animeId, episodeNum, videoDurationForSkips]);
 
@@ -589,9 +611,45 @@ export function WatchPage() {
   // Get the current active server's stream URL
   const activeServer = multiStream?.servers?.[selectedServer] ?? null;
   const cleanActiveServerName = activeServer ? getCleanServerName(activeServer.name, selectedServer) : "";
-  const is4K = activeServer?.quality?.includes("2160") || false;
-  const is1440p = activeServer?.quality?.includes("1440") || false;
-  const activeQualityBadge = is4K ? "4K UHD (2160p)" : is1440p ? "2K QHD (1440p)" : (activeServer?.quality || "1080p FHD");
+
+  useEffect(() => {
+    setDetectedQualities([]);
+  }, [activeServer?.url]);
+
+  const mergedSkips = useMemo(() => {
+    const serverSkips = activeServer?.skips || [];
+    if (serverSkips.length === 0) return skips;
+    const coveredTypes = new Set(skips.map((s) => s.type));
+    return [...skips, ...serverSkips.filter((s) => !coveredTypes.has(s.type))];
+  }, [skips, activeServer?.skips]);
+
+  const maxDetectedHeight = detectedQualities.length > 0 ? detectedQualities[detectedQualities.length - 1] : 0;
+  const is4K = maxDetectedHeight >= 2160 || Boolean(activeServer?.quality?.includes("2160"));
+  const is1440p =
+    !is4K && (maxDetectedHeight >= 1440 || Boolean(activeServer?.quality?.includes("1440")));
+  const activeQualityBadge =
+    maxDetectedHeight > 0
+      ? maxDetectedHeight >= 2160
+        ? "4K UHD (2160p)"
+        : maxDetectedHeight >= 1440
+          ? "2K QHD (1440p)"
+          : maxDetectedHeight >= 1080
+            ? "1080p FHD"
+            : maxDetectedHeight >= 720
+              ? "720p HD"
+              : `${maxDetectedHeight}p`
+      : is4K
+        ? "4K UHD (2160p)"
+        : is1440p
+          ? "2K QHD (1440p)"
+          : activeServer?.quality || "Auto";
+
+  const qualityNote =
+    detectedQualities.length === 1
+      ? ` Highest available resolution from this provider is ${detectedQualities[0]}p.`
+      : detectedQualities.length > 1
+        ? ` Available qualities: ${detectedQualities.map((h) => `${h}p`).join(" / ")}. Selectable in player settings (⚙️).`
+        : " Quality can also be selected in player settings (⚙️).";
 
   const firstSubIndex = multiStream?.servers.findIndex((s) => (s.category || "SUB") === "SUB") ?? -1;
   const firstDubIndex = multiStream?.servers.findIndex((s) => s.category === "DUB") ?? -1;
@@ -648,9 +706,10 @@ export function WatchPage() {
               initialTime={initialTime}
               subtitles={activeServer?.subtitles}
               thumbnails={activeServer?.thumbnails}
-              skips={skips}
+              skips={mergedSkips}
               autoSkip={autoSkip}
               episodeNumber={episodeNum}
+              onQualitiesDetected={setDetectedQualities}
               onError={handleStreamError}
               onRetry={handleRetry}
               onEnded={handleVideoEnded}
@@ -685,7 +744,7 @@ export function WatchPage() {
                   {activeServer?.category === "DUB"
                     ? "Playing English Dubbed audio."
                     : "Playing Japanese audio with English subtitles."}
-                  {" Adaptive stream up to 2160p (4K) / 1080p. Quality can also be selected in player settings (⚙️)."}
+                  {qualityNote}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2.5">

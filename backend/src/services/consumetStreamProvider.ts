@@ -7,6 +7,7 @@ import {
   StreamServer,
   MultiStreamResult,
   SubtitleTrack,
+  SkipInterval,
 } from "./streamProvider";
 import { jikanService } from "./jikanService";
 import { getKnownStreams } from "./knownStreamRegistry";
@@ -928,6 +929,7 @@ export class ConsumetStreamProvider implements StreamProvider {
           if (!streamUrl || !streamUrl.startsWith("http")) return null;
 
           const subtitles = this.normalizeZokoSubtitles(payload?.subtitles);
+          const skips = this.normalizeZokoSkips(payload?.skip);
 
           return {
             id: `zoko-${mode}-0`,
@@ -937,6 +939,7 @@ export class ConsumetStreamProvider implements StreamProvider {
             type: "hls",
             quality: "Auto",
             subtitles,
+            ...(skips.length > 0 ? { skips } : {}),
           };
         } catch {
           return null;
@@ -945,6 +948,24 @@ export class ConsumetStreamProvider implements StreamProvider {
     );
 
     return resolved.filter((s): s is StreamServer => Boolean(s));
+  }
+
+  private normalizeZokoSkips(rawSkip: any): SkipInterval[] {
+    if (!rawSkip || typeof rawSkip !== "object") return [];
+    const pairs: Array<["intro" | "outro", "op" | "ed"]> = [
+      ["intro", "op"],
+      ["outro", "ed"],
+    ];
+    const skips: SkipInterval[] = [];
+    for (const [key, type] of pairs) {
+      const seg = rawSkip[key];
+      const start = Number(seg?.start);
+      const end = Number(seg?.end);
+      if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start + 15) {
+        skips.push({ type, start, end, episodeLength: 0 });
+      }
+    }
+    return skips;
   }
 
   private normalizeZokoSubtitles(rawSubs: any): SubtitleTrack[] {
