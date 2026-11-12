@@ -109,7 +109,23 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
   const [burstReaction, setBurstReaction] = useState<{ type: ReactionType; key: number } | null>(null);
   const [pendingLikeId, setPendingLikeId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    id: string;
+    isReply: boolean;
+    replyCount: number;
+  } | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!deleteConfirm) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !pendingDeleteId) {
+        setDeleteConfirm(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [deleteConfirm, pendingDeleteId]);
 
   const guestProfile = useMemo(
     () => generateRandomAnimeProfile(getOrCreateGuestId()),
@@ -173,6 +189,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
     setReplyTarget(null);
     setReplyDraft("");
     setReplyError(null);
+    setDeleteConfirm(null);
     setRevealedIds(new Set());
     setExpandedThreads(new Set());
 
@@ -381,10 +398,12 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
         token
       );
       setDiscussion(updated);
+      setDeleteConfirm(null);
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "Could not delete comment."
       );
+      setDeleteConfirm(null);
     } finally {
       setPendingDeleteId(null);
     }
@@ -417,6 +436,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
   const renderCommentCard = (comment: EpisodeComment, isReply = false) => {
     const isRevealed = revealedIds.has(comment.id);
     const showMasked = comment.is_spoiler && !isRevealed;
+    const replyCount = isReply ? 0 : (repliesByParentId.get(comment.id)?.length ?? 0);
 
     return (
       <div className="flex items-start gap-3">
@@ -436,38 +456,24 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
         </Avatar>
 
         <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`${isReply ? "text-xs" : "text-sm"} font-semibold text-white`}>
-                {comment.author_name}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`${isReply ? "text-xs" : "text-sm"} font-semibold text-white`}>
+              {comment.author_name}
+            </span>
+            {comment.is_guest && (
+              <span className="px-1.5 py-0.5 rounded bg-secondary/80 text-[10px] font-medium text-muted-foreground">
+                Guest
               </span>
-              {comment.is_guest && (
-                <span className="px-1.5 py-0.5 rounded bg-secondary/80 text-[10px] font-medium text-muted-foreground">
-                  Guest
-                </span>
-              )}
-              {comment.is_spoiler && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-[10px] font-bold uppercase tracking-wide text-amber-300">
-                  <AlertTriangle className="w-3 h-3" />
-                  Spoiler
-                </span>
-              )}
-              <span className="text-xs text-muted-foreground">
-                {formatRelativeTime(comment.created_at)}
-              </span>
-            </div>
-
-            {comment.can_delete && (
-              <button
-                type="button"
-                onClick={() => handleDeleteComment(comment.id)}
-                disabled={pendingDeleteId === comment.id}
-                title="Delete comment"
-                className="text-muted-foreground hover:text-red-400 transition-colors p-1 rounded-md hover:bg-red-500/10"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
             )}
+            {comment.is_spoiler && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-[10px] font-bold uppercase tracking-wide text-amber-300">
+                <AlertTriangle className="w-3 h-3" />
+                Spoiler
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {formatRelativeTime(comment.created_at)}
+            </span>
           </div>
 
           {showMasked ? (
@@ -501,7 +507,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
             <button
               type="button"
               onClick={() => handleToggleCommentLike(comment.id)}
@@ -525,6 +531,24 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
               <CornerDownRight className="w-3.5 h-3.5" />
               <span>Reply</span>
             </button>
+
+            {comment.can_delete && (
+              <button
+                type="button"
+                onClick={() =>
+                  setDeleteConfirm({
+                    id: comment.id,
+                    isReply,
+                    replyCount,
+                  })
+                }
+                disabled={pendingDeleteId === comment.id}
+                className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            )}
 
             {comment.is_spoiler && isRevealed && (
               <button
@@ -916,6 +940,73 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-comment-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => {
+            if (!pendingDeleteId) setDeleteConfirm(null);
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-card border border-border/80 p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-400" />
+              </div>
+              <div className="space-y-1">
+                <h4
+                  id="delete-comment-title"
+                  className="text-base font-bold text-white"
+                >
+                  Delete {deleteConfirm.isReply ? "Reply" : "Comment"}?
+                </h4>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                  Are you sure you want to delete this {deleteConfirm.isReply ? "reply" : "comment"}? This action cannot be undone.
+                </p>
+                {deleteConfirm.replyCount > 0 && (
+                  <p className="text-xs font-medium text-amber-300/90 pt-0.5">
+                    This will also delete {deleteConfirm.replyCount}{" "}
+                    {deleteConfirm.replyCount === 1 ? "reply" : "replies"} under this comment.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={Boolean(pendingDeleteId)}
+                onClick={() => setDeleteConfirm(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={Boolean(pendingDeleteId)}
+                onClick={() => handleDeleteComment(deleteConfirm.id)}
+                className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+              >
+                {pendingDeleteId === deleteConfirm.id ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                {pendingDeleteId === deleteConfirm.id ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </section>
