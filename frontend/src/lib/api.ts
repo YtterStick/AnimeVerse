@@ -11,6 +11,7 @@ import type {
 import { anilistBrowserFallback } from "./anilistBrowserFallback";
 import { resolveKaaClient } from "./kaaDirectResolver";
 import { resolveKnownStream } from "./knownStreamResolver";
+import { resolveExternalEnglishSubtitles } from "./subtitleFallbackResolver";
 
 const DEFAULT_PRODUCTION_BACKEND = "https://animeverse-z6p4.onrender.com";
 const DEFAULT_CLOUDFLARE_STREAM_PROXY = "https://aniverse-stream.andreidilag12.workers.dev";
@@ -475,6 +476,37 @@ export const streamApi = {
       }
     }
     res.servers = uniqueServers.length > 0 ? uniqueServers : res.servers;
+
+    // If no SUB server has English subtitles (or burned-in English hard-subs like AnimeHeaven),
+    // fetch fallback English text subtitles from AnimeTosho (.srt/.ass -> WebVTT) cleanly.
+    const hasEnglishSubSupport = res.servers.some(
+      (s) =>
+        (s.category || "SUB") === "SUB" &&
+        (s.id.startsWith("animeheaven-") ||
+          s.subtitles?.some(
+            (sub) => sub.lang === "en" || /english/i.test(sub.label || "")
+          ))
+    );
+
+    if (!hasEnglishSubSupport) {
+      const fallbackSubs = await resolveExternalEnglishSubtitles(animeId, episode, {
+        buildProxyUrls: (targetUrl, referer) => {
+          const primary = buildStreamProxyUrl(targetUrl, referer ? { referer } : undefined);
+          const backup = toRenderFallbackProxyUrl(primary);
+          return backup ? [primary, backup] : [primary];
+        },
+      }).catch(() => []);
+
+      if (fallbackSubs.length > 0) {
+        res.servers = res.servers.map((server) =>
+          (server.category || "SUB") === "SUB" &&
+          !server.id.startsWith("animeheaven-") &&
+          (!server.subtitles || server.subtitles.length === 0)
+            ? { ...server, subtitles: fallbackSubs }
+            : server
+        );
+      }
+    }
 
     // Pick best default server: Soft-subbed HLS with English subtitle track first, then any SUB
     const engSubIdx = res.servers.findIndex(

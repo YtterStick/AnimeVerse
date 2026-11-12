@@ -161,7 +161,7 @@ export function WatchPage() {
   }, [episodes]);
 
   const [episodeSearch, setEpisodeSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
   const activeEpisodeRef = useRef<HTMLButtonElement | null>(null);
 
   // Auto-select range index containing the current episode
