@@ -90,7 +90,6 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
 
   // Main composer state
   const [draft, setDraft] = useState("");
-  const [markSpoiler, setMarkSpoiler] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -100,7 +99,6 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
     replyToName: string;
   } | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
-  const [replySpoiler, setReplySpoiler] = useState(false);
   const [submittingReply, setSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
 
@@ -139,21 +137,21 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
   const token = session?.access_token ?? null;
 
   const draftModeration = useMemo(
-    () => moderateCommentContent(draft, markSpoiler),
-    [draft, markSpoiler]
+    () => moderateCommentContent(draft, false),
+    [draft]
   );
   const autoDetectedSpoiler = useMemo(
-    () => !markSpoiler && draft.trim().length > 0 && detectSpoilerContent(draft),
-    [draft, markSpoiler]
+    () => draft.trim().length > 0 && detectSpoilerContent(draft),
+    [draft]
   );
 
   const replyModeration = useMemo(
-    () => moderateCommentContent(replyDraft, replySpoiler),
-    [replyDraft, replySpoiler]
+    () => moderateCommentContent(replyDraft, false),
+    [replyDraft]
   );
   const autoDetectedReplySpoiler = useMemo(
-    () => !replySpoiler && replyDraft.trim().length > 0 && detectSpoilerContent(replyDraft),
-    [replyDraft, replySpoiler]
+    () => replyDraft.trim().length > 0 && detectSpoilerContent(replyDraft),
+    [replyDraft]
   );
 
   // Group top-level comments (newest first) and replies (oldest first inside thread)
@@ -281,7 +279,6 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
       );
       setDiscussion(updated);
       setDraft("");
-      setMarkSpoiler(false);
       toast.success("Comment posted");
     } catch (err) {
       const msg =
@@ -306,7 +303,6 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
     }
     setReplyTarget({ rootCommentId: rootId, replyToName: comment.author_name });
     setReplyDraft(comment.parent_id ? `@${comment.author_name} ` : "");
-    setReplySpoiler(false);
     setReplyError(null);
   };
 
@@ -347,7 +343,6 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
       setExpandedThreads((prev) => new Set(prev).add(targetRootId));
       setReplyTarget(null);
       setReplyDraft("");
-      setReplySpoiler(false);
       toast.success("Reply posted");
     } catch (err) {
       const msg =
@@ -775,28 +770,10 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
 
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMarkSpoiler((v) => !v)}
-                    aria-pressed={markSpoiler}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium border transition-colors ${
-                      markSpoiler
-                        ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
-                        : "bg-secondary/50 border-border/50 text-muted-foreground hover:text-white"
-                    }`}
-                  >
-                    {markSpoiler ? (
-                      <EyeOff className="w-3.5 h-3.5" />
-                    ) : (
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                    )}
-                    <span>{markSpoiler ? "Spoiler" : "Contains Spoiler"}</span>
-                  </button>
-
                   {autoDetectedSpoiler && (
-                    <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/25 px-2 py-1 rounded-lg">
-                      <AlertTriangle className="w-3 h-3" />
-                      Auto-spoiler
+                    <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-medium text-amber-300 bg-amber-500/15 border border-amber-500/35 px-2.5 py-1 rounded-lg">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      Spoiler detected — will be hidden automatically
                     </span>
                   )}
                 </div>
@@ -913,27 +890,10 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
 
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setReplySpoiler((v) => !v)}
-                            aria-pressed={replySpoiler}
-                            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
-                              replySpoiler
-                                ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
-                                : "bg-secondary/50 border-border/50 text-muted-foreground hover:text-white"
-                            }`}
-                          >
-                            {replySpoiler ? (
-                              <EyeOff className="w-3 h-3" />
-                            ) : (
-                              <AlertTriangle className="w-3 h-3" />
-                            )}
-                            <span>{replySpoiler ? "Marked Spoiler" : "Spoiler"}</span>
-                          </button>
-
                           {autoDetectedReplySpoiler && (
-                            <span className="text-[11px] text-amber-300/90">
-                              Auto-spoiler detected
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-lg">
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              Spoiler detected — will be hidden automatically
                             </span>
                           )}
                         </div>

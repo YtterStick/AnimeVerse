@@ -445,7 +445,7 @@ router.post("/:animeId/:episode", optionalAuth, async (req: AuthRequest, res: Re
     }
 
     const rawContent = typeof req.body?.content === "string" ? req.body.content : "";
-    const moderation = moderateCommentContent(rawContent, Boolean(req.body?.is_spoiler));
+    const moderation = moderateCommentContent(rawContent, false);
 
     if (!moderation.cleanText) {
       return res.status(400).json({ message: "Comment cannot be empty" });
