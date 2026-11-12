@@ -1033,43 +1033,8 @@ export function WatchPage() {
       </div>
     </div>
 
-    {/* Bottom Section: Full Width Controls, Metadata, Synopsis, Related, More Like This */}
+    {/* Bottom Section: Synopsis, Comments, Related, More Like This */}
     <div className="space-y-8 pt-2">
-      {/* Episode Controls & Metadata */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 border-b border-border/20 pb-6">
-          <div className="min-w-0">
-            <h2 className="text-lg sm:text-xl font-bold text-white line-clamp-1 leading-tight">
-              {title}
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-              Episode {episodeNum}
-              {currentEpisodeTitle ? ` — ${currentEpisodeTitle}` : ""}
-            </p>
-          </div>
-
-          {/* Previous / Next Episode buttons */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              onClick={handlePrevEpisode}
-              disabled={episodeNum <= 1}
-              className="rounded-full px-4 border border-border/40"
-            >
-              <ChevronLeft className="w-4 h-4 mr-1.5" />
-              Prev
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={handleNextEpisode}
-              disabled={!hasNext}
-              className="rounded-full px-4 border border-border/40"
-            >
-              Next
-              <ChevronRight className="w-4 h-4 ml-1.5" />
-            </Button>
-          </div>
-        </div>
-
         {/* Synopsis Accordion description */}
         <div className="space-y-2 pb-6">
           <h2 className="text-base font-bold text-foreground">Synopsis</h2>
