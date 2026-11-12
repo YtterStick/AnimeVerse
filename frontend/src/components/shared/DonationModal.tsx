@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Heart, Copy, Check, Gift, ShieldCheck } from "lucide-react";
+import { Heart, ShieldCheck } from "lucide-react";
 
 interface DonationModalProps {
   isOpen: boolean;
@@ -9,15 +8,6 @@ interface DonationModalProps {
 }
 
 export function DonationModal({ isOpen, onClose }: DonationModalProps) {
-  const [copied, setCopied] = useState(false);
-  const referralCode = "AD231757";
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(referralCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md bg-card/95 border-border/60 backdrop-blur-xl shadow-2xl p-6 rounded-2xl max-h-[90vh] overflow-y-auto">
@@ -55,43 +45,6 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
           <div className="bg-secondary/50 border border-border/60 rounded-xl p-3 text-xs text-muted-foreground flex items-center gap-2.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>Scan with GCash, Maya, ShopeePay, BDO, BPI, or any InstaPay-supported banking app.</span>
-          </div>
-
-          {/* Referral Reward Box */}
-          <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Gift className="w-4 h-4 text-amber-400" />
-                <span className="text-xs font-bold text-amber-300">MariBank Referral Bonus</span>
-              </div>
-              <span className="text-[10px] font-bold text-amber-400/90 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
-                Up to ₱588
-              </span>
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-snug">
-              Sign up for a MariBank account using this referral code and get up to ₱588 welcome rewards!
-            </p>
-            <div className="flex items-center gap-2 pt-1">
-              <code className="flex-1 px-3 py-1.5 bg-black/40 rounded-lg text-xs font-mono font-bold text-white border border-amber-500/30 tracking-wider">
-                {referralCode}
-              </code>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleCopy}
-                className="h-8 text-xs font-bold border-amber-500/40 hover:bg-amber-500/20 text-amber-300 cursor-pointer"
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 mr-1 text-emerald-400" /> Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5 mr-1" /> Copy
-                  </>
-                )}
-              </Button>
-            </div>
           </div>
 
           {/* Close Action */}
