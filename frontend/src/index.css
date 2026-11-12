@@ -494,5 +494,45 @@
   animation: animeReactionBurst 0.75s ease-out forwards;
 }
 
+@keyframes coffeeSteamRise {
+  0% { transform: translateY(4px) scaleX(0.9); opacity: 0; }
+  35% { opacity: 0.9; }
+  75% { opacity: 0.55; }
+  100% { transform: translateY(-16px) scaleX(1.15); opacity: 0; }
+}
+
+@keyframes coffeeFillUp {
+  0% { transform: scaleY(0.15); }
+  70% { transform: scaleY(1); }
+  100% { transform: scaleY(0.95); }
+}
+
+@keyframes qrPopIn {
+  0% { opacity: 0; transform: scale(0.86) translateY(10px); }
+  65% { opacity: 1; transform: scale(1.02) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.coffee-steam-1 {
+  animation: coffeeSteamRise 1.4s ease-out infinite;
+}
+
+.coffee-steam-2 {
+  animation: coffeeSteamRise 1.4s ease-out 0.35s infinite;
+}
+
+.coffee-steam-3 {
+  animation: coffeeSteamRise 1.4s ease-out 0.7s infinite;
+}
+
+.coffee-liquid-fill {
+  animation: coffeeFillUp 1.05s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform-origin: bottom;
+}
+
+.qr-reveal-pop {
+  animation: qrPopIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
 
 
