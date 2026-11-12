@@ -693,5 +693,65 @@ router.delete("/:animeId/:episode/:commentId", optionalAuth, async (req: AuthReq
   }
 });
 
+export async function getEpisodeCommentById(
+  animeId: number,
+  episodeNumber: number,
+  commentId: string
+): Promise<StoredComment | null> {
+  episodeCache.delete(getEpisodeKey(animeId, episodeNumber));
+  const record = await loadEpisodeRecord(animeId, episodeNumber, true);
+  return record.comments.find((c) => c.id === commentId) || null;
+}
+
+export async function adminMarkCommentAsSpoiler(
+  animeId: number,
+  episodeNumber: number,
+  commentId: string
+): Promise<boolean> {
+  let updated = false;
+  await enqueueEpisodeWrite(animeId, episodeNumber, async () => {
+    episodeCache.delete(getEpisodeKey(animeId, episodeNumber));
+    const current = await loadEpisodeRecord(animeId, episodeNumber, true);
+    const targetExists = current.comments.some((c) => c.id === commentId);
+    if (!targetExists) return current;
+
+    updated = true;
+    const nextRecord: EpisodeDiscussionRecord = {
+      ...current,
+      comments: current.comments.map((c) =>
+        c.id === commentId ? { ...c, is_spoiler: true } : c
+      ),
+    };
+    await saveEpisodeRecord(nextRecord);
+    return nextRecord;
+  });
+  return updated;
+}
+
+export async function adminRemoveEpisodeComment(
+  animeId: number,
+  episodeNumber: number,
+  commentId: string
+): Promise<boolean> {
+  let removed = false;
+  await enqueueEpisodeWrite(animeId, episodeNumber, async () => {
+    episodeCache.delete(getEpisodeKey(animeId, episodeNumber));
+    const current = await loadEpisodeRecord(animeId, episodeNumber, true);
+    const targetExists = current.comments.some((c) => c.id === commentId);
+    if (!targetExists) return current;
+
+    removed = true;
+    const nextRecord: EpisodeDiscussionRecord = {
+      ...current,
+      comments: current.comments.filter(
+        (c) => c.id !== commentId && c.parent_id !== commentId
+      ),
+    };
+    await saveEpisodeRecord(nextRecord);
+    return nextRecord;
+  });
+  return removed;
+}
+
 export default router;
 

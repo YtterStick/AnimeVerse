@@ -2,6 +2,9 @@ import type {
   Anime,
   AnimeSeason,
   ApiResponse,
+  CommentReport,
+  CommentReportAction,
+  CommentReportCategory,
   Episode,
   EpisodeDiscussion,
   MultiStreamResult,
@@ -885,6 +888,58 @@ export const reportsApi = {
 
   deleteReport: (token: string, id: string) =>
     fetchApi<{ message: string; remaining: number }>(`/reports/${id}`, {
+      method: "DELETE",
+      headers: withAuth(token),
+      timeoutMs: 12000,
+      maxAttempts: 2,
+    }),
+
+  submitCommentReport: (
+    data: {
+      anime_id: number;
+      anime_title?: string;
+      anime_image?: string | null;
+      episode_number: number;
+      comment_id: string;
+      comment_author: string;
+      comment_content: string;
+      category: CommentReportCategory;
+      reason: string;
+      details?: string;
+    },
+    token?: string | null
+  ) =>
+    fetchApi<{ data: CommentReport; message: string }>("/reports/comments", {
+      method: "POST",
+      headers: withActorHeaders(token),
+      body: JSON.stringify(data),
+      timeoutMs: 12000,
+      maxAttempts: 1,
+    }),
+
+  getCommentReports: (token: string) =>
+    fetchApi<{ data: CommentReport[] }>("/reports/comments", {
+      headers: withAuth(token),
+      cache: "no-store",
+      timeoutMs: 12000,
+      maxAttempts: 2,
+    }),
+
+  processCommentReport: (
+    token: string,
+    id: string,
+    action: CommentReportAction | "reopen"
+  ) =>
+    fetchApi<{ data: CommentReport }>(`/reports/comments/${id}`, {
+      method: "PATCH",
+      headers: withAuth(token),
+      body: JSON.stringify({ action }),
+      timeoutMs: 12000,
+      maxAttempts: 1,
+    }),
+
+  deleteCommentReport: (token: string, id: string) =>
+    fetchApi<{ message: string; remaining: number }>(`/reports/comments/${id}`, {
       method: "DELETE",
       headers: withAuth(token),
       timeoutMs: 12000,

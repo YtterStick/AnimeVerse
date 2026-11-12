@@ -196,6 +196,41 @@ export interface VideoReport {
   resolved_at: string | null;
 }
 
+export type CommentReportCategory =
+  | "spoiler"
+  | "bad_language"
+  | "sexual"
+  | "harassment"
+  | "spam"
+  | "other";
+
+export type CommentReportAction =
+  | "marked_spoiler"
+  | "deleted_comment"
+  | "dismissed";
+
+export interface CommentReport {
+  id: string;
+  anime_id: number;
+  anime_title: string;
+  anime_image: string | null;
+  episode_number: number;
+  comment_id: string;
+  comment_author: string;
+  comment_content: string;
+  comment_is_spoiler: boolean;
+  category: CommentReportCategory;
+  reason: string;
+  details: string;
+  reporter_email: string;
+  status: "open" | "resolved";
+  action_taken: CommentReportAction | null;
+  report_count: number;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}
+
 export type ReactionType = "like" | "love" | "fire" | "funny" | "sad";
 
 export interface EpisodeComment {

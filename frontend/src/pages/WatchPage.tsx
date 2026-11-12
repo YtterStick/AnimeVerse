@@ -1092,7 +1092,12 @@ export function WatchPage() {
         </div>
 
         {/* Episode Reactions & Comments */}
-        <EpisodeComments animeId={animeId} episodeNumber={episodeNum} />
+        <EpisodeComments
+          animeId={animeId}
+          episodeNumber={episodeNum}
+          animeTitle={anime ? formatTitle(anime) : undefined}
+          animeImage={anime?.images?.jpg?.large_image_url || anime?.images?.jpg?.image_url || null}
+        />
 
         {/* Seasons & Franchise Section (Season 1, Season 2, Sequels & Movies) */}
         <AnimeSeasons currentAnimeId={animeId} mode="watch" />
