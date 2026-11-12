@@ -108,12 +108,10 @@ export function WatchPage() {
   // Fetch intro/outro timestamps (AniSkip) once per episode after actual duration is known
   // (or after a brief fallback delay if duration metadata is unavailable)
   const [videoDurationForSkips, setVideoDurationForSkips] = useState(0);
-  const [detectedQualities, setDetectedQualities] = useState<number[]>([]);
 
   useEffect(() => {
     setSkips([]);
     setVideoDurationForSkips(0);
-    setDetectedQualities([]);
   }, [animeId, episodeNum]);
 
   useEffect(() => {
@@ -612,10 +610,12 @@ export function WatchPage() {
   // Get the current active server's stream URL
   const activeServer = multiStream?.servers?.[selectedServer] ?? null;
   const cleanActiveServerName = activeServer ? getCleanServerName(activeServer.name, selectedServer) : "";
-
-  useEffect(() => {
-    setDetectedQualities([]);
-  }, [activeServer?.url]);
+  const currentEpisode = episodes.find((ep) => ep.episode_number === episodeNum);
+  const currentEpisodeTitle =
+    currentEpisode?.title &&
+    currentEpisode.title.trim().toLowerCase() !== `episode ${episodeNum}`
+      ? currentEpisode.title.trim()
+      : null;
 
   const mergedSkips = useMemo(() => {
     const serverSkips = activeServer?.skips || [];
@@ -623,34 +623,6 @@ export function WatchPage() {
     const coveredTypes = new Set(skips.map((s) => s.type));
     return [...skips, ...serverSkips.filter((s) => !coveredTypes.has(s.type))];
   }, [skips, activeServer?.skips]);
-
-  const maxDetectedHeight = detectedQualities.length > 0 ? detectedQualities[detectedQualities.length - 1] : 0;
-  const is4K = maxDetectedHeight >= 2160 || Boolean(activeServer?.quality?.includes("2160"));
-  const is1440p =
-    !is4K && (maxDetectedHeight >= 1440 || Boolean(activeServer?.quality?.includes("1440")));
-  const activeQualityBadge =
-    maxDetectedHeight > 0
-      ? maxDetectedHeight >= 2160
-        ? "4K UHD (2160p)"
-        : maxDetectedHeight >= 1440
-          ? "2K QHD (1440p)"
-          : maxDetectedHeight >= 1080
-            ? "1080p FHD"
-            : maxDetectedHeight >= 720
-              ? "720p HD"
-              : `${maxDetectedHeight}p`
-      : is4K
-        ? "4K UHD (2160p)"
-        : is1440p
-          ? "2K QHD (1440p)"
-          : activeServer?.quality || "Auto";
-
-  const qualityNote =
-    detectedQualities.length === 1
-      ? ` Highest available resolution from this provider is ${detectedQualities[0]}p.`
-      : detectedQualities.length > 1
-        ? ` Available qualities: ${detectedQualities.map((h) => `${h}p`).join(" / ")}. Selectable in player settings (⚙️).`
-        : " Quality can also be selected in player settings (⚙️).";
 
   const firstSubIndex = multiStream?.servers.findIndex((s) => (s.category || "SUB") === "SUB") ?? -1;
   const firstDubIndex = multiStream?.servers.findIndex((s) => s.category === "DUB") ?? -1;
@@ -710,7 +682,6 @@ export function WatchPage() {
               skips={mergedSkips}
               autoSkip={autoSkip}
               episodeNumber={episodeNum}
-              onQualitiesDetected={setDetectedQualities}
               onError={handleStreamError}
               onRetry={handleRetry}
               onEnded={handleVideoEnded}
@@ -722,108 +693,99 @@ export function WatchPage() {
               onReport={() => setIsReportOpen(true)}
             />
 
-        {/* Server Selector */}
-        {multiStream && multiStream.servers.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex flex-col gap-3 rounded-xl border border-border/20 bg-card/20 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0 space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-primary">Current Server</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-bold text-white tracking-wide">{cleanActiveServerName}</p>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                    is4K 
-                      ? "bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/40 shadow-sm" 
-                      : "bg-primary/15 text-primary border border-primary/30"
-                  }`}>
-                    {activeQualityBadge}
-                  </span>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-secondary/80 text-foreground border border-border/40">
-                    {activeServer?.category === "DUB" ? "English Dub" : "English Sub"}
-                  </span>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {activeServer?.category === "DUB"
-                    ? "Playing English Dubbed audio."
-                    : "Playing Japanese audio with English subtitles."}
-                  {qualityNote}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2.5">
-                {firstSubIndex !== -1 && (
-                  <Button
-                    size="sm"
-                    variant={(activeServer?.category || "SUB") === "SUB" ? "default" : "secondary"}
-                    onClick={() => handleServerChange(firstSubIndex)}
-                    className="rounded-full px-3 text-xs font-bold"
-                  >
-                    SUB (Eng)
-                  </Button>
-                )}
-                {firstDubIndex !== -1 && (
-                  <Button
-                    size="sm"
-                    variant={activeServer?.category === "DUB" ? "default" : "secondary"}
-                    onClick={() => handleServerChange(firstDubIndex)}
-                    className="rounded-full px-3 text-xs font-bold"
-                  >
-                    DUB (Eng)
-                  </Button>
-                )}
-
-                {/* Auto Skip Checkbox */}
-                <label
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary/80 border border-border/40 text-xs font-semibold text-white/90 hover:text-white cursor-pointer select-none transition-colors"
-                  title="Automatically skip intros and outros"
-                >
-                  <input
-                    type="checkbox"
-                    checked={autoSkip}
-                    onChange={toggleAutoSkip}
-                    className="w-3.5 h-3.5 rounded border-border text-primary accent-primary cursor-pointer"
-                  />
-                  <span className="flex items-center gap-1.5">
-                    <FastForward className="w-3.5 h-3.5 text-primary" />
-                    Auto Skip
-                  </span>
-                </label>
-
-                {/* Auto Next Checkbox */}
-                <label
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary/80 border border-border/40 text-xs font-semibold text-white/90 hover:text-white cursor-pointer select-none transition-colors"
-                  title="Automatically play the next episode when current episode ends"
-                >
-                  <input
-                    type="checkbox"
-                    checked={autoNext}
-                    onChange={toggleAutoNext}
-                    className="w-3.5 h-3.5 rounded border-border text-primary accent-primary cursor-pointer"
-                  />
-                  <span className="flex items-center gap-1.5">
-                    <Play className="w-3 h-3 text-primary fill-primary" />
-                    Auto Next
-                  </span>
-                </label>
-
-                {/* Report Broken Video Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsReportOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs font-semibold text-amber-300 hover:text-amber-200 cursor-pointer select-none transition-colors"
-                  title="Report a problem with this video stream or server"
-                >
-                  <Flag className="w-3.5 h-3.5 text-amber-400" />
-                  Report
-                </button>
-              </div>
+        {/* Episode & Anime Title Bar + Playback Controls */}
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 rounded-xl border border-border/30 bg-card/30 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-0.5">
+              <Link
+                to={`/anime/${animeId}`}
+                className="text-xs font-bold text-primary hover:underline truncate block"
+              >
+                {title}
+              </Link>
+              <h1 className="text-base sm:text-lg font-extrabold text-white tracking-tight truncate">
+                Episode {episodeNum}
+                {currentEpisodeTitle ? ` — ${currentEpisodeTitle}` : ""}
+              </h1>
             </div>
 
+            <div className="flex flex-wrap items-center gap-2">
+              {firstSubIndex !== -1 && (
+                <Button
+                  size="sm"
+                  variant={(activeServer?.category || "SUB") === "SUB" ? "default" : "secondary"}
+                  onClick={() => handleServerChange(firstSubIndex)}
+                  className="rounded-full px-3 text-xs font-bold"
+                >
+                  SUB (Eng)
+                </Button>
+              )}
+              {firstDubIndex !== -1 && (
+                <Button
+                  size="sm"
+                  variant={activeServer?.category === "DUB" ? "default" : "secondary"}
+                  onClick={() => handleServerChange(firstDubIndex)}
+                  className="rounded-full px-3 text-xs font-bold"
+                >
+                  DUB (Eng)
+                </Button>
+              )}
+
+              {/* Auto Skip Checkbox */}
+              <label
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary/80 border border-border/40 text-xs font-semibold text-white/90 hover:text-white cursor-pointer select-none transition-colors"
+                title="Automatically skip intros and outros"
+              >
+                <input
+                  type="checkbox"
+                  checked={autoSkip}
+                  onChange={toggleAutoSkip}
+                  className="w-3.5 h-3.5 rounded border-border text-primary accent-primary cursor-pointer"
+                />
+                <span className="flex items-center gap-1.5">
+                  <FastForward className="w-3.5 h-3.5 text-primary" />
+                  Auto Skip
+                </span>
+              </label>
+
+              {/* Auto Next Checkbox */}
+              <label
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary/80 border border-border/40 text-xs font-semibold text-white/90 hover:text-white cursor-pointer select-none transition-colors"
+                title="Automatically play the next episode when current episode ends"
+              >
+                <input
+                  type="checkbox"
+                  checked={autoNext}
+                  onChange={toggleAutoNext}
+                  className="w-3.5 h-3.5 rounded border-border text-primary accent-primary cursor-pointer"
+                />
+                <span className="flex items-center gap-1.5">
+                  <Play className="w-3 h-3 text-primary fill-primary" />
+                  Auto Next
+                </span>
+              </label>
+
+              {/* Report Broken Video Button */}
+              <button
+                type="button"
+                onClick={() => setIsReportOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs font-semibold text-amber-300 hover:text-amber-200 cursor-pointer select-none transition-colors"
+                title="Report a problem with this video stream or server"
+              >
+                <Flag className="w-3.5 h-3.5 text-amber-400" />
+                Report
+              </button>
+            </div>
+          </div>
+
+          {multiStream && multiStream.servers.length > 1 && (
             <ServerSelector
               servers={multiStream.servers}
               activeIndex={selectedServer}
               onSelect={handleServerChange}
             />
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Under-Player Ad-Free Support Banner */}
         <div className="relative overflow-hidden rounded-2xl border border-pink-500/30 bg-gradient-to-r from-pink-500/10 via-purple-500/5 to-amber-500/10 p-3.5 sm:p-4 shadow-lg backdrop-blur-md">
@@ -1043,12 +1005,13 @@ export function WatchPage() {
     <div className="space-y-8 pt-2">
       {/* Episode Controls & Metadata */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 border-b border-border/20 pb-6">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white line-clamp-1 leading-tight">
-              Episode {episodeNum}
-            </h1>
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-white line-clamp-1 leading-tight">
+              {title}
+            </h2>
             <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-              Playing: <span className="text-foreground font-semibold">{title}</span>
+              Episode {episodeNum}
+              {currentEpisodeTitle ? ` — ${currentEpisodeTitle}` : ""}
             </p>
           </div>
 
