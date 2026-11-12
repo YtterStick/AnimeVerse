@@ -1,6 +1,7 @@
 import { Router, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { optionalAuth, isAdminUser, AuthRequest } from "../middleware/auth";
+import env from "../config/env";
 import supabase from "../config/supabase";
 import { detectExplicitContent, moderateCommentContent } from "../utils/contentModeration";
 
@@ -151,45 +152,65 @@ function setCachedRecord(key: string, record: EpisodeDiscussionRecord): void {
   });
 }
 
+async function fetchStorageRecordNoCache(
+  animeId: number,
+  episodeNumber: number,
+  throwOnTransientError = false
+): Promise<EpisodeDiscussionRecord> {
+  const fileName = getFileName(animeId, episodeNumber);
+  const baseUrl = env.SUPABASE_URL.replace(/\/+$/, "");
+  const storageUrl = `${baseUrl}/storage/v1/object/${BUCKET_NAME}/${encodeURIComponent(fileName)}?cb=${Date.now()}`;
+
+  try {
+    const res = await fetch(storageUrl, {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        "Cache-Control": "no-cache, no-store",
+        Pragma: "no-cache",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    // Object does not exist yet in Supabase Storage
+    if (res.status === 404 || res.status === 400) {
+      return createEmptyRecord(animeId, episodeNumber);
+    }
+
+    if (!res.ok) {
+      throw new Error(`Storage read failed (${res.status})`);
+    }
+
+    const text = await res.text();
+    const parsed = JSON.parse(text);
+    return normalizeRecord(parsed, animeId, episodeNumber);
+  } catch (err) {
+    if (throwOnTransientError) {
+      throw err;
+    }
+    return createEmptyRecord(animeId, episodeNumber);
+  }
+}
+
 async function loadEpisodeRecord(
   animeId: number,
   episodeNumber: number,
-  forceRefresh = false
+  throwOnTransientError = false
 ): Promise<EpisodeDiscussionRecord> {
   const key = getEpisodeKey(animeId, episodeNumber);
   const cached = episodeCache.get(key);
-  if (cached && !forceRefresh && cached.expiresAt > Date.now()) {
+  if (cached && cached.expiresAt > Date.now()) {
     return cached.record;
   }
 
   await ensureBucket();
-
-  try {
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .download(getFileName(animeId, episodeNumber));
-
-    if (error || !data) {
-      const empty = createEmptyRecord(animeId, episodeNumber);
-      setCachedRecord(key, empty);
-      return empty;
-    }
-
-    const text = await data.text();
-    const parsed = JSON.parse(text);
-    const normalized = normalizeRecord(parsed, animeId, episodeNumber);
-    setCachedRecord(key, normalized);
-    return normalized;
-  } catch {
-    const empty = createEmptyRecord(animeId, episodeNumber);
-    setCachedRecord(key, empty);
-    return empty;
-  }
+  const record = await fetchStorageRecordNoCache(animeId, episodeNumber, throwOnTransientError);
+  setCachedRecord(key, record);
+  return record;
 }
 
 async function saveEpisodeRecord(record: EpisodeDiscussionRecord): Promise<void> {
   const key = getEpisodeKey(record.anime_id, record.episode_number);
-  setCachedRecord(key, record);
   await ensureBucket();
 
   const payload = JSON.stringify(record);
@@ -197,6 +218,7 @@ async function saveEpisodeRecord(record: EpisodeDiscussionRecord): Promise<void>
     .from(BUCKET_NAME)
     .upload(getFileName(record.anime_id, record.episode_number), Buffer.from(payload, "utf-8"), {
       contentType: "application/json",
+      cacheControl: "0",
       upsert: true,
     });
 
@@ -204,6 +226,8 @@ async function saveEpisodeRecord(record: EpisodeDiscussionRecord): Promise<void>
     console.error("[Comments] Failed to save episode discussion:", error.message);
     throw error;
   }
+
+  setCachedRecord(key, record);
 }
 
 function enqueueEpisodeWrite<T>(
@@ -393,6 +417,7 @@ router.get("/:animeId/:episode", optionalAuth, async (req: AuthRequest, res: Res
     const actorKey = getActorKey(req);
     const isAdmin = isAdminUser(req.user);
 
+    res.setHeader("Cache-Control", "no-store");
     res.json(toPublicDiscussion(record, actorKey, isAdmin));
   } catch (error) {
     next(error);

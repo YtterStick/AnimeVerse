@@ -398,6 +398,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
   const handleDeleteComment = async (commentId: string) => {
     if (pendingDeleteId === commentId) return;
     setPendingDeleteId(commentId);
+    setErrorMessage(null);
     try {
       const updated = await commentsApi.deleteComment(
         animeId,
@@ -410,6 +411,27 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
       toast.info("Comment deleted");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Could not delete comment.";
+      if (/comment not found/i.test(msg)) {
+        // Comment is already absent on server — resync discussion state cleanly
+        try {
+          const fresh = await commentsApi.getEpisodeDiscussion(
+            animeId,
+            episodeNumber,
+            token
+          );
+          setDiscussion(fresh);
+        } catch {
+          setDiscussion((prev) => ({
+            ...prev,
+            comments: prev.comments.filter(
+              (c) => c.id !== commentId && c.parent_id !== commentId
+            ),
+          }));
+        }
+        setDeleteConfirm(null);
+        toast.info("Comment removed");
+        return;
+      }
       setErrorMessage(msg);
       toast.error(msg);
       setDeleteConfirm(null);

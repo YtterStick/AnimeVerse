@@ -933,6 +933,7 @@ export const commentsApi = {
   ) =>
     fetchApi<EpisodeDiscussion>(`/comments/${animeId}/${episodeNumber}`, {
       headers: withActorHeaders(token),
+      cache: "no-store",
       timeoutMs: 10000,
       maxAttempts: 2,
     }),
@@ -1001,14 +1002,16 @@ export const commentsApi = {
     episodeNumber: number,
     commentId: string,
     token?: string | null
-  ) =>
-    fetchApi<EpisodeDiscussion>(
-      `/comments/${animeId}/${episodeNumber}/${commentId}`,
+  ) => {
+    const guestId = encodeURIComponent(getOrCreateGuestId());
+    return fetchApi<EpisodeDiscussion>(
+      `/comments/${animeId}/${episodeNumber}/${commentId}?guestId=${guestId}`,
       {
         method: "DELETE",
         headers: withActorHeaders(token),
         timeoutMs: 10000,
         maxAttempts: 1,
       }
-    ),
+    );
+  },
 };
