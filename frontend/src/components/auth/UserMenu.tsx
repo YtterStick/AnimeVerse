@@ -37,7 +37,7 @@ export function UserMenu() {
     .toUpperCase() || "U";
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger className="focus:outline-none cursor-pointer rounded-full p-0.5 border border-border/50 hover:border-primary transition-all select-none hover:scale-105 active:scale-95 duration-200">
         <Avatar className="w-8 h-8 ring-1 ring-white/10">
           <AvatarImage src={avatarUrl} alt={name} className="object-cover" />

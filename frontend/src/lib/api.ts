@@ -941,6 +941,7 @@ export const commentsApi = {
     data: {
       content: string;
       is_spoiler?: boolean;
+      parent_id?: string | null;
       author_name?: string;
       author_avatar?: string | null;
     },

@@ -200,6 +200,7 @@ export type ReactionType = "like" | "love" | "fire" | "funny" | "sad";
 
 export interface EpisodeComment {
   id: string;
+  parent_id: string | null;
   author_name: string;
   author_avatar: string | null;
   is_guest: boolean;

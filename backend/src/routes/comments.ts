@@ -12,6 +12,7 @@ export type ReactionType = (typeof REACTION_TYPES)[number];
 
 interface StoredComment {
   id: string;
+  parent_id: string | null;
   actor_key: string;
   author_name: string;
   author_avatar: string | null;
@@ -31,6 +32,7 @@ interface EpisodeDiscussionRecord {
 
 export interface PublicComment {
   id: string;
+  parent_id: string | null;
   author_name: string;
   author_avatar: string | null;
   is_guest: boolean;
@@ -121,6 +123,7 @@ function normalizeRecord(
       .filter((c): c is StoredComment => Boolean(c && typeof c.id === "string" && typeof c.content === "string"))
       .map((c) => ({
         id: c.id,
+        parent_id: typeof c.parent_id === "string" && c.parent_id.trim() ? c.parent_id.trim() : null,
         actor_key: typeof c.actor_key === "string" ? c.actor_key : "",
         author_name: typeof c.author_name === "string" && c.author_name.trim() ? c.author_name.trim() : "AnimeFan",
         author_avatar: typeof c.author_avatar === "string" ? c.author_avatar : null,
@@ -363,6 +366,7 @@ function toPublicDiscussion(
 
   const comments: PublicComment[] = record.comments.map((c) => ({
     id: c.id,
+    parent_id: c.parent_id ?? null,
     author_name: c.author_name,
     author_avatar: c.author_avatar,
     is_guest: c.is_guest,
@@ -433,6 +437,11 @@ router.post("/:animeId/:episode", optionalAuth, async (req: AuthRequest, res: Re
       });
     }
 
+    const rawParentId =
+      typeof req.body?.parent_id === "string" && req.body.parent_id.trim()
+        ? req.body.parent_id.trim()
+        : null;
+
     const nowMs = Date.now();
     const lastMs = lastCommentByActor.get(author.actorKey) || 0;
     if (nowMs - lastMs < COMMENT_COOLDOWN_MS) {
@@ -440,25 +449,38 @@ router.post("/:animeId/:episode", optionalAuth, async (req: AuthRequest, res: Re
         message: "Please wait a few seconds before posting another comment.",
       });
     }
-    lastCommentByActor.set(author.actorKey, nowMs);
 
-    const newComment: StoredComment = {
-      id: crypto.randomUUID(),
-      actor_key: author.actorKey,
-      author_name: author.authorName,
-      author_avatar: author.authorAvatar,
-      is_guest: author.isGuest,
-      content: moderation.cleanText,
-      is_spoiler: moderation.isSpoiler,
-      liked_by: [],
-      created_at: new Date().toISOString(),
-    };
-
+    let parentNotFound = false;
     const updatedRecord = await enqueueEpisodeWrite(
       parsed.animeId,
       parsed.episodeNumber,
       async () => {
         const current = await loadEpisodeRecord(parsed.animeId, parsed.episodeNumber, true);
+
+        let resolvedParentId: string | null = null;
+        if (rawParentId) {
+          const parentComment = current.comments.find((c) => c.id === rawParentId);
+          if (!parentComment) {
+            parentNotFound = true;
+            return current;
+          }
+          resolvedParentId = parentComment.parent_id || parentComment.id;
+        }
+
+        const newComment: StoredComment = {
+          id: crypto.randomUUID(),
+          parent_id: resolvedParentId,
+          actor_key: author.actorKey,
+          author_name: author.authorName,
+          author_avatar: author.authorAvatar,
+          is_guest: author.isGuest,
+          content: moderation.cleanText,
+          is_spoiler: moderation.isSpoiler,
+          liked_by: [],
+          created_at: new Date().toISOString(),
+        };
+
+        lastCommentByActor.set(author.actorKey, nowMs);
         const nextComments = [newComment, ...current.comments].slice(0, MAX_COMMENTS_PER_EPISODE);
         const nextRecord: EpisodeDiscussionRecord = {
           ...current,
@@ -468,6 +490,10 @@ router.post("/:animeId/:episode", optionalAuth, async (req: AuthRequest, res: Re
         return nextRecord;
       }
     );
+
+    if (parentNotFound) {
+      return res.status(404).json({ message: "Parent comment no longer exists" });
+    }
 
     const isAdmin = isAdminUser(req.user);
     res.status(201).json(toPublicDiscussion(updatedRecord, author.actorKey, isAdmin));
@@ -616,7 +642,9 @@ router.delete("/:animeId/:episode/:commentId", optionalAuth, async (req: AuthReq
         resultStatus = "deleted";
         const nextRecord: EpisodeDiscussionRecord = {
           ...current,
-          comments: current.comments.filter((c) => c.id !== commentId),
+          comments: current.comments.filter(
+            (c) => c.id !== commentId && c.parent_id !== commentId
+          ),
         };
         await saveEpisodeRecord(nextRecord);
         return nextRecord;
@@ -637,3 +665,4 @@ router.delete("/:animeId/:episode/:commentId", optionalAuth, async (req: AuthReq
 });
 
 export default router;
+

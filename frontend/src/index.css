@@ -389,5 +389,110 @@
   gap: 4px !important;
 }
 
+/* ============================================
+   Animated Anime Reactions
+   ============================================ */
+
+@keyframes animeBob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-2.5px) scale(1.06); }
+}
+
+@keyframes animeTwinkle {
+  0%, 100% { transform: scale(0.9) rotate(-8deg); opacity: 0.75; }
+  50% { transform: scale(1.18) rotate(8deg); opacity: 1; }
+}
+
+@keyframes animeHeartbeat {
+  0%, 100% { transform: scale(1); }
+  18% { transform: scale(1.22); }
+  32% { transform: scale(0.96); }
+  48% { transform: scale(1.14); }
+  70% { transform: scale(1); }
+}
+
+@keyframes animeFloatMini {
+  0% { transform: translateY(3px) scale(0.75); opacity: 0; }
+  45% { opacity: 1; }
+  100% { transform: translateY(-5px) scale(1.05); opacity: 0; }
+}
+
+@keyframes animeFlame {
+  0%, 100% { transform: scaleY(1) skewX(0deg); }
+  25% { transform: scaleY(1.08) skewX(-4deg); }
+  55% { transform: scaleY(0.95) skewX(4deg); }
+  80% { transform: scaleY(1.06) skewX(-2deg); }
+}
+
+@keyframes animeLaugh {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  20% { transform: translateY(-2px) rotate(-5deg); }
+  40% { transform: translateY(1px) rotate(5deg); }
+  60% { transform: translateY(-2px) rotate(-4deg); }
+  80% { transform: translateY(0) rotate(3deg); }
+}
+
+@keyframes animeSweatdrop {
+  0% { transform: translateY(-2px) scale(0.9); opacity: 0.65; }
+  50% { transform: translateY(2px) scale(1.1); opacity: 1; }
+  100% { transform: translateY(-2px) scale(0.9); opacity: 0.65; }
+}
+
+@keyframes animeTearDrop {
+  0% { transform: translateY(-1px); opacity: 0.25; }
+  45% { transform: translateY(2px); opacity: 1; }
+  100% { transform: translateY(5px); opacity: 0; }
+}
+
+@keyframes animeReactionBurst {
+  0% { transform: translateY(0) scale(0.7); opacity: 0; }
+  25% { transform: translateY(-8px) scale(1.15); opacity: 1; }
+  100% { transform: translateY(-26px) scale(0.9); opacity: 0; }
+}
+
+.anime-rx-bob {
+  animation: animeBob 1.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.anime-rx-twinkle {
+  animation: animeTwinkle 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.anime-rx-heart {
+  animation: animeHeartbeat 1.5s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.anime-rx-float-mini {
+  animation: animeFloatMini 1.6s ease-out infinite;
+  transform-origin: center;
+}
+
+.anime-rx-flame {
+  animation: animeFlame 1.1s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+.anime-rx-laugh {
+  animation: animeLaugh 1.3s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.anime-rx-sweat {
+  animation: animeSweatdrop 1.2s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.anime-rx-tear {
+  animation: animeTearDrop 1.5s ease-in infinite;
+  transform-origin: center;
+}
+
+.anime-rx-burst {
+  animation: animeReactionBurst 0.75s ease-out forwards;
+}
+
 
 

@@ -9,15 +9,20 @@ import {
   Trash2,
   ShieldAlert,
   Loader2,
+  CornerDownRight,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { AnimeReactionIcon } from "@/components/anime/AnimeReactionIcon";
 import { useAuth } from "@/contexts/AuthContext";
 import { commentsApi, getOrCreateGuestId } from "@/lib/api";
 import { generateRandomAnimeProfile } from "@/lib/avatars";
 import { detectSpoilerContent, moderateCommentContent } from "@/lib/contentModeration";
-import type { EpisodeDiscussion, ReactionType } from "@/types";
+import type { EpisodeComment, EpisodeDiscussion, ReactionType } from "@/types";
 
 interface EpisodeCommentsProps {
   animeId: number;
@@ -26,14 +31,34 @@ interface EpisodeCommentsProps {
 
 const REACTION_OPTIONS: Array<{
   type: ReactionType;
-  emoji: string;
   label: string;
+  activeClass: string;
 }> = [
-  { type: "like", emoji: "👍", label: "Like" },
-  { type: "love", emoji: "❤️", label: "Love" },
-  { type: "fire", emoji: "🔥", label: "Hype" },
-  { type: "funny", emoji: "😂", label: "Funny" },
-  { type: "sad", emoji: "😢", label: "Cry" },
+  {
+    type: "like",
+    label: "Sugoi!",
+    activeClass: "bg-amber-500/20 border-amber-400/60 text-amber-200 shadow-sm shadow-amber-500/20",
+  },
+  {
+    type: "love",
+    label: "Kawaii",
+    activeClass: "bg-pink-500/20 border-pink-400/60 text-pink-200 shadow-sm shadow-pink-500/20",
+  },
+  {
+    type: "fire",
+    label: "Hype!",
+    activeClass: "bg-orange-500/20 border-orange-400/60 text-orange-200 shadow-sm shadow-orange-500/20",
+  },
+  {
+    type: "funny",
+    label: "Kusa!",
+    activeClass: "bg-yellow-500/20 border-yellow-400/60 text-yellow-200 shadow-sm shadow-yellow-500/20",
+  },
+  {
+    type: "sad",
+    label: "Feels",
+    activeClass: "bg-sky-500/20 border-sky-400/60 text-sky-200 shadow-sm shadow-sky-500/20",
+  },
 ];
 
 const EMPTY_DISCUSSION: EpisodeDiscussion = {
@@ -60,12 +85,28 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
   const { user, session, displayName, avatarUrl } = useAuth();
   const [discussion, setDiscussion] = useState<EpisodeDiscussion>(EMPTY_DISCUSSION);
   const [loading, setLoading] = useState(true);
+
+  // Main composer state
   const [draft, setDraft] = useState("");
   const [markSpoiler, setMarkSpoiler] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Reply composer state
+  const [replyTarget, setReplyTarget] = useState<{
+    rootCommentId: string;
+    replyToName: string;
+  } | null>(null);
+  const [replyDraft, setReplyDraft] = useState("");
+  const [replySpoiler, setReplySpoiler] = useState(false);
+  const [submittingReply, setSubmittingReply] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+
+  // UI toggles & optimistic locks
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
+  const [expandedThreads, setExpandedThreads] = useState<Set<string>>(() => new Set());
   const [pendingReact, setPendingReact] = useState<ReactionType | null>(null);
+  const [burstReaction, setBurstReaction] = useState<{ type: ReactionType; key: number } | null>(null);
   const [pendingLikeId, setPendingLikeId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -79,7 +120,6 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
   const activeAvatar = user ? avatarUrl || guestProfile.avatarUrl : guestProfile.avatarUrl;
   const token = session?.access_token ?? null;
 
-  // Live moderation check on draft so explicit language is flagged immediately
   const draftModeration = useMemo(
     () => moderateCommentContent(draft, markSpoiler),
     [draft, markSpoiler]
@@ -89,11 +129,52 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
     [draft, markSpoiler]
   );
 
+  const replyModeration = useMemo(
+    () => moderateCommentContent(replyDraft, replySpoiler),
+    [replyDraft, replySpoiler]
+  );
+  const autoDetectedReplySpoiler = useMemo(
+    () => !replySpoiler && replyDraft.trim().length > 0 && detectSpoilerContent(replyDraft),
+    [replyDraft, replySpoiler]
+  );
+
+  // Group top-level comments (newest first) and replies (oldest first inside thread)
+  const { topLevelComments, repliesByParentId } = useMemo(() => {
+    const tops: EpisodeComment[] = [];
+    const repliesMap = new Map<string, EpisodeComment[]>();
+
+    for (const c of discussion.comments) {
+      if (!c.parent_id) {
+        tops.push(c);
+      } else {
+        const list = repliesMap.get(c.parent_id) || [];
+        list.push(c);
+        repliesMap.set(c.parent_id, list);
+      }
+    }
+
+    // Reverse each thread's replies so replies read chronologically top-to-bottom
+    for (const [parentId, list] of repliesMap.entries()) {
+      repliesMap.set(
+        parentId,
+        [...list].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )
+      );
+    }
+
+    return { topLevelComments: tops, repliesByParentId: repliesMap };
+  }, [discussion.comments]);
+
   useEffect(() => {
     let active = true;
     setLoading(true);
     setErrorMessage(null);
+    setReplyTarget(null);
+    setReplyDraft("");
+    setReplyError(null);
     setRevealedIds(new Set());
+    setExpandedThreads(new Set());
 
     commentsApi
       .getEpisodeDiscussion(animeId, episodeNumber, token)
@@ -117,7 +198,10 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
     const prev = discussion;
     const alreadyActive = prev.userReactions.includes(type);
 
-    // Optimistic update
+    if (!alreadyActive) {
+      setBurstReaction({ type, key: Date.now() });
+    }
+
     setDiscussion({
       ...prev,
       reactions: {
@@ -179,13 +263,77 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
       setDraft("");
       setMarkSpoiler(false);
     } catch (err) {
-      const msg =
+      setErrorMessage(
         err instanceof Error
           ? err.message
-          : "Unable to post comment right now. Please try again.";
-      setErrorMessage(msg);
+          : "Unable to post comment right now. Please try again."
+      );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleOpenReply = (comment: EpisodeComment) => {
+    const rootId = comment.parent_id || comment.id;
+    const isSame =
+      replyTarget?.rootCommentId === rootId &&
+      replyTarget?.replyToName === comment.author_name;
+    if (isSame) {
+      setReplyTarget(null);
+      return;
+    }
+    setReplyTarget({ rootCommentId: rootId, replyToName: comment.author_name });
+    setReplyDraft(comment.parent_id ? `@${comment.author_name} ` : "");
+    setReplySpoiler(false);
+    setReplyError(null);
+  };
+
+  const handleSubmitReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replyTarget) return;
+    setReplyError(null);
+
+    if (!replyModeration.cleanText) {
+      setReplyError("Please write a reply before posting.");
+      return;
+    }
+
+    if (replyModeration.isExplicit) {
+      setReplyError(
+        replyModeration.reason ||
+          "Explicit or offensive language (English/Filipino) is automatically blocked."
+      );
+      return;
+    }
+
+    const targetRootId = replyTarget.rootCommentId;
+    setSubmittingReply(true);
+    try {
+      const updated = await commentsApi.postComment(
+        animeId,
+        episodeNumber,
+        {
+          content: replyModeration.cleanText,
+          is_spoiler: replyModeration.isSpoiler,
+          parent_id: targetRootId,
+          author_name: activeName,
+          author_avatar: activeAvatar,
+        },
+        token
+      );
+      setDiscussion(updated);
+      setExpandedThreads((prev) => new Set(prev).add(targetRootId));
+      setReplyTarget(null);
+      setReplyDraft("");
+      setReplySpoiler(false);
+    } catch (err) {
+      setReplyError(
+        err instanceof Error
+          ? err.message
+          : "Unable to post reply right now. Please try again."
+      );
+    } finally {
+      setSubmittingReply(false);
     }
   };
 
@@ -254,6 +402,146 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
     });
   };
 
+  const toggleExpandThread = (parentId: string) => {
+    setExpandedThreads((prev) => {
+      const next = new Set(prev);
+      if (next.has(parentId)) {
+        next.delete(parentId);
+      } else {
+        next.add(parentId);
+      }
+      return next;
+    });
+  };
+
+  const renderCommentCard = (comment: EpisodeComment, isReply = false) => {
+    const isRevealed = revealedIds.has(comment.id);
+    const showMasked = comment.is_spoiler && !isRevealed;
+
+    return (
+      <div className="flex items-start gap-3">
+        <Avatar
+          className={`${isReply ? "w-7 h-7" : "w-9 h-9"} border border-border/60 shrink-0 mt-0.5`}
+        >
+          {comment.author_avatar ? (
+            <AvatarImage
+              src={comment.author_avatar}
+              alt={comment.author_name}
+              className="object-cover"
+            />
+          ) : null}
+          <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">
+            {comment.author_name[0]?.toUpperCase() || "A"}
+          </AvatarFallback>
+        </Avatar>
+
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`${isReply ? "text-xs" : "text-sm"} font-semibold text-white`}>
+                {comment.author_name}
+              </span>
+              {comment.is_guest && (
+                <span className="px-1.5 py-0.5 rounded bg-secondary/80 text-[10px] font-medium text-muted-foreground">
+                  Guest
+                </span>
+              )}
+              {comment.is_spoiler && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-[10px] font-bold uppercase tracking-wide text-amber-300">
+                  <AlertTriangle className="w-3 h-3" />
+                  Spoiler
+                </span>
+              )}
+              <span className="text-xs text-muted-foreground">
+                {formatRelativeTime(comment.created_at)}
+              </span>
+            </div>
+
+            {comment.can_delete && (
+              <button
+                type="button"
+                onClick={() => handleDeleteComment(comment.id)}
+                disabled={pendingDeleteId === comment.id}
+                title="Delete comment"
+                className="text-muted-foreground hover:text-red-400 transition-colors p-1 rounded-md hover:bg-red-500/10"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {showMasked ? (
+            <div className="relative rounded-xl bg-black/40 border border-amber-500/25 p-3 overflow-hidden">
+              <p
+                aria-hidden="true"
+                className="text-sm text-gray-300 whitespace-pre-wrap break-words blur-md select-none opacity-35 pointer-events-none line-clamp-2"
+              >
+                {comment.content}
+              </p>
+              <div className="inset-0 absolute flex flex-wrap items-center justify-between gap-2 px-3.5 bg-gradient-to-r from-background/80 via-background/70 to-background/80 backdrop-blur-[2px]">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300">
+                  <EyeOff className="w-3.5 h-3.5 shrink-0" />
+                  Hidden Spoiler Warning
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => toggleRevealSpoiler(comment.id)}
+                  className="h-7 px-2.5 text-xs font-semibold gap-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  Show Spoiler
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className={`${isReply ? "text-xs sm:text-sm" : "text-sm"} text-gray-200 whitespace-pre-wrap break-words leading-relaxed`}>
+              {comment.content}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <button
+              type="button"
+              onClick={() => handleToggleCommentLike(comment.id)}
+              disabled={pendingLikeId === comment.id}
+              aria-pressed={comment.liked_by_me}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md transition-colors ${
+                comment.liked_by_me
+                  ? "bg-primary/20 text-primary"
+                  : "text-muted-foreground hover:text-white hover:bg-secondary/70"
+              }`}
+            >
+              <ThumbsUp className="w-3.5 h-3.5" />
+              <span>{comment.likes_count > 0 ? comment.likes_count : "Like"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleOpenReply(comment)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/70 transition-colors"
+            >
+              <CornerDownRight className="w-3.5 h-3.5" />
+              <span>Reply</span>
+            </button>
+
+            {comment.is_spoiler && isRevealed && (
+              <button
+                type="button"
+                onClick={() => toggleRevealSpoiler(comment.id)}
+                className="inline-flex items-center gap-1 text-xs text-amber-300/80 hover:text-amber-200 px-2 py-1 rounded-md hover:bg-amber-500/10 transition-colors"
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+                Hide Spoiler
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const totalReactions = REACTION_OPTIONS.reduce(
     (sum, item) => sum + (discussion.reactions[item.type] || 0),
     0
@@ -264,8 +552,8 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
       className="mt-6 rounded-2xl bg-card/40 border border-border/50 p-4 sm:p-6 space-y-6"
       aria-label="Episode reactions and comments"
     >
-      {/* Episode Reactions Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-border/40">
+      {/* Custom Animated Anime Reactions Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-border/40">
         <div>
           <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
             Episode {episodeNumber} Reactions
@@ -276,14 +564,15 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
             )}
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Share how you feel about this episode
+            Tap an anime reaction to hype this episode
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {REACTION_OPTIONS.map(({ type, emoji, label }) => {
+        <div className="flex flex-wrap items-center gap-2.5">
+          {REACTION_OPTIONS.map(({ type, label, activeClass }) => {
             const count = discussion.reactions[type] || 0;
             const active = discussion.userReactions.includes(type);
+            const showBurst = burstReaction?.type === type;
             return (
               <button
                 key={type}
@@ -292,20 +581,31 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
                 disabled={pendingReact !== null}
                 aria-pressed={active}
                 title={label}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
+                className={`relative group inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all duration-200 hover:scale-105 active:scale-95 ${
                   active
-                    ? "bg-primary/20 border-primary/60 text-white shadow-sm shadow-primary/20"
-                    : "bg-secondary/50 border-border/50 text-muted-foreground hover:text-white hover:border-border hover:bg-secondary/80"
+                    ? activeClass
+                    : "bg-secondary/50 border-border/50 text-muted-foreground hover:text-white hover:border-primary/40 hover:bg-secondary/80"
                 }`}
               >
-                <span className="text-sm leading-none" aria-hidden="true">
-                  {emoji}
-                </span>
+                {showBurst && (
+                  <span
+                    key={burstReaction.key}
+                    className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 text-[11px] font-extrabold text-white anime-rx-burst"
+                  >
+                    <AnimeReactionIcon type={type} active className="w-5 h-5" />
+                    +1
+                  </span>
+                )}
+                <AnimeReactionIcon
+                  type={type}
+                  active={active}
+                  className="w-6 h-6 shrink-0"
+                />
                 <span>{label}</span>
                 {count > 0 && (
                   <span
-                    className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[11px] leading-none ${
-                      active ? "bg-primary/30 text-white" : "bg-black/30 text-gray-300"
+                    className={`px-1.5 py-0.5 rounded-full text-[11px] leading-none ${
+                      active ? "bg-black/30 text-white" : "bg-black/30 text-gray-300"
                     }`}
                   >
                     {count}
@@ -317,7 +617,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
         </div>
       </div>
 
-      {/* Comments Header & Composer */}
+      {/* Comments Header & Main Composer */}
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
@@ -377,7 +677,6 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
                 }`}
               />
 
-              {/* Live explicit warning */}
               {(draftModeration.isExplicit || errorMessage) && (
                 <div
                   role="alert"
@@ -391,7 +690,6 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
                 </div>
               )}
 
-              {/* Composer footer */}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
@@ -459,7 +757,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
               </div>
             ))}
           </div>
-        ) : discussion.comments.length === 0 ? (
+        ) : topLevelComments.length === 0 ? (
           <div className="text-center py-8 px-4 rounded-xl bg-secondary/20 border border-border/30">
             <MessageSquare className="w-7 h-7 text-muted-foreground/50 mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">
@@ -468,126 +766,150 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
           </div>
         ) : (
           <div className="space-y-3 pt-1">
-            {discussion.comments.map((comment) => {
-              const isRevealed = revealedIds.has(comment.id);
-              const showMasked = comment.is_spoiler && !isRevealed;
+            {topLevelComments.map((comment) => {
+              const replies = repliesByParentId.get(comment.id) || [];
+              const isReplyingHere = replyTarget?.rootCommentId === comment.id;
+              const isThreadExpanded = expandedThreads.has(comment.id) || replies.length <= 2;
 
               return (
                 <article
                   key={comment.id}
-                  className="flex items-start gap-3 p-3.5 sm:p-4 rounded-xl bg-secondary/30 border border-border/40 hover:border-border/70 transition-colors"
+                  className="p-3.5 sm:p-4 rounded-xl bg-secondary/30 border border-border/40 hover:border-border/70 transition-colors space-y-3"
                 >
-                  <Avatar className="w-9 h-9 border border-border/60 shrink-0 mt-0.5">
-                    {comment.author_avatar ? (
-                      <AvatarImage
-                        src={comment.author_avatar}
-                        alt={comment.author_name}
-                        className="object-cover"
-                      />
-                    ) : null}
-                    <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">
-                      {comment.author_name[0]?.toUpperCase() || "A"}
-                    </AvatarFallback>
-                  </Avatar>
+                  {renderCommentCard(comment, false)}
 
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold text-white">
-                          {comment.author_name}
+                  {/* Inline Reply Composer */}
+                  {isReplyingHere && replyTarget && (
+                    <form
+                      onSubmit={handleSubmitReply}
+                      className="ml-6 sm:ml-12 pl-3.5 border-l-2 border-primary/40 space-y-2.5 pt-1"
+                    >
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>
+                          Replying to <strong className="text-white">{replyTarget.replyToName}</strong>
                         </span>
-                        {comment.is_guest && (
-                          <span className="px-1.5 py-0.5 rounded bg-secondary/80 text-[10px] font-medium text-muted-foreground">
-                            Guest
-                          </span>
-                        )}
-                        {comment.is_spoiler && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-[10px] font-bold uppercase tracking-wide text-amber-300">
-                            <AlertTriangle className="w-3 h-3" />
-                            Spoiler
-                          </span>
-                        )}
-                        <span className="text-xs text-muted-foreground">
-                          {formatRelativeTime(comment.created_at)}
-                        </span>
-                      </div>
-
-                      {comment.can_delete && (
                         <button
                           type="button"
-                          onClick={() => handleDeleteComment(comment.id)}
-                          disabled={pendingDeleteId === comment.id}
-                          title="Delete comment"
-                          className="text-muted-foreground hover:text-red-400 transition-colors p-1 rounded-md hover:bg-red-500/10"
+                          onClick={() => setReplyTarget(null)}
+                          className="inline-flex items-center gap-1 hover:text-white transition-colors"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <X className="w-3.5 h-3.5" />
+                          Cancel
                         </button>
-                      )}
-                    </div>
-
-                    {/* Comment body with Spoiler Masking */}
-                    {showMasked ? (
-                      <div className="relative rounded-xl bg-black/40 border border-amber-500/25 p-3 overflow-hidden">
-                        <p
-                          aria-hidden="true"
-                          className="text-sm text-gray-300 whitespace-pre-wrap break-words blur-md select-none opacity-35 pointer-events-none line-clamp-2"
-                        >
-                          {comment.content}
-                        </p>
-                        <div className="inset-0 absolute flex flex-wrap items-center justify-between gap-2 px-3.5 bg-gradient-to-r from-background/80 via-background/70 to-background/80 backdrop-blur-[2px]">
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300">
-                            <EyeOff className="w-3.5 h-3.5 shrink-0" />
-                            Hidden Spoiler Warning
-                          </span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => toggleRevealSpoiler(comment.id)}
-                            className="h-7 px-2.5 text-xs font-semibold gap-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            Show Spoiler
-                          </Button>
-                        </div>
                       </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <p className="text-sm text-gray-200 whitespace-pre-wrap break-words leading-relaxed">
-                          {comment.content}
-                        </p>
-                      </div>
-                    )}
 
-                    {/* Action row */}
-                    <div className="flex items-center gap-3 pt-0.5">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleCommentLike(comment.id)}
-                        disabled={pendingLikeId === comment.id}
-                        aria-pressed={comment.liked_by_me}
-                        className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md transition-colors ${
-                          comment.liked_by_me
-                            ? "bg-primary/20 text-primary"
-                            : "text-muted-foreground hover:text-white hover:bg-secondary/70"
+                      <textarea
+                        value={replyDraft}
+                        onChange={(e) => {
+                          setReplyDraft(e.target.value);
+                          if (replyError) setReplyError(null);
+                        }}
+                        autoFocus
+                        maxLength={1000}
+                        rows={2}
+                        placeholder={`Reply to ${replyTarget.replyToName}...`}
+                        className={`w-full rounded-xl bg-black/30 border px-3 py-2 text-xs sm:text-sm text-white placeholder:text-muted-foreground/60 focus:outline-none transition-colors resize-y min-h-[64px] ${
+                          replyModeration.isExplicit
+                            ? "border-red-500/70 focus:border-red-500"
+                            : "border-border/50 focus:border-primary"
                         }`}
-                      >
-                        <ThumbsUp className="w-3.5 h-3.5" />
-                        <span>{comment.likes_count > 0 ? comment.likes_count : "Like"}</span>
-                      </button>
+                      />
 
-                      {comment.is_spoiler && isRevealed && (
+                      {(replyModeration.isExplicit || replyError) && (
+                        <div
+                          role="alert"
+                          className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 px-2.5 py-1.5 text-xs text-red-300"
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                          <span>
+                            {replyError ||
+                              "Explicit or offensive language (English/Filipino) is automatically blocked."}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setReplySpoiler((v) => !v)}
+                            aria-pressed={replySpoiler}
+                            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                              replySpoiler
+                                ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
+                                : "bg-secondary/50 border-border/50 text-muted-foreground hover:text-white"
+                            }`}
+                          >
+                            {replySpoiler ? (
+                              <EyeOff className="w-3 h-3" />
+                            ) : (
+                              <AlertTriangle className="w-3 h-3" />
+                            )}
+                            <span>{replySpoiler ? "Marked Spoiler" : "Spoiler"}</span>
+                          </button>
+
+                          {autoDetectedReplySpoiler && (
+                            <span className="text-[11px] text-amber-300/90">
+                              Auto-spoiler detected
+                            </span>
+                          )}
+                        </div>
+
+                        <Button
+                          type="submit"
+                          size="sm"
+                          disabled={
+                            submittingReply ||
+                            !replyDraft.trim() ||
+                            replyModeration.isExplicit
+                          }
+                          className="h-7 px-3 text-xs gap-1 font-semibold ml-auto"
+                        >
+                          {submittingReply ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Send className="w-3 h-3" />
+                          )}
+                          {submittingReply ? "Replying..." : "Post Reply"}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Nested Replies List */}
+                  {replies.length > 0 && (
+                    <div className="ml-5 sm:ml-11 pl-3.5 border-l-2 border-primary/25 space-y-3 pt-1">
+                      {replies.length > 2 && (
                         <button
                           type="button"
-                          onClick={() => toggleRevealSpoiler(comment.id)}
-                          className="inline-flex items-center gap-1 text-xs text-amber-300/80 hover:text-amber-200 px-2 py-1 rounded-md hover:bg-amber-500/10 transition-colors"
+                          onClick={() => toggleExpandThread(comment.id)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                         >
-                          <EyeOff className="w-3.5 h-3.5" />
-                          Hide Spoiler
+                          {isThreadExpanded ? (
+                            <>
+                              <ChevronUp className="w-3.5 h-3.5" />
+                              Hide {replies.length} replies
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="w-3.5 h-3.5" />
+                              View {replies.length} replies
+                            </>
+                          )}
                         </button>
                       )}
+
+                      {isThreadExpanded &&
+                        replies.map((reply) => (
+                          <div
+                            key={reply.id}
+                            className="p-2.5 sm:p-3 rounded-lg bg-black/20 border border-border/30"
+                          >
+                            {renderCommentCard(reply, true)}
+                          </div>
+                        ))}
                     </div>
-                  </div>
+                  )}
                 </article>
               );
             })}
