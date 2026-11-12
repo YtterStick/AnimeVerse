@@ -284,7 +284,8 @@ export const animeApi = {
     page = 1,
     genres = "",
     orderBy = "",
-    status = ""
+    status = "",
+    type = ""
   ) => {
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
@@ -292,9 +293,10 @@ export const animeApi = {
     if (genres) params.set("genres", genres);
     if (orderBy) params.set("order_by", orderBy);
     if (status) params.set("status", status);
+    if (type) params.set("type", type);
     return withBrowserFallback<ApiResponse<Anime[]>>(
       `/anime/search?${params.toString()}`,
-      () => anilistBrowserFallback.search(query, page, genres, orderBy, status)
+      () => anilistBrowserFallback.search(query, page, genres, orderBy, status, type)
     );
   },
 

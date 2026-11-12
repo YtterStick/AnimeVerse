@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { AnimeReactionIcon } from "@/components/anime/AnimeReactionIcon";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
 import { commentsApi, getOrCreateGuestId } from "@/lib/api";
 import { generateRandomAnimeProfile } from "@/lib/avatars";
 import { detectSpoilerContent, moderateCommentContent } from "@/lib/contentModeration";
@@ -83,6 +84,7 @@ function formatRelativeTime(isoDate: string): string {
 
 export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps) {
   const { user, session, displayName, avatarUrl } = useAuth();
+  const toast = useToast();
   const [discussion, setDiscussion] = useState<EpisodeDiscussion>(EMPTY_DISCUSSION);
   const [loading, setLoading] = useState(true);
 
@@ -241,6 +243,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
       setDiscussion(updated);
     } catch {
       setDiscussion(prev);
+      toast.error("Failed to update reaction. Please try again.");
     } finally {
       setPendingReact(null);
     }
@@ -279,12 +282,14 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
       setDiscussion(updated);
       setDraft("");
       setMarkSpoiler(false);
+      toast.success("Comment posted");
     } catch (err) {
-      setErrorMessage(
+      const msg =
         err instanceof Error
           ? err.message
-          : "Unable to post comment right now. Please try again."
-      );
+          : "Unable to post comment right now. Please try again.";
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -343,12 +348,14 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
       setReplyTarget(null);
       setReplyDraft("");
       setReplySpoiler(false);
+      toast.success("Reply posted");
     } catch (err) {
-      setReplyError(
+      const msg =
         err instanceof Error
           ? err.message
-          : "Unable to post reply right now. Please try again."
-      );
+          : "Unable to post reply right now. Please try again.";
+      setReplyError(msg);
+      toast.error(msg);
     } finally {
       setSubmittingReply(false);
     }
@@ -382,6 +389,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
       setDiscussion(updated);
     } catch {
       setDiscussion(prev);
+      toast.error("Failed to update comment like");
     } finally {
       setPendingLikeId(null);
     }
@@ -399,10 +407,11 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
       );
       setDiscussion(updated);
       setDeleteConfirm(null);
+      toast.info("Comment deleted");
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Could not delete comment."
-      );
+      const msg = err instanceof Error ? err.message : "Could not delete comment.";
+      setErrorMessage(msg);
+      toast.error(msg);
       setDeleteConfirm(null);
     } finally {
       setPendingDeleteId(null);

@@ -1,9 +1,14 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Play, History, ChevronRight } from "lucide-react";
+import { Play, History, ChevronRight, X } from "lucide-react";
 import { useTrending, useTopAiring, useUpcoming, usePopular } from "@/hooks/useAnime";
 import { useWatchHistory } from "@/hooks/useWatchHistory";
-import { getRecentLocalHistory, isEpisodeFinished } from "@/lib/watchProgress";
+import {
+  getRecentLocalHistory,
+  isEpisodeFinished,
+  removeLocalAnimeHistory,
+} from "@/lib/watchProgress";
+import { useToast } from "@/contexts/ToastContext";
 import { HeroBanner } from "@/components/anime/HeroBanner";
 import { AnimeCarousel } from "@/components/anime/AnimeCarousel";
 import { EstimatedSchedule } from "@/components/anime/EstimatedSchedule";
@@ -18,6 +23,7 @@ interface ContinueItem {
   episode_title?: string;
   progress_seconds: number;
   duration_seconds: number;
+  cloudIds: string[];
 }
 
 export function HomePage() {
@@ -25,10 +31,13 @@ export function HomePage() {
   const { data: topAiring, loading: topAiringLoading } = useTopAiring();
   const { data: upcoming, loading: upcomingLoading } = useUpcoming();
   const { data: popular, loading: popularLoading } = usePopular();
-  const { history } = useWatchHistory();
+  const { history, deleteEntry } = useWatchHistory();
+  const toast = useToast();
   const [localHistory, setLocalHistory] = useState(() => getRecentLocalHistory());
+  const [dismissedAnimeIds, setDismissedAnimeIds] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
+    document.title = "AniVerse — Watch Anime Free in HD";
     setLocalHistory(getRecentLocalHistory());
   }, []);
 
@@ -44,6 +53,7 @@ export function HomePage() {
       progress_seconds: number;
       duration_seconds: number;
       updated_at: number;
+      cloudIds: string[];
     }
 
     const map = new Map<number, MergedEntry>();
@@ -63,6 +73,7 @@ export function HomePage() {
           progress_seconds: item.progressSeconds,
           duration_seconds: item.durationSeconds,
           updated_at: item.updatedAt || 0,
+          cloudIds: existing?.cloudIds || [],
         });
       }
     }
@@ -72,6 +83,7 @@ export function HomePage() {
       if (!h || !h.anime_id || !h.duration_seconds) continue;
       const hTime = h.watched_at ? new Date(h.watched_at).getTime() : 0;
       const existing = map.get(h.anime_id);
+      const nextCloudIds = existing ? [...existing.cloudIds, String(h.id)] : [String(h.id)];
 
       // Cloud entry wins if there's no existing local entry, or cloud has newer timestamp, or cloud is further in episodes
       if (!existing || hTime > existing.updated_at || h.episode_number > existing.episode_number) {
@@ -85,12 +97,17 @@ export function HomePage() {
           progress_seconds: h.progress_seconds,
           duration_seconds: h.duration_seconds,
           updated_at: hTime,
+          cloudIds: nextCloudIds,
         });
+      } else {
+        existing.cloudIds = nextCloudIds;
       }
     }
 
-    // Sort by latest watched timestamp (most recently watched first)
-    const sorted = Array.from(map.values()).sort((a, b) => b.updated_at - a.updated_at);
+    // Sort by latest watched timestamp (most recently watched first) and exclude dismissed cards
+    const sorted = Array.from(map.values())
+      .filter((item) => !dismissedAnimeIds.has(item.anime_id))
+      .sort((a, b) => b.updated_at - a.updated_at);
 
     return sorted.slice(0, 8).map((item) => {
       // If the latest episode was finished (>95% or within 30s of end), prompt to continue with next episode
@@ -105,6 +122,7 @@ export function HomePage() {
           episode_title: `Episode ${item.episode_number + 1}`,
           progress_seconds: 0,
           duration_seconds: item.duration_seconds,
+          cloudIds: item.cloudIds,
         };
       }
       return {
@@ -116,9 +134,27 @@ export function HomePage() {
         episode_title: item.episode_title,
         progress_seconds: item.progress_seconds,
         duration_seconds: item.duration_seconds,
+        cloudIds: item.cloudIds,
       };
     });
-  }, [history, localHistory]);
+  }, [history, localHistory, dismissedAnimeIds]);
+
+  const handleDismissContinueItem = async (
+    e: React.MouseEvent,
+    item: ContinueItem
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setDismissedAnimeIds((prev) => new Set(prev).add(item.anime_id));
+    removeLocalAnimeHistory(item.anime_id);
+    setLocalHistory(getRecentLocalHistory());
+
+    if (item.cloudIds.length > 0) {
+      await Promise.allSettled(item.cloudIds.map((cid) => deleteEntry(cid)));
+    }
+    toast.info(`Removed "${item.anime_title}" from Continue Watching`);
+  };
 
   return (
     <div className="flex flex-col w-full pb-16 page-enter">
@@ -156,12 +192,22 @@ export function HomePage() {
                       <img
                         src={item.anime_image || "/placeholder-anime.jpg"}
                         alt={item.anime_title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="w-full h-full object-cover object-[center_20%] transition-transform duration-500 group-hover:scale-105"
                       />
                       {/* Play overlay on hover */}
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Play className="w-8 h-8 text-white fill-white" />
                       </div>
+                      {/* Dismiss / remove button */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleDismissContinueItem(e, item)}
+                        aria-label={`Remove ${item.anime_title} from Continue Watching`}
+                        title="Remove from Continue Watching"
+                        className="absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-black/75 hover:bg-red-500/90 text-white/90 hover:text-white border border-white/15 flex items-center justify-center opacity-85 sm:opacity-0 sm:group-hover:opacity-100 transition-all cursor-pointer shadow-md"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
                     <div className="p-3">

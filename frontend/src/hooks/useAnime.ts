@@ -142,39 +142,41 @@ export function useAnimeSearch(
   query: string,
   genres = "",
   page = 1,
-  category = ""
+  category = "",
+  statusFilter = "",
+  typeFilter = ""
 ) {
   return usePaginatedAnimeQuery<Anime[]>(
     () => {
-      // If user selected a direct category without extra query or genres
-      if (category === "trending" && !query && !genres) {
+      // If user selected a direct category without extra query, genres, status, or format
+      if (category === "trending" && !query && !genres && !statusFilter && !typeFilter) {
         return animeApi.trending(page);
       }
-      if (category === "top-airing" && !query && !genres) {
+      if (category === "top-airing" && !query && !genres && !statusFilter && !typeFilter) {
         return animeApi.topAiring(page);
       }
-      if (category === "upcoming" && !query && !genres) {
+      if (category === "upcoming" && !query && !genres && !statusFilter && !typeFilter) {
         return animeApi.upcoming(page);
       }
-      if (category === "popular" && !query && !genres) {
+      if (category === "popular" && !query && !genres && !statusFilter && !typeFilter) {
         return animeApi.popular(page);
       }
-      if (category === "top-rated" && !query && !genres) {
+      if (category === "top-rated" && !query && !genres && !statusFilter && !typeFilter) {
         return animeApi.topRated(page);
       }
 
-      // If category has genres or custom filter
+      // If category has genres or custom filters
       let orderBy = "";
-      let status = "";
+      let status = statusFilter;
       if (category === "top-rated") orderBy = "score";
       if (category === "trending") orderBy = "trending";
       if (category === "popular") orderBy = "popularity";
-      if (category === "top-airing") status = "airing";
-      if (category === "upcoming") status = "upcoming";
+      if (!status && category === "top-airing") status = "airing";
+      if (!status && category === "upcoming") status = "upcoming";
 
-      return animeApi.search(query, page, genres, orderBy, status);
+      return animeApi.search(query, page, genres, orderBy, status, typeFilter);
     },
-    [query, genres, page, category]
+    [query, genres, page, category, statusFilter, typeFilter]
   );
 }
 

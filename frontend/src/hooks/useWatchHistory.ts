@@ -91,6 +91,15 @@ export function useSaveProgress() {
 }
 
 const LOCAL_WATCHLIST_KEY = "aniverse:watchlist";
+const WATCHLIST_EVENT = "aniverse:watchlist-changed";
+
+function broadcastWatchlist(items: WatchlistEntry[]) {
+  try {
+    window.dispatchEvent(new CustomEvent<WatchlistEntry[]>(WATCHLIST_EVENT, { detail: items }));
+  } catch {
+    // Ignore event errors in non-DOM contexts
+  }
+}
 
 function getLocalWatchlist(): WatchlistEntry[] {
   try {
@@ -113,6 +122,17 @@ export function useWatchlist() {
   const { session } = useAuth();
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>(() => getLocalWatchlist());
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const onWatchlistChanged = (e: Event) => {
+      const custom = e as CustomEvent<WatchlistEntry[]>;
+      if (Array.isArray(custom.detail)) {
+        setWatchlist(custom.detail);
+      }
+    };
+    window.addEventListener(WATCHLIST_EVENT, onWatchlistChanged);
+    return () => window.removeEventListener(WATCHLIST_EVENT, onWatchlistChanged);
+  }, []);
 
   const fetchWatchlist = useCallback(async () => {
     if (!session?.access_token) {
@@ -180,6 +200,7 @@ export function useWatchlist() {
         if (!session?.access_token) {
           saveLocalWatchlist(next);
         }
+        queueMicrotask(() => broadcastWatchlist(next));
         return next;
       });
 
@@ -187,13 +208,19 @@ export function useWatchlist() {
         try {
           const saved = await watchlistApi.addToWatchlist(session.access_token, data);
           // Replace optimistic entry with the persisted row
-          setWatchlist((prev) =>
-            prev.map((item) => (item.anime_id === data.anime_id ? saved : item))
-          );
+          setWatchlist((prev) => {
+            const next = prev.map((item) => (item.anime_id === data.anime_id ? saved : item));
+            queueMicrotask(() => broadcastWatchlist(next));
+            return next;
+          });
         } catch (err) {
           console.error("Failed to add to watchlist:", err);
           // Roll back so the UI never shows an item that wasn't saved
-          setWatchlist((prev) => prev.filter((item) => item.id !== newEntry.id));
+          setWatchlist((prev) => {
+            const next = prev.filter((item) => item.id !== newEntry.id);
+            queueMicrotask(() => broadcastWatchlist(next));
+            return next;
+          });
           throw err;
         }
       }
@@ -211,6 +238,7 @@ export function useWatchlist() {
         if (!session?.access_token) {
           saveLocalWatchlist(next);
         }
+        queueMicrotask(() => broadcastWatchlist(next));
         return next;
       });
 
@@ -221,7 +249,11 @@ export function useWatchlist() {
           console.error("Failed to remove from watchlist:", err);
           if (removed) {
             const restore = removed;
-            setWatchlist((prev) => [restore, ...prev]);
+            setWatchlist((prev) => {
+              const next = [restore, ...prev];
+              queueMicrotask(() => broadcastWatchlist(next));
+              return next;
+            });
           }
           throw err;
         }

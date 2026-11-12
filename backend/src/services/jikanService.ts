@@ -514,7 +514,7 @@ async function fetchAniListMediaList(
   extraVars: Record<string, any> = {}
 ) {
   const query = `
-    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $search: String, $genre_in: [String], $tag_in: [String]) {
+    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $format: MediaFormat, $search: String, $genre_in: [String], $tag_in: [String]) {
       Page(page: $page, perPage: $perPage) {
         pageInfo {
           total
@@ -523,7 +523,7 @@ async function fetchAniListMediaList(
           lastPage
           hasNextPage
         }
-        media(type: ANIME, isAdult: false, sort: $sort, status: $status, search: $search, genre_in: $genre_in, tag_in: $tag_in) {
+        media(type: ANIME, isAdult: false, sort: $sort, status: $status, format: $format, search: $search, genre_in: $genre_in, tag_in: $tag_in) {
           ${ANILIST_MEDIA_FIELDS}
         }
       }
@@ -785,7 +785,8 @@ export const jikanService = {
     page = 1,
     genres = "",
     orderBy = "",
-    status = ""
+    status = "",
+    type = ""
   ) => {
     const trimmed = query.trim();
     const tokens = genres
@@ -822,10 +823,18 @@ export const jikanService = {
       jikanParams.sort = "desc";
     }
 
-    if (status === "airing") {
+    const normStatus = status.toLowerCase();
+    if (normStatus === "airing") {
       jikanParams.status = "airing";
-    } else if (status === "upcoming") {
+    } else if (normStatus === "upcoming") {
       jikanParams.status = "upcoming";
+    } else if (normStatus === "complete" || normStatus === "completed") {
+      jikanParams.status = "complete";
+    }
+
+    const normType = type.toLowerCase();
+    if (normType === "tv" || normType === "movie" || normType === "ova" || normType === "special") {
+      jikanParams.type = normType;
     }
 
     if (genreIds.length > 0) {
@@ -834,11 +843,18 @@ export const jikanService = {
 
     const extraVars: Record<string, any> = {};
     if (trimmed) extraVars.search = trimmed;
-    if (status === "airing") {
+    if (normStatus === "airing") {
       extraVars.status = "RELEASING";
-    } else if (status === "upcoming") {
+    } else if (normStatus === "upcoming") {
       extraVars.status = "NOT_YET_RELEASED";
+    } else if (normStatus === "complete" || normStatus === "completed") {
+      extraVars.status = "FINISHED";
     }
+
+    if (normType === "tv") extraVars.format = "TV";
+    else if (normType === "movie") extraVars.format = "MOVIE";
+    else if (normType === "ova") extraVars.format = "OVA";
+    else if (normType === "special") extraVars.format = "SPECIAL";
 
     const anilistGenreIn: string[] = [];
     const anilistTagIn: string[] = [];

@@ -37,6 +37,7 @@ export function HistoryPage() {
   const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
+    document.title = "Watch History • AniVerse";
     setLocalHistory(getRecentLocalHistory());
   }, []);
 

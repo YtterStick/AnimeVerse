@@ -18,6 +18,7 @@ const PrivacyPage = lazy(() => import("@/pages/PrivacyPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const AdminPage = lazy(() => import("@/pages/AdminPage"));
 const AuthCallbackPage = lazy(() => import("@/pages/AuthCallbackPage"));
+const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 // Minimal loading fallback – matches the dark theme
 function PageLoader() {
@@ -45,6 +46,7 @@ export function App() {
           <Route path="profile" element={<Suspense fallback={<PageLoader />}><ProfilePage /></Suspense>} />
           <Route path="admin" element={<Suspense fallback={<PageLoader />}><AdminPage /></Suspense>} />
           <Route path="auth/callback" element={<Suspense fallback={<PageLoader />}><AuthCallbackPage /></Suspense>} />
+          <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFoundPage /></Suspense>} />
         </Route>
       </Routes>
     </BrowserRouter>

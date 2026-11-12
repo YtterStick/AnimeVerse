@@ -7,6 +7,7 @@ import { useWatchlist } from "@/hooks/useWatchHistory";
 import { truncateText, formatScore } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
+import { useToast } from "@/contexts/ToastContext";
 
 interface HeroBannerProps {
   trendingList: Anime[] | null;
@@ -17,6 +18,7 @@ export function HeroBanner({ trendingList, loading }: HeroBannerProps) {
   const navigate = useNavigate();
   const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
   const { formatTitle } = useTitleLanguage();
+  const toast = useToast();
   const [activeIndex, setActiveIndex] = useState(0);
 
   const bannerList = trendingList?.slice(0, 5) || [];
@@ -82,6 +84,7 @@ export function HeroBanner({ trendingList, loading }: HeroBannerProps) {
     try {
       if (isSaved) {
         await removeFromWatchlist(currentAnime.mal_id);
+        toast.info(`Removed "${title}" from Watchlist`);
       } else {
         await addToWatchlist({
           anime_id: currentAnime.mal_id,
@@ -89,9 +92,10 @@ export function HeroBanner({ trendingList, loading }: HeroBannerProps) {
           anime_image: currentAnime.images?.webp?.image_url || currentAnime.images?.jpg?.image_url,
           anime_type: currentAnime.type,
         });
+        toast.success(`Added "${title}" to Watchlist`);
       }
     } catch {
-      window.alert("Couldn't update your watchlist. Please try again.");
+      toast.error("Couldn't update your watchlist. Please try again.");
     }
   };
 
@@ -121,13 +125,15 @@ export function HeroBanner({ trendingList, loading }: HeroBannerProps) {
       {/* Slide Navigation Controls */}
       <button
         onClick={handlePrev}
-        className="absolute left-4 top-1/2 -translate-y-1/2 z-25 p-2 rounded-full glass border border-border/60 text-foreground hover:bg-primary hover:text-white cursor-pointer hover:border-primary opacity-0 group-hover:opacity-100 transition-all duration-300"
+        aria-label="Previous featured anime"
+        className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 z-25 p-2 rounded-full glass border border-border/60 text-foreground hover:bg-primary hover:text-white cursor-pointer hover:border-primary opacity-75 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300"
       >
         <ChevronLeft className="w-5 h-5" />
       </button>
       <button
         onClick={handleNext}
-        className="absolute right-4 top-1/2 -translate-y-1/2 z-25 p-2 rounded-full glass border border-border/60 text-foreground hover:bg-primary hover:text-white cursor-pointer hover:border-primary opacity-0 group-hover:opacity-100 transition-all duration-300"
+        aria-label="Next featured anime"
+        className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 z-25 p-2 rounded-full glass border border-border/60 text-foreground hover:bg-primary hover:text-white cursor-pointer hover:border-primary opacity-75 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300"
       >
         <ChevronRight className="w-5 h-5" />
       </button>

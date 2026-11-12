@@ -167,6 +167,33 @@ export function removeLocalEpisodeProgress(animeId: number, episodeNumber: numbe
 }
 
 /**
+ * Remove all local progress and continue-watching entries for an anime.
+ */
+export function removeLocalAnimeHistory(animeId: number): void {
+  try {
+    localStorage.removeItem(`${LAST_WATCHED_PREFIX}${animeId}`);
+    const perEpPrefix = `${STORAGE_KEY_PREFIX}${animeId}:`;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(perEpPrefix)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+    const rawList = localStorage.getItem(RECENT_LIST_KEY);
+    if (rawList) {
+      const list: LocalWatchProgress[] = JSON.parse(rawList);
+      const filtered = list.filter((item) => item.animeId !== animeId);
+      localStorage.setItem(RECENT_LIST_KEY, JSON.stringify(filtered));
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+/**
  * Clear all local watch history.
  */
 export function clearAllLocalHistory(): void {

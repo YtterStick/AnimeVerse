@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWatchHistory, useWatchlist } from "@/hooks/useWatchHistory";
@@ -29,6 +29,10 @@ export function ProfilePage() {
   const [nameInput, setNameInput] = useState(displayName);
   const [savingName, setSavingName] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    document.title = "Profile & Avatar • AniVerse";
+  }, []);
 
   const currentAvatarInfo = getAvatarByUrl(avatarUrl) || {
     name: "Totoro",

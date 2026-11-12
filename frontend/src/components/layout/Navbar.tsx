@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWatchlist } from "@/hooks/useWatchHistory";
 import { Button } from "@/components/ui/button";
 import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, CalendarDays, Home, Compass, User } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
@@ -14,6 +15,7 @@ import type { Anime } from "@/types";
 
 export function Navbar() {
   const { user } = useAuth();
+  const { watchlist } = useWatchlist();
   const { formatTitle } = useTitleLanguage();
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,6 +31,7 @@ export function Navbar() {
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const desktopSearchRef = useRef<HTMLDivElement>(null);
+  const desktopSearchInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -99,6 +102,22 @@ export function Navbar() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setShowDropdown(false);
+        return;
+      }
+
+      // Focus search bar on "/" or Ctrl/Cmd+K when not already typing inside an input/textarea
+      const activeTag = (document.activeElement?.tagName || "").toLowerCase();
+      const isTyping =
+        activeTag === "input" ||
+        activeTag === "textarea" ||
+        (document.activeElement as HTMLElement | null)?.isContentEditable;
+
+      if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        desktopSearchInputRef.current?.focus();
+      } else if (e.key === "/" && !isTyping) {
+        e.preventDefault();
+        desktopSearchInputRef.current?.focus();
       }
     };
 
@@ -259,17 +278,20 @@ export function Navbar() {
                 <History className="w-4 h-4" />
                 <span>History</span>
               </Link>
-              {user && (
-                <Link
-                  to="/watchlist"
-                  className={`transition-colors duration-200 flex items-center gap-1.5 ${
-                    isActive("/watchlist") ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Heart className="w-4 h-4" />
-                  <span>Watchlist</span>
-                </Link>
-              )}
+              <Link
+                to="/watchlist"
+                className={`transition-colors duration-200 flex items-center gap-1.5 ${
+                  isActive("/watchlist") ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Heart className="w-4 h-4" />
+                <span>Watchlist</span>
+                {watchlist.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none bg-primary/20 text-primary border border-primary/30">
+                    {watchlist.length}
+                  </span>
+                )}
+              </Link>
               <Link
                 to="/profile"
                 className={`transition-colors duration-200 flex items-center gap-1.5 ${
@@ -285,6 +307,7 @@ export function Navbar() {
             <div ref={desktopSearchRef} className="hidden sm:block flex-1 max-w-sm relative">
               <form onSubmit={handleSearchSubmit} className="relative w-full">
                 <input
+                  ref={desktopSearchInputRef}
                   type="text"
                   placeholder="Search anime..."
                   value={searchQuery}
@@ -295,11 +318,15 @@ export function Navbar() {
                   onFocus={() => {
                     if (searchQuery.trim().length >= 2) setShowDropdown(true);
                   }}
-                  className="w-full h-9 bg-secondary/80 border border-border/80 rounded-full px-4 pl-10 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all text-foreground"
+                  className="w-full h-9 bg-secondary/80 border border-border/80 rounded-full px-4 pl-10 pr-16 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all text-foreground"
                 />
                 <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-muted-foreground pointer-events-none" />
-                {isSearching && (
+                {isSearching ? (
                   <Loader2 className="absolute right-3 top-2.5 w-4 h-4 text-primary animate-spin pointer-events-none" />
+                ) : !searchQuery && (
+                  <kbd className="hidden lg:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground/75 bg-black/30 border border-border/50 rounded absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                    /
+                  </kbd>
                 )}
               </form>
 
@@ -451,18 +478,25 @@ export function Navbar() {
                 <span>Support AniVerse (Keep Ad-Free)</span>
               </button>
 
-              {user ? (
-                <Link
-                  to="/watchlist"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2.5 ${
-                    isActive("/watchlist") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
-                  }`}
-                >
+              <Link
+                to="/watchlist"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center justify-between gap-2.5 ${
+                  isActive("/watchlist") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                }`}
+              >
+                <span className="flex items-center gap-2.5">
                   <Heart className="w-4 h-4" />
                   <span>Watchlist</span>
-                </Link>
-              ) : (
+                </span>
+                {watchlist.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none bg-primary/20 text-primary border border-primary/30">
+                    {watchlist.length}
+                  </span>
+                )}
+              </Link>
+
+              {!user && (
                 <div className="pt-2 flex flex-col gap-2">
                   <Button
                     variant="outline"

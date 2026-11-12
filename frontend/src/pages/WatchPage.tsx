@@ -108,11 +108,18 @@ export function WatchPage() {
   // Fetch intro/outro timestamps (AniSkip) once per episode after actual duration is known
   // (or after a brief fallback delay if duration metadata is unavailable)
   const [videoDurationForSkips, setVideoDurationForSkips] = useState(0);
+  const [synopsisExpanded, setSynopsisExpanded] = useState(false);
 
   useEffect(() => {
     setSkips([]);
     setVideoDurationForSkips(0);
+    setSynopsisExpanded(false);
   }, [animeId, episodeNum]);
+
+  useEffect(() => {
+    const docTitle = anime ? formatTitle(anime) : `Anime #${animeId}`;
+    document.title = `${docTitle} • Ep ${episodeNum} • AniVerse`;
+  }, [anime, animeId, episodeNum, formatTitle]);
 
   useEffect(() => {
     let cancelled = false;
@@ -710,6 +717,31 @@ export function WatchPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <div className="flex items-center gap-1 mr-0.5">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handlePrevEpisode}
+                  disabled={episodeNum <= 1}
+                  className="rounded-full h-7 sm:h-8 px-2.5 text-[11px] sm:text-xs font-bold border border-border/40"
+                  title="Previous episode"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5 mr-0.5" />
+                  Prev
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleNextEpisode}
+                  disabled={!hasNext}
+                  className="rounded-full h-7 sm:h-8 px-2.5 text-[11px] sm:text-xs font-bold border border-border/40"
+                  title="Next episode"
+                >
+                  Next
+                  <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                </Button>
+              </div>
+
               {firstSubIndex !== -1 && (
                 <Button
                   size="sm"
@@ -1041,9 +1073,22 @@ export function WatchPage() {
         {/* Synopsis Accordion description */}
         <div className="space-y-2 pb-6">
           <h2 className="text-base font-bold text-foreground">Synopsis</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+          <p
+            className={`text-sm text-muted-foreground leading-relaxed whitespace-pre-line ${
+              synopsisExpanded ? "" : "line-clamp-3"
+            }`}
+          >
             {anime?.synopsis || (animeLoading ? "Loading synopsis..." : "No synopsis available.")}
           </p>
+          {(anime?.synopsis?.length || 0) > 180 && (
+            <button
+              type="button"
+              onClick={() => setSynopsisExpanded((prev) => !prev)}
+              className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors cursor-pointer"
+            >
+              {synopsisExpanded ? "Show less" : "Read more"}
+            </button>
+          )}
         </div>
 
         {/* Episode Reactions & Comments */}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Calendar, Clock, Play, Star, ChevronRight } from "lucide-react";
 import { useAnimeSchedule } from "@/hooks/useAnime";
@@ -7,13 +7,13 @@ import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 import type { Anime } from "@/types";
 
 const DAYS = [
-  { id: "monday", label: "MON", full: "Monday" },
-  { id: "tuesday", label: "TUE", full: "Tuesday" },
-  { id: "wednesday", label: "WED", full: "Wednesday" },
-  { id: "thursday", label: "THU", full: "Thursday" },
-  { id: "friday", label: "FRI", full: "Friday" },
-  { id: "saturday", label: "SAT", full: "Saturday" },
-  { id: "sunday", label: "SUN", full: "Sunday" },
+  { id: "monday", label: "MON", full: "Monday", dayIndex: 1 },
+  { id: "tuesday", label: "TUE", full: "Tuesday", dayIndex: 2 },
+  { id: "wednesday", label: "WED", full: "Wednesday", dayIndex: 3 },
+  { id: "thursday", label: "THU", full: "Thursday", dayIndex: 4 },
+  { id: "friday", label: "FRI", full: "Friday", dayIndex: 5 },
+  { id: "saturday", label: "SAT", full: "Saturday", dayIndex: 6 },
+  { id: "sunday", label: "SUN", full: "Sunday", dayIndex: 0 },
 ];
 
 function getTodayDayId(): string {
@@ -22,11 +22,69 @@ function getTodayDayId(): string {
   return dayNames[dayIdx] || "monday";
 }
 
+function getLocalTimezoneLabel(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz || "Local";
+  } catch {
+    return "Local";
+  }
+}
+
+function formatBroadcastTimes(
+  timeStr: string | null | undefined,
+  dayIndex: number
+): { primary: string; secondary: string | null } {
+  if (!timeStr) return { primary: "TBA", secondary: null };
+  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return { primary: timeStr, secondary: null };
+
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  if (isNaN(hours) || isNaN(minutes) || hours > 23 || minutes > 59) {
+    return { primary: timeStr, secondary: null };
+  }
+
+  // Construct next matching weekday in fixed JST (UTC+9, no DST)
+  const nowUtc = new Date();
+  const jstNow = new Date(nowUtc.getTime() + 9 * 60 * 60 * 1000);
+  const deltaDays = (dayIndex - jstNow.getUTCDay() + 7) % 7;
+  const targetUtcMs = Date.UTC(
+    jstNow.getUTCFullYear(),
+    jstNow.getUTCMonth(),
+    jstNow.getUTCDate() + deltaDays,
+    hours - 9,
+    minutes
+  );
+  const localDate = new Date(targetUtcMs);
+
+  const localTimeStr = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(localDate);
+
+  // If browser timezone is already JST (UTC+9, offset -540 min), show clean local time + JST tag
+  if (localDate.getTimezoneOffset() === -540) {
+    return { primary: `${localTimeStr} JST`, secondary: null };
+  }
+
+  const localDayDiff = localDate.getDay() !== dayIndex;
+  const localWeekday = localDayDiff
+    ? `${new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(localDate)} `
+    : "";
+
+  return {
+    primary: `${localWeekday}${localTimeStr}`,
+    secondary: `${timeStr} JST`,
+  };
+}
+
 export function EstimatedSchedule() {
   const { formatTitle } = useTitleLanguage();
   const todayId = getTodayDayId();
   const [selectedDay, setSelectedDay] = useState<string>(todayId);
   const { data: animeList, loading } = useAnimeSchedule(selectedDay);
+  const localTimezone = useMemo(() => getLocalTimezoneLabel(), []);
 
   const activeDayObj = DAYS.find((d) => d.id === selectedDay) || DAYS[0];
 
@@ -44,11 +102,11 @@ export function EstimatedSchedule() {
               Airing
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2">
-            <span>Upcoming anime releases and scheduled broadcast times</span>
+          <p className="text-xs sm:text-sm text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>Scheduled broadcast times converted to your timezone</span>
             <span className="hidden sm:inline-block text-border">•</span>
-            <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[11px] text-primary/80">
-              <Clock className="w-3 h-3" /> Asia/Tokyo (JST)
+            <span className="inline-flex items-center gap-1 font-mono text-[11px] text-primary/85">
+              <Clock className="w-3 h-3" /> {localTimezone} (from JST)
             </span>
           </p>
         </div>
@@ -126,7 +184,10 @@ export function EstimatedSchedule() {
               anime.images?.jpg?.large_image_url ||
               "/placeholder-anime.jpg";
 
-            const broadcastTime = anime.broadcast?.time || "TBA";
+            const { primary: localTimeLabel, secondary: jstSubLabel } = formatBroadcastTimes(
+              anime.broadcast?.time,
+              activeDayObj.dayIndex
+            );
             const episodeNum = anime.episode;
 
             return (
@@ -154,11 +215,20 @@ export function EstimatedSchedule() {
                 <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
                   <div className="space-y-1">
                     {/* Time & Episode Badge */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/25 px-2 py-0.5 rounded-md">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/25 px-2 py-0.5 rounded-md"
+                        title={jstSubLabel ? `Local time (${jstSubLabel})` : "Broadcast time"}
+                      >
                         <Clock className="w-3 h-3 text-amber-400" />
-                        {broadcastTime}
+                        {localTimeLabel}
                       </span>
+
+                      {jstSubLabel && (
+                        <span className="font-mono text-[10px] text-muted-foreground/80">
+                          ({jstSubLabel})
+                        </span>
+                      )}
 
                       {episodeNum && (
                         <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 rounded-md">

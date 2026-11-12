@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWatchlist } from "@/hooks/useWatchHistory";
@@ -11,6 +12,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function WatchlistPage() {
   const { user, loading: authLoading } = useAuth();
   const { watchlist, loading: watchlistLoading } = useWatchlist();
+
+  useEffect(() => {
+    document.title = "Watchlist • AniVerse";
+  }, []);
 
   if (authLoading) {
     return (

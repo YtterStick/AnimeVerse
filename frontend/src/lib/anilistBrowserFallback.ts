@@ -180,10 +180,10 @@ export async function fetchMediaListFallback(
   extraVars: Record<string, unknown> = {}
 ): Promise<ApiResponse<Anime[]>> {
   const query = `
-    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $search: String, $genre_in: [String], $tag_in: [String]) {
+    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $format: MediaFormat, $search: String, $genre_in: [String], $tag_in: [String]) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { total perPage currentPage lastPage hasNextPage }
-        media(type: ANIME, isAdult: false, sort: $sort, status: $status, search: $search, genre_in: $genre_in, tag_in: $tag_in) {
+        media(type: ANIME, isAdult: false, sort: $sort, status: $status, format: $format, search: $search, genre_in: $genre_in, tag_in: $tag_in) {
           ${MEDIA_FIELDS}
         }
       }
@@ -238,11 +238,19 @@ export const anilistBrowserFallback = {
   topRated: (page = 1) =>
     fetchMediaListFallback(["SCORE_DESC", "POPULARITY_DESC"], page, 25),
 
-  search: (query: string, page = 1, genres = "", orderBy = "", status = "") => {
+  search: (query: string, page = 1, genres = "", orderBy = "", status = "", type = "") => {
     const extraVars: Record<string, unknown> = {};
     if (query.trim()) extraVars.search = query.trim();
-    if (status === "airing") extraVars.status = "RELEASING";
-    else if (status === "upcoming") extraVars.status = "NOT_YET_RELEASED";
+    const normStatus = status.toLowerCase();
+    if (normStatus === "airing") extraVars.status = "RELEASING";
+    else if (normStatus === "upcoming") extraVars.status = "NOT_YET_RELEASED";
+    else if (normStatus === "complete" || normStatus === "completed") extraVars.status = "FINISHED";
+
+    const normType = type.toLowerCase();
+    if (normType === "tv") extraVars.format = "TV";
+    else if (normType === "movie") extraVars.format = "MOVIE";
+    else if (normType === "ova") extraVars.format = "OVA";
+    else if (normType === "special") extraVars.format = "SPECIAL";
 
     if (genres) {
       const genreIn: string[] = [];

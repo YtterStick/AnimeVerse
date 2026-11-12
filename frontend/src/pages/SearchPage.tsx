@@ -102,11 +102,13 @@ export function SearchPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Extract 'q', 'genres', 'category', and 'page' query parameters from URL
+  // Extract 'q', 'genres', 'category', 'type', 'status', and 'page' query parameters from URL
   const queryParams = new URLSearchParams(location.search);
   const urlQuery = queryParams.get("q") || "";
   const urlGenresRaw = queryParams.get("genres") || "";
   const urlCategory = queryParams.get("category") || "";
+  const urlType = (queryParams.get("type") || "").toLowerCase();
+  const urlStatus = (queryParams.get("status") || "").toLowerCase();
   const urlPage = Math.max(1, parseInt(queryParams.get("page") || "1", 10));
 
   const selectedGenres = useMemo(() => {
@@ -119,17 +121,27 @@ export function SearchPage() {
   }, [urlGenresRaw]);
 
   const [searchTerm, setSearchTerm] = useState(urlQuery);
-  const [showGenreFilter, setShowGenreFilter] = useState(true);
+  const [showGenreFilter, setShowGenreFilter] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true
+  );
 
-  // Sync state with URL when it changes
+  // Sync state with URL and update tab title
   useEffect(() => {
     setSearchTerm(urlQuery);
-  }, [urlQuery]);
+    const catTitle = urlCategory ? CATEGORY_CONFIG[urlCategory]?.badge : null;
+    document.title = urlQuery
+      ? `"${urlQuery}" • Discover • AniVerse`
+      : catTitle
+        ? `${catTitle} • AniVerse`
+        : "Discover Anime • AniVerse";
+  }, [urlQuery, urlCategory]);
 
   const hasFilters =
     urlQuery.trim().length > 0 ||
     selectedGenres.length > 0 ||
     Boolean(urlCategory) ||
+    Boolean(urlType) ||
+    Boolean(urlStatus) ||
     urlPage > 1;
 
   // Paginated Search & Category Hook
@@ -138,7 +150,7 @@ export function SearchPage() {
     pagination,
     loading: searchLoading,
     error: searchError,
-  } = useAnimeSearch(urlQuery, selectedGenres.join(","), urlPage, urlCategory);
+  } = useAnimeSearch(urlQuery, selectedGenres.join(","), urlPage, urlCategory, urlStatus, urlType);
 
   // Discover showcase hooks (active when in default overview mode)
   const { data: popularList, loading: popularLoading } = usePopular();
@@ -150,7 +162,9 @@ export function SearchPage() {
     newQuery: string,
     newGenres: string[],
     newPage = 1,
-    newCategory = urlCategory
+    newCategory = urlCategory,
+    newStatus = urlStatus,
+    newType = urlType
   ) => {
     const params = new URLSearchParams();
     if (newQuery.trim()) {
@@ -161,6 +175,12 @@ export function SearchPage() {
     }
     if (newCategory) {
       params.set("category", newCategory);
+    }
+    if (newType) {
+      params.set("type", newType);
+    }
+    if (newStatus) {
+      params.set("status", newStatus);
     }
     if (newPage > 1) {
       params.set("page", String(newPage));
@@ -182,6 +202,16 @@ export function SearchPage() {
     updateSearch(searchTerm, nextGenres, 1, urlCategory);
   };
 
+  const toggleTypeFilter = (typeValue: string) => {
+    const nextType = urlType === typeValue ? "" : typeValue;
+    updateSearch(searchTerm, selectedGenres, 1, urlCategory, urlStatus, nextType);
+  };
+
+  const toggleStatusFilter = (statusValue: string) => {
+    const nextStatus = urlStatus === statusValue ? "" : statusValue;
+    updateSearch(searchTerm, selectedGenres, 1, urlCategory, nextStatus, urlType);
+  };
+
   const removeGenre = (genreName: string) => {
     const nextGenres = selectedGenres.filter((g) => g !== genreName);
     updateSearch(searchTerm, nextGenres, 1, urlCategory);
@@ -189,6 +219,14 @@ export function SearchPage() {
 
   const removeCategory = () => {
     updateSearch(searchTerm, selectedGenres, 1, "");
+  };
+
+  const removeType = () => {
+    updateSearch(searchTerm, selectedGenres, 1, urlCategory, urlStatus, "");
+  };
+
+  const removeStatus = () => {
+    updateSearch(searchTerm, selectedGenres, 1, urlCategory, "", urlType);
   };
 
   const removeQuery = () => {
@@ -254,40 +292,95 @@ export function SearchPage() {
           </Button>
         </form>
 
-        {/* Genre Selector Pills Box */}
-        <div className="w-full bg-card/30 border border-border/40 rounded-2xl p-4 sm:p-5 backdrop-blur-sm space-y-3 text-left">
+        {/* Quick Format & Status Filters + Collapsible Genres */}
+        <div className="w-full bg-card/30 border border-border/40 rounded-2xl p-4 sm:p-5 backdrop-blur-sm space-y-3.5 text-left">
+          {/* Format & Status Quick Filters Row */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-border/30">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mr-1">
+                Quick Filters
+              </span>
+              {[
+                { kind: "type" as const, value: "tv", label: "TV" },
+                { kind: "type" as const, value: "movie", label: "Movie" },
+              ].map((opt) => {
+                const active = urlType === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => toggleTypeFilter(opt.value)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer select-none ${
+                      active
+                        ? "bg-primary text-white border-primary shadow-sm shadow-primary/30"
+                        : "bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground border-border/40"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+
+              <span className="text-border/70 px-0.5">|</span>
+
+              {[
+                { value: "airing", label: "Airing" },
+                { value: "complete", label: "Completed" },
+              ].map((opt) => {
+                const active = urlStatus === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => toggleStatusFilter(opt.value)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer select-none ${
+                      active
+                        ? "bg-primary text-white border-primary shadow-sm shadow-primary/30"
+                        : "bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground border-border/40"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="text-xs text-muted-foreground hover:text-red-400 flex items-center gap-1 transition-colors cursor-pointer px-2 py-1 rounded hover:bg-secondary/40"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset All</span>
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowGenreFilter(!showGenreFilter)}
+              className="flex items-center gap-2 cursor-pointer group"
+            >
               <SlidersHorizontal className="w-4 h-4 text-primary" />
-              <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
-                Filter by Genre
+              <span className="text-xs sm:text-sm font-bold text-white tracking-wide group-hover:text-primary transition-colors">
+                Genres{selectedGenres.length > 0 ? ` (${selectedGenres.length})` : ""}
               </span>
               {selectedGenres.length > 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-[10px] font-extrabold border border-primary/30">
-                  {selectedGenres.length} selected
+                  {selectedGenres.length} active
                 </span>
               )}
-            </div>
+            </button>
 
-            <div className="flex items-center gap-2">
-              {hasFilters && (
-                <button
-                  type="button"
-                  onClick={clearAllFilters}
-                  className="text-xs text-muted-foreground hover:text-red-400 flex items-center gap-1 transition-colors cursor-pointer px-2 py-1 rounded hover:bg-secondary/40"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Reset All</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowGenreFilter(!showGenreFilter)}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              >
-                {showGenreFilter ? "Hide" : "Show"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowGenreFilter(!showGenreFilter)}
+              className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer px-2.5 py-1 rounded-full bg-secondary/40 hover:bg-secondary/70 border border-border/40"
+            >
+              {showGenreFilter ? "Hide Genres" : `Show Genres${selectedGenres.length > 0 ? ` (${selectedGenres.length})` : ""}`}
+            </button>
           </div>
 
           {showGenreFilter && (
@@ -367,6 +460,36 @@ export function SearchPage() {
                       onClick={removeQuery}
                       className="hover:text-white rounded-full p-0.5 hover:bg-muted transition-colors cursor-pointer"
                       title="Clear text search"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {urlType && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/20 text-primary border border-primary/30">
+                    <span>Format: {urlType === "tv" ? "TV" : urlType === "movie" ? "Movie" : urlType.toUpperCase()}</span>
+                    <button
+                      type="button"
+                      onClick={removeType}
+                      className="hover:text-white rounded-full p-0.5 hover:bg-primary/40 transition-colors cursor-pointer"
+                      title="Clear format filter"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {urlStatus && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/20 text-primary border border-primary/30">
+                    <span>
+                      Status: {urlStatus === "airing" ? "Airing" : urlStatus === "complete" ? "Completed" : urlStatus}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={removeStatus}
+                      className="hover:text-white rounded-full p-0.5 hover:bg-primary/40 transition-colors cursor-pointer"
+                      title="Clear status filter"
                     >
                       <X className="w-3 h-3" />
                     </button>

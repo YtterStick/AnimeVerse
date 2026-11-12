@@ -23,7 +23,8 @@ router.get("/search", async (req: Request, res: Response, _next: NextFunction) =
     const genres = (req.query.genres as string) || "";
     const orderBy = (req.query.order_by as string) || "";
     const status = (req.query.status as string) || "";
-    const data = await jikanService.searchAnime(q, page, genres, orderBy, status);
+    const type = (req.query.type as string) || "";
+    const data = await jikanService.searchAnime(q, page, genres, orderBy, status, type);
     res.json(data);
   } catch (error: any) {
     console.warn("[AnimeRoute] Search failed:", error.message);

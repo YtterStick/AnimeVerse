@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Star, Clock, Calendar, Heart, Play, AlertCircle, RefreshCw } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes } from "@/hooks/useAnime";
-import { useWatchlist } from "@/hooks/useWatchHistory";
+import { useWatchHistory, useWatchlist } from "@/hooks/useWatchHistory";
+import { getRecentLocalHistory, isEpisodeFinished } from "@/lib/watchProgress";
 import { EpisodeList } from "@/components/anime/EpisodeList";
 import { AnimeSeasons } from "@/components/anime/AnimeSeasons";
 import { GenreBadge } from "@/components/anime/GenreBadge";
@@ -10,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { formatScore } from "@/lib/utils";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
+import { useToast } from "@/contexts/ToastContext";
 
 export function AnimePage() {
   const { id } = useParams<{ id: string }>();
@@ -21,8 +23,48 @@ export function AnimePage() {
 
   const { anime, loading: detailLoading, error: detailError, retry } = useAnimeDetail(animeId);
   const { episodes, loading: episodesLoading } = useAnimeEpisodes(animeId);
+  const { history } = useWatchHistory();
   const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
   const { formatTitle, language } = useTitleLanguage();
+  const toast = useToast();
+
+  // Compute resume episode from local + cloud history for this anime
+  const resumeEpisode = useMemo(() => {
+    let bestEp: number | null = null;
+    let bestFinished = false;
+    let bestTime = -1;
+
+    for (const item of getRecentLocalHistory()) {
+      if (item.animeId === animeId && item.durationSeconds > 0 && item.updatedAt > bestTime) {
+        bestTime = item.updatedAt;
+        bestEp = item.episodeNumber;
+        bestFinished = isEpisodeFinished(item.progressSeconds, item.durationSeconds);
+      }
+    }
+
+    for (const h of history) {
+      if (h.anime_id === animeId && h.duration_seconds > 0) {
+        const hTime = h.watched_at ? new Date(h.watched_at).getTime() : 0;
+        if (hTime > bestTime || (bestEp !== null && h.episode_number > bestEp)) {
+          bestTime = hTime;
+          bestEp = h.episode_number;
+          bestFinished = isEpisodeFinished(h.progress_seconds, h.duration_seconds);
+        }
+      }
+    }
+
+    if (bestEp === null) return null;
+    const targetEp = bestFinished ? bestEp + 1 : bestEp;
+    const totalCount = anime?.episodes || episodes.length || null;
+    if (totalCount && targetEp > totalCount) return bestEp;
+    return targetEp;
+  }, [animeId, history, anime?.episodes, episodes.length]);
+
+  useEffect(() => {
+    if (anime) {
+      document.title = `${formatTitle(anime)} • AniVerse`;
+    }
+  }, [anime, formatTitle]);
 
   const isUpcoming =
     anime?.status === "Not yet aired" ||
@@ -116,6 +158,7 @@ export function AnimePage() {
     try {
       if (isSaved) {
         await removeFromWatchlist(anime.mal_id);
+        toast.info(`Removed "${title}" from Watchlist`);
       } else {
         await addToWatchlist({
           anime_id: anime.mal_id,
@@ -128,9 +171,10 @@ export function AnimePage() {
             null,
           anime_type: anime.type,
         });
+        toast.success(`Added "${title}" to Watchlist`);
       }
     } catch {
-      window.alert("Couldn't update your watchlist. Please try again.");
+      toast.error("Couldn't update your watchlist. Please try again.");
     }
   };
 
@@ -249,9 +293,9 @@ export function AnimePage() {
                     asChild
                     className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 py-5 shadow-lg shadow-primary/10 transition-all font-semibold"
                   >
-                    <Link to={`/watch/${anime.mal_id}/1`}>
+                    <Link to={`/watch/${anime.mal_id}/${resumeEpisode ?? 1}`}>
                       <Play className="w-4 h-4 mr-2 fill-white" />
-                      Watch Episode 1
+                      {resumeEpisode ? `Continue Episode ${resumeEpisode}` : "Watch Episode 1"}
                     </Link>
                   </Button>
                 ) : anime.trailer?.url ? (
@@ -307,7 +351,7 @@ export function AnimePage() {
             {/* Synopsis */}
             <div className="space-y-3">
               <h2 className="text-lg font-bold text-foreground">Synopsis</h2>
-              <p className="text-muted-foreground text-sm leading-relaxed whitespace-pre-line text-justify">
+              <p className="text-muted-foreground text-sm leading-relaxed whitespace-pre-line text-left">
                 {synopsis}
               </p>
               
