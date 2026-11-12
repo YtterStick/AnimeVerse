@@ -709,13 +709,13 @@ export function WatchPage() {
               </h1>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               {firstSubIndex !== -1 && (
                 <Button
                   size="sm"
                   variant={(activeServer?.category || "SUB") === "SUB" ? "default" : "secondary"}
                   onClick={() => handleServerChange(firstSubIndex)}
-                  className="rounded-full px-3 text-xs font-bold"
+                  className="rounded-full h-7 sm:h-8 px-2.5 sm:px-3 text-[11px] sm:text-xs font-bold"
                 >
                   SUB (Eng)
                 </Button>
@@ -725,7 +725,7 @@ export function WatchPage() {
                   size="sm"
                   variant={activeServer?.category === "DUB" ? "default" : "secondary"}
                   onClick={() => handleServerChange(firstDubIndex)}
-                  className="rounded-full px-3 text-xs font-bold"
+                  className="rounded-full h-7 sm:h-8 px-2.5 sm:px-3 text-[11px] sm:text-xs font-bold"
                 >
                   DUB (Eng)
                 </Button>
@@ -733,34 +733,34 @@ export function WatchPage() {
 
               {/* Auto Skip Checkbox */}
               <label
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary/80 border border-border/40 text-xs font-semibold text-white/90 hover:text-white cursor-pointer select-none transition-colors"
+                className="flex items-center gap-1.5 sm:gap-2 h-7 sm:h-8 px-2.5 sm:px-3 rounded-full bg-secondary/50 hover:bg-secondary/80 border border-border/40 text-[11px] sm:text-xs font-semibold text-white/90 hover:text-white cursor-pointer select-none transition-colors"
                 title="Automatically skip intros and outros"
               >
                 <input
                   type="checkbox"
                   checked={autoSkip}
                   onChange={toggleAutoSkip}
-                  className="w-3.5 h-3.5 rounded border-border text-primary accent-primary cursor-pointer"
+                  className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded border-border text-primary accent-primary cursor-pointer"
                 />
-                <span className="flex items-center gap-1.5">
-                  <FastForward className="w-3.5 h-3.5 text-primary" />
+                <span className="flex items-center gap-1">
+                  <FastForward className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
                   Auto Skip
                 </span>
               </label>
 
               {/* Auto Next Checkbox */}
               <label
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary/80 border border-border/40 text-xs font-semibold text-white/90 hover:text-white cursor-pointer select-none transition-colors"
+                className="flex items-center gap-1.5 sm:gap-2 h-7 sm:h-8 px-2.5 sm:px-3 rounded-full bg-secondary/50 hover:bg-secondary/80 border border-border/40 text-[11px] sm:text-xs font-semibold text-white/90 hover:text-white cursor-pointer select-none transition-colors"
                 title="Automatically play the next episode when current episode ends"
               >
                 <input
                   type="checkbox"
                   checked={autoNext}
                   onChange={toggleAutoNext}
-                  className="w-3.5 h-3.5 rounded border-border text-primary accent-primary cursor-pointer"
+                  className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded border-border text-primary accent-primary cursor-pointer"
                 />
-                <span className="flex items-center gap-1.5">
-                  <Play className="w-3 h-3 text-primary fill-primary" />
+                <span className="flex items-center gap-1">
+                  <Play className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-primary fill-primary" />
                   Auto Next
                 </span>
               </label>
@@ -769,10 +769,10 @@ export function WatchPage() {
               <button
                 type="button"
                 onClick={() => setIsReportOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs font-semibold text-amber-300 hover:text-amber-200 cursor-pointer select-none transition-colors"
+                className="flex items-center gap-1 sm:gap-1.5 h-7 sm:h-8 px-2.5 sm:px-3 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-[11px] sm:text-xs font-semibold text-amber-300 hover:text-amber-200 cursor-pointer select-none transition-colors"
                 title="Report a problem with this video stream or server"
               >
-                <Flag className="w-3.5 h-3.5 text-amber-400" />
+                <Flag className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400" />
                 Report
               </button>
             </div>
@@ -818,7 +818,7 @@ export function WatchPage() {
 
       {/* Right Column: Self-contained Episode List Card */}
       <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 min-w-0">
-        <div className="rounded-2xl border border-border/40 bg-card/40 backdrop-blur-md shadow-xl flex flex-col overflow-hidden h-[540px] sm:h-[580px] lg:h-[620px] 2xl:h-[680px]">
+        <div className="rounded-2xl border border-border/40 bg-card/40 backdrop-blur-md shadow-xl flex flex-col overflow-hidden h-[280px] sm:h-[340px] lg:h-[620px] 2xl:h-[680px]">
           {/* Card Header */}
           <div className="p-3 sm:p-3.5 flex items-center justify-between border-b border-border/40 bg-card/60 select-none shrink-0 gap-2">
             <div className="flex items-center gap-2 min-w-0">
@@ -914,8 +914,8 @@ export function WatchPage() {
                 {episodeSearch ? `No episode matching "${episodeSearch}"` : "No episodes found."}
               </div>
             ) : viewMode === "grid" ? (
-              /* GRID VIEW (Compact number badges) */
-              <div className="grid grid-cols-5 gap-2 pb-4">
+              /* GRID VIEW (Compact number badges on mobile, square tiles on desktop) */
+              <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-5 gap-1.5 lg:gap-2 pb-2 lg:pb-4">
                 {displayedEpisodes.map((ep) => {
                   const isActive = ep.episode_number === episodeNum;
                   const { isWatched } = getEpisodeWatchStatus(animeId, ep.episode_number, history);
@@ -924,9 +924,9 @@ export function WatchPage() {
                       key={ep.episode_number}
                       ref={isActive ? activeEpisodeRef : null}
                       onClick={() => navigate(`/watch/${animeId}/${ep.episode_number}`)}
-                      className={`relative aspect-square rounded-xl border flex flex-col items-center justify-center font-bold text-xs transition-all cursor-pointer ${
+                      className={`relative h-9 lg:h-auto lg:aspect-square rounded-lg lg:rounded-xl border flex flex-col items-center justify-center font-bold text-xs transition-all cursor-pointer ${
                         isActive
-                          ? "bg-primary text-white border-primary shadow-lg shadow-primary/25 ring-2 ring-primary/40 scale-105"
+                          ? "bg-primary text-white border-primary shadow-lg shadow-primary/25 ring-2 ring-primary/40 lg:scale-105"
                           : isWatched
                           ? "bg-card/25 border-border/30 text-muted-foreground/45 hover:bg-secondary/50 hover:text-white"
                           : "bg-card/60 border-border/40 text-foreground hover:bg-secondary/70 hover:border-primary/50 hover:text-white"
@@ -935,10 +935,10 @@ export function WatchPage() {
                     >
                       <span>{ep.episode_number}</span>
                       {isWatched && !isActive && (
-                        <Check className="w-2.5 h-2.5 text-emerald-400 absolute bottom-1 right-1" />
+                        <Check className="w-2 h-2 lg:w-2.5 lg:h-2.5 text-emerald-400 absolute bottom-0.5 right-0.5 lg:bottom-1 lg:right-1" />
                       )}
                       {isActive && (
-                        <Play className="w-2.5 h-2.5 text-white fill-white absolute bottom-1 right-1" />
+                        <Play className="w-2 h-2 lg:w-2.5 lg:h-2.5 text-white fill-white absolute bottom-0.5 right-0.5 lg:bottom-1 lg:right-1" />
                       )}
                     </button>
                   );

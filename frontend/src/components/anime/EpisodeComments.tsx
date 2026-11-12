@@ -507,28 +507,28 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pt-0.5">
             <button
               type="button"
               onClick={() => handleToggleCommentLike(comment.id)}
               disabled={pendingLikeId === comment.id}
               aria-pressed={comment.liked_by_me}
-              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md transition-colors ${
+              className={`inline-flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md whitespace-nowrap transition-colors ${
                 comment.liked_by_me
                   ? "bg-primary/20 text-primary"
                   : "text-muted-foreground hover:text-white hover:bg-secondary/70"
               }`}
             >
-              <ThumbsUp className="w-3.5 h-3.5" />
+              <ThumbsUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               <span>{comment.likes_count > 0 ? comment.likes_count : "Like"}</span>
             </button>
 
             <button
               type="button"
               onClick={() => handleOpenReply(comment)}
-              className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/70 transition-colors"
+              className="inline-flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/70 whitespace-nowrap transition-colors"
             >
-              <CornerDownRight className="w-3.5 h-3.5" />
+              <CornerDownRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               <span>Reply</span>
             </button>
 
@@ -543,9 +543,9 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
                   })
                 }
                 disabled={pendingDeleteId === comment.id}
-                className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 whitespace-nowrap transition-colors"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 <span>Delete</span>
               </button>
             )}
@@ -554,9 +554,9 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
               <button
                 type="button"
                 onClick={() => toggleRevealSpoiler(comment.id)}
-                className="inline-flex items-center gap-1 text-xs text-amber-300/80 hover:text-amber-200 px-2 py-1 rounded-md hover:bg-amber-500/10 transition-colors"
+                className="inline-flex items-center gap-1 text-[11px] sm:text-xs text-amber-300/80 hover:text-amber-200 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md hover:bg-amber-500/10 whitespace-nowrap transition-colors"
               >
-                <EyeOff className="w-3.5 h-3.5" />
+                <EyeOff className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 Hide Spoiler
               </button>
             )}
@@ -573,26 +573,26 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
 
   return (
     <section
-      className="mt-6 rounded-2xl bg-card/40 border border-border/50 p-4 sm:p-6 space-y-6"
+      className="mt-4 sm:mt-6 rounded-2xl bg-card/40 border border-border/50 p-3.5 sm:p-6 space-y-5 sm:space-y-6"
       aria-label="Episode reactions and comments"
     >
       {/* Custom Animated Anime Reactions Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-border/40">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-5 border-b border-border/40">
         <div>
-          <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+          <h2 className="text-sm sm:text-lg font-bold text-white flex items-center gap-2">
             Episode {episodeNumber} Reactions
             {totalReactions > 0 && (
-              <span className="text-xs font-medium text-muted-foreground bg-secondary/70 px-2 py-0.5 rounded-full">
+              <span className="text-[11px] sm:text-xs font-medium text-muted-foreground bg-secondary/70 px-2 py-0.5 rounded-full">
                 {totalReactions}
               </span>
             )}
           </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
             Tap an anime reaction to hype this episode
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 overflow-x-auto hide-scrollbar sm:flex-wrap pb-0.5 sm:pb-0 -mx-0.5 px-0.5">
           {REACTION_OPTIONS.map(({ type, label, activeClass }) => {
             const count = discussion.reactions[type] || 0;
             const active = discussion.userReactions.includes(type);
@@ -605,7 +605,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
                 disabled={pendingReact !== null}
                 aria-pressed={active}
                 title={label}
-                className={`relative group inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all duration-200 hover:scale-105 active:scale-95 ${
+                className={`relative group inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-bold border shrink-0 transition-all duration-200 hover:scale-105 active:scale-95 ${
                   active
                     ? activeClass
                     : "bg-secondary/50 border-border/50 text-muted-foreground hover:text-white hover:border-primary/40 hover:bg-secondary/80"
@@ -623,12 +623,12 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
                 <AnimeReactionIcon
                   type={type}
                   active={active}
-                  className="w-6 h-6 shrink-0"
+                  className="w-5 h-5 sm:w-6 sm:h-6 shrink-0"
                 />
                 <span>{label}</span>
                 {count > 0 && (
                   <span
-                    className={`px-1.5 py-0.5 rounded-full text-[11px] leading-none ${
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-[11px] leading-none ${
                       active ? "bg-black/30 text-white" : "bg-black/30 text-gray-300"
                     }`}
                   >
@@ -643,19 +643,47 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
 
       {/* Comments Header & Main Composer */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-primary" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
+          <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 whitespace-nowrap">
+            <MessageSquare className="w-4 h-4 text-primary shrink-0" />
             Comments ({discussion.comments.length})
           </h3>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[10px] sm:text-[11px] text-muted-foreground">
             Profanity auto-blocked • Spoilers hidden
           </span>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="flex items-start gap-3">
-            <Avatar className="w-9 h-9 border border-primary/30 shrink-0 mt-0.5">
+        <form onSubmit={handleSubmit} className="space-y-2.5 sm:space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3">
+            <div className="flex items-center justify-between gap-2 sm:hidden">
+              <div className="flex items-center gap-2 min-w-0">
+                <Avatar className="w-7 h-7 border border-primary/30 shrink-0">
+                  {activeAvatar ? (
+                    <AvatarImage src={activeAvatar} alt={activeName} className="object-cover" />
+                  ) : null}
+                  <AvatarFallback className="bg-primary/20 text-primary text-[11px] font-bold">
+                    {activeName[0]?.toUpperCase() || "A"}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-xs font-semibold text-white truncate">{activeName}</span>
+                {!user && (
+                  <span className="px-1.5 py-0.5 rounded bg-secondary/70 text-[10px] text-muted-foreground">
+                    Guest
+                  </span>
+                )}
+              </div>
+              {!user && (
+                <button
+                  type="button"
+                  onClick={() => setAuthModalOpen(true)}
+                  className="text-[11px] text-primary hover:underline font-medium shrink-0"
+                >
+                  Sign in
+                </button>
+              )}
+            </div>
+
+            <Avatar className="hidden sm:flex w-9 h-9 border border-primary/30 shrink-0 mt-0.5">
               {activeAvatar ? (
                 <AvatarImage src={activeAvatar} alt={activeName} className="object-cover" />
               ) : null}
@@ -665,7 +693,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
             </Avatar>
 
             <div className="flex-1 min-w-0 space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="hidden sm:flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs">
                   <span className="font-semibold text-white">{activeName}</span>
                   {!user && (
@@ -692,9 +720,9 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
                   if (errorMessage) setErrorMessage(null);
                 }}
                 maxLength={1000}
-                rows={3}
-                placeholder="Join the discussion about this episode... (Keep it respectful; spoilers will be hidden)"
-                className={`w-full rounded-xl bg-secondary/50 border px-3.5 py-2.5 text-sm text-white placeholder:text-muted-foreground/60 focus:outline-none transition-colors resize-y min-h-[82px] ${
+                rows={2}
+                placeholder="Join the discussion about this episode... (Spoilers will be hidden)"
+                className={`w-full rounded-xl bg-secondary/50 border px-3 py-2 sm:px-3.5 sm:py-2.5 text-xs sm:text-sm text-white placeholder:text-muted-foreground/60 focus:outline-none transition-colors resize-y min-h-[70px] sm:min-h-[82px] ${
                   draftModeration.isExplicit
                     ? "border-red-500/70 focus:border-red-500"
                     : "border-border/50 focus:border-primary"
@@ -720,7 +748,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
                     type="button"
                     onClick={() => setMarkSpoiler((v) => !v)}
                     aria-pressed={markSpoiler}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium border transition-colors ${
                       markSpoiler
                         ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
                         : "bg-secondary/50 border-border/50 text-muted-foreground hover:text-white"
@@ -731,33 +759,33 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
                     ) : (
                       <AlertTriangle className="w-3.5 h-3.5" />
                     )}
-                    <span>{markSpoiler ? "Marked as Spoiler" : "Contains Spoiler"}</span>
+                    <span>{markSpoiler ? "Spoiler" : "Contains Spoiler"}</span>
                   </button>
 
                   {autoDetectedSpoiler && (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/25 px-2 py-1 rounded-lg">
+                    <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/25 px-2 py-1 rounded-lg">
                       <AlertTriangle className="w-3 h-3" />
-                      Spoiler detected — will hide automatically
+                      Auto-spoiler
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center gap-3 ml-auto">
-                  <span className="text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+                  <span className="text-[10px] sm:text-[11px] text-muted-foreground">
                     {draft.length}/1000
                   </span>
                   <Button
                     type="submit"
                     size="sm"
                     disabled={submitting || !draft.trim() || draftModeration.isExplicit}
-                    className="gap-1.5 font-semibold"
+                    className="h-8 px-3 text-xs gap-1.5 font-semibold"
                   >
                     {submitting ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <Send className="w-3.5 h-3.5" />
                     )}
-                    {submitting ? "Posting..." : "Post Comment"}
+                    {submitting ? "Posting..." : "Post"}
                   </Button>
                 </div>
               </div>
@@ -806,7 +834,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
                   {isReplyingHere && replyTarget && (
                     <form
                       onSubmit={handleSubmitReply}
-                      className="ml-6 sm:ml-12 pl-3.5 border-l-2 border-primary/40 space-y-2.5 pt-1"
+                      className="ml-2.5 sm:ml-11 pl-2.5 sm:pl-3.5 border-l-2 border-primary/40 space-y-2 pt-1"
                     >
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>
@@ -902,7 +930,7 @@ export function EpisodeComments({ animeId, episodeNumber }: EpisodeCommentsProps
 
                   {/* Nested Replies List */}
                   {replies.length > 0 && (
-                    <div className="ml-5 sm:ml-11 pl-3.5 border-l-2 border-primary/25 space-y-3 pt-1">
+                    <div className="ml-2.5 sm:ml-11 pl-2.5 sm:pl-3.5 border-l-2 border-primary/25 space-y-2.5 sm:space-y-3 pt-1">
                       {replies.length > 2 && (
                         <button
                           type="button"
