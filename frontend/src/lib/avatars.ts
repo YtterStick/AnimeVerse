@@ -151,6 +151,78 @@ export const ANIME_AVATARS: AnimeAvatar[] = [
 
 export const DEFAULT_AVATAR = "/avatars/totoro.svg";
 
+const ANIME_NAME_PREFIXES = [
+  "Kitsune",
+  "Shinobi",
+  "Senpai",
+  "Tanuki",
+  "Ronin",
+  "Tengu",
+  "Sakura",
+  "Akatsuki",
+  "Sorcerer",
+  "Alchemist",
+  "Hashira",
+  "Valkyrie",
+  "Phantom",
+  "Moonlit",
+  "Crimson",
+  "Azure",
+];
+
+const ANIME_NAME_SUFFIXES = [
+  "Wanderer",
+  "Drifter",
+  "Watcher",
+  "Blade",
+  "Spirit",
+  "Mage",
+  "Striker",
+  "Dreamer",
+  "Seeker",
+  "Hunter",
+  "Knight",
+  "Ninja",
+  "Sage",
+  "Nomad",
+  "Hero",
+  "Fox",
+];
+
+function hashSeed(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+export function isExternalOAuthAvatar(url?: string | null): boolean {
+  if (!url || !url.trim()) return true;
+  return /googleusercontent\.com|ggpht\.com|gravatar\.com/i.test(url);
+}
+
+export function generateRandomAnimeProfile(seed?: string): {
+  username: string;
+  avatarUrl: string;
+} {
+  const n1 = seed ? hashSeed(`${seed}:prefix`) : Math.floor(Math.random() * 1_000_000);
+  const n2 = seed ? hashSeed(`${seed}:suffix`) : Math.floor(Math.random() * 1_000_000);
+  const n3 = seed ? hashSeed(`${seed}:num`) : Math.floor(Math.random() * 1_000_000);
+  const n4 = seed ? hashSeed(`${seed}:avatar`) : Math.floor(Math.random() * 1_000_000);
+
+  const prefix = ANIME_NAME_PREFIXES[n1 % ANIME_NAME_PREFIXES.length];
+  const suffix = ANIME_NAME_SUFFIXES[n2 % ANIME_NAME_SUFFIXES.length];
+  const tag = String(100 + (n3 % 900));
+  const avatar = ANIME_AVATARS[n4 % ANIME_AVATARS.length]?.url || DEFAULT_AVATAR;
+
+  return {
+    username: `${prefix}${suffix}${tag}`,
+    avatarUrl: avatar,
+  };
+}
+
 export function getAvatarByUrl(url?: string | null): AnimeAvatar | undefined {
   if (!url) return undefined;
   return ANIME_AVATARS.find((a) => a.url === url || url.includes(a.id));

@@ -9,6 +9,7 @@ import { AuthModal } from "@/components/auth/AuthModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Camera,
   History,
   Heart,
   LogOut,
@@ -110,14 +111,23 @@ export function ProfilePage() {
         {/* Top: Avatar & User Identity */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 pb-6 border-b border-border/30">
           <div className="flex items-center gap-4 sm:gap-5">
-            {/* Avatar */}
-            <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full overflow-hidden border border-border/60 bg-secondary/30 shrink-0">
+            {/* Avatar (clickable to open Avatar Picker) */}
+            <button
+              type="button"
+              onClick={() => setIsAvatarModalOpen(true)}
+              aria-label="Change avatar"
+              title="Click to change avatar"
+              className="group relative w-20 h-20 sm:w-22 sm:h-22 rounded-full overflow-hidden border border-border/60 hover:border-primary/80 bg-secondary/30 shrink-0 cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
               <img
                 src={avatarUrl}
                 alt={displayName}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
               />
-            </div>
+              <span className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <Camera className="w-5 h-5 text-white" />
+              </span>
+            </button>
 
             <div className="space-y-1 min-w-0">
               <div className="flex items-center gap-2">

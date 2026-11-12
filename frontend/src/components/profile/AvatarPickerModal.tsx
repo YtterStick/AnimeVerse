@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,12 @@ export function AvatarPickerModal({
   const [selectedUrl, setSelectedUrl] = useState<string>(currentAvatarUrl);
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedUrl(currentAvatarUrl);
+    }
+  }, [isOpen, currentAvatarUrl]);
 
   const categories = ["All", "Studio Ghibli", "Anime Chibi"];
 
