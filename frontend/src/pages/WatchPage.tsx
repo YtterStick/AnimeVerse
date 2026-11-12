@@ -12,6 +12,7 @@ import { DonationModal } from "@/components/shared/DonationModal";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AnimeSeasons } from "@/components/anime/AnimeSeasons";
+import { EpisodeComments } from "@/components/anime/EpisodeComments";
 import type { MultiStreamResult } from "@/types";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 import { getCleanServerName } from "@/lib/serverNames";
@@ -1081,6 +1082,9 @@ export function WatchPage() {
             {anime?.synopsis || (animeLoading ? "Loading synopsis..." : "No synopsis available.")}
           </p>
         </div>
+
+        {/* Episode Reactions & Comments */}
+        <EpisodeComments animeId={animeId} episodeNumber={episodeNum} />
 
         {/* Seasons & Franchise Section (Season 1, Season 2, Sequels & Movies) */}
         <AnimeSeasons currentAnimeId={animeId} mode="watch" />

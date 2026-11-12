@@ -3,7 +3,9 @@ import type {
   AnimeSeason,
   ApiResponse,
   Episode,
+  EpisodeDiscussion,
   MultiStreamResult,
+  ReactionType,
   SkipInterval,
   VideoReport,
   WatchHistoryEntry,
@@ -886,4 +888,124 @@ export const reportsApi = {
       timeoutMs: 12000,
       maxAttempts: 2,
     }),
+};
+
+// ============================================
+// Episode Comments & Reactions Endpoints
+// ============================================
+
+const GUEST_ID_STORAGE_KEY = "aniverse_guest_id";
+
+export function getOrCreateGuestId(): string {
+  try {
+    const existing = localStorage.getItem(GUEST_ID_STORAGE_KEY);
+    if (existing && /^[a-zA-Z0-9_-]{8,64}$/.test(existing)) {
+      return existing;
+    }
+    const generated =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? `g_${crypto.randomUUID().replace(/-/g, "")}`
+        : `g_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
+    localStorage.setItem(GUEST_ID_STORAGE_KEY, generated);
+    return generated;
+  } catch {
+    return "g_anonymous_session";
+  }
+}
+
+function withActorHeaders(token?: string | null): Record<string, string> {
+  const headers: Record<string, string> = {
+    "x-guest-id": getOrCreateGuestId(),
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export const commentsApi = {
+  getEpisodeDiscussion: (
+    animeId: number,
+    episodeNumber: number,
+    token?: string | null
+  ) =>
+    fetchApi<EpisodeDiscussion>(`/comments/${animeId}/${episodeNumber}`, {
+      headers: withActorHeaders(token),
+      timeoutMs: 10000,
+      maxAttempts: 2,
+    }),
+
+  postComment: (
+    animeId: number,
+    episodeNumber: number,
+    data: {
+      content: string;
+      is_spoiler?: boolean;
+      author_name?: string;
+      author_avatar?: string | null;
+    },
+    token?: string | null
+  ) =>
+    fetchApi<EpisodeDiscussion>(`/comments/${animeId}/${episodeNumber}`, {
+      method: "POST",
+      headers: withActorHeaders(token),
+      body: JSON.stringify({
+        ...data,
+        guest_id: getOrCreateGuestId(),
+      }),
+      timeoutMs: 12000,
+      maxAttempts: 1,
+    }),
+
+  toggleVideoReaction: (
+    animeId: number,
+    episodeNumber: number,
+    type: ReactionType,
+    token?: string | null
+  ) =>
+    fetchApi<EpisodeDiscussion>(`/comments/${animeId}/${episodeNumber}/react`, {
+      method: "POST",
+      headers: withActorHeaders(token),
+      body: JSON.stringify({
+        type,
+        guest_id: getOrCreateGuestId(),
+      }),
+      timeoutMs: 10000,
+      maxAttempts: 1,
+    }),
+
+  toggleCommentLike: (
+    animeId: number,
+    episodeNumber: number,
+    commentId: string,
+    token?: string | null
+  ) =>
+    fetchApi<EpisodeDiscussion>(
+      `/comments/${animeId}/${episodeNumber}/${commentId}/like`,
+      {
+        method: "POST",
+        headers: withActorHeaders(token),
+        body: JSON.stringify({
+          guest_id: getOrCreateGuestId(),
+        }),
+        timeoutMs: 10000,
+        maxAttempts: 1,
+      }
+    ),
+
+  deleteComment: (
+    animeId: number,
+    episodeNumber: number,
+    commentId: string,
+    token?: string | null
+  ) =>
+    fetchApi<EpisodeDiscussion>(
+      `/comments/${animeId}/${episodeNumber}/${commentId}`,
+      {
+        method: "DELETE",
+        headers: withActorHeaders(token),
+        timeoutMs: 10000,
+        maxAttempts: 1,
+      }
+    ),
 };

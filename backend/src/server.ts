@@ -15,6 +15,7 @@ import streamRoutes from "./routes/stream";
 import historyRoutes from "./routes/history";
 import watchlistRoutes from "./routes/watchlist";
 import reportRoutes from "./routes/reports";
+import commentRoutes from "./routes/comments";
 import errorHandler from "./middleware/errorHandler";
 import { jikanService } from "./services/jikanService";
 
@@ -112,6 +113,7 @@ app.use("/api/stream", streamRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/watchlist", watchlistRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/comments", commentRoutes);
 
 // Global Error Handler
 app.use(errorHandler);

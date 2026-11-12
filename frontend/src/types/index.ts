@@ -195,3 +195,24 @@ export interface VideoReport {
   updated_at: string;
   resolved_at: string | null;
 }
+
+export type ReactionType = "like" | "love" | "fire" | "funny" | "sad";
+
+export interface EpisodeComment {
+  id: string;
+  author_name: string;
+  author_avatar: string | null;
+  is_guest: boolean;
+  content: string;
+  is_spoiler: boolean;
+  likes_count: number;
+  liked_by_me: boolean;
+  can_delete: boolean;
+  created_at: string;
+}
+
+export interface EpisodeDiscussion {
+  reactions: Record<ReactionType, number>;
+  userReactions: ReactionType[];
+  comments: EpisodeComment[];
+}
