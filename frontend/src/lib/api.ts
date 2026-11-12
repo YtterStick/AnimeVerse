@@ -12,6 +12,7 @@ import { anilistBrowserFallback } from "./anilistBrowserFallback";
 import { resolveKaaClient } from "./kaaDirectResolver";
 import { resolveKnownStream } from "./knownStreamResolver";
 import { resolveExternalEnglishSubtitles } from "./subtitleFallbackResolver";
+import { resolveZokoClient } from "./zokoDirectResolver";
 
 const DEFAULT_PRODUCTION_BACKEND = "https://animeverse-z6p4.onrender.com";
 const DEFAULT_CLOUDFLARE_STREAM_PROXY = "https://aniverse-stream.andreidilag12.workers.dev";
@@ -403,61 +404,101 @@ async function fetchAniSkipDirect(
   }
 }
 
+function buildEdgeWithRenderBackup(targetUrl: string, referer?: string): string[] {
+  const primary = buildStreamProxyUrl(targetUrl, referer ? { referer } : undefined);
+  const backup = toRenderFallbackProxyUrl(primary);
+  return backup ? [primary, backup] : [primary];
+}
+
+function isItalianHardsubServer(serverId: string): boolean {
+  return serverId.startsWith("animeunity-") || serverId.startsWith("stellar-");
+}
+
+function hasEnglishSubtitles(server: MultiStreamResult["servers"][number]): boolean {
+  return Boolean(
+    server.subtitles?.some(
+      (sub) => sub.lang === "en" || /english/i.test(sub.label || "")
+    )
+  );
+}
+
 export const streamApi = {
   getStreamUrl: async (
     animeId: number,
     episode: number,
     fresh = false
   ): Promise<MultiStreamResult> => {
-    // 1. Resolve directly in the browser + Vercel Edge first (uses 0 bytes on Render)
+    const zokoOptions = {
+      buildProxyUrls: buildEdgeWithRenderBackup,
+      buildStreamProxyUrl: (targetUrl: string, referer?: string) =>
+        buildStreamProxyUrl(targetUrl, referer ? { referer } : undefined),
+      fresh,
+    };
+
+    // 1. Resolve KAA directly in the browser + Cloudflare Worker first (0 bytes on Render)
     const clientServers = await resolveKaaClient(animeId, episode).catch(() => []);
 
-    // 2. Only query Render's backup scrapers if client resolution found nothing or user clicked Retry
+    // 2. When KAA returns nothing (or user clicked Retry), resolve ZokoAnime cleanly via Worker
+    // before falling back to Render so shows like Special A get clean non-Italian SUB+DUB quickly.
+    let zokoServers: MultiStreamResult["servers"] = [];
     let backendValue: MultiStreamResult | null = null;
-    if (clientServers.length === 0 || fresh) {
-      backendValue = await fetchApi<MultiStreamResult>(
-        `/stream/${animeId}/${episode}${fresh ? "?fresh=1" : ""}`,
-        { timeoutMs: 8500, maxAttempts: 1 }
-      ).catch(() => {
-        markRenderColdAndWake();
-        return null;
-      });
+
+    if (fresh) {
+      [zokoServers, backendValue] = await Promise.all([
+        resolveZokoClient(animeId, episode, zokoOptions).catch(() => []),
+        fetchApi<MultiStreamResult>(
+          `/stream/${animeId}/${episode}?fresh=1`,
+          { timeoutMs: 8500, maxAttempts: 1 }
+        ).catch(() => {
+          markRenderColdAndWake();
+          return null;
+        }),
+      ]);
+    } else if (clientServers.length === 0) {
+      zokoServers = await resolveZokoClient(animeId, episode, zokoOptions).catch(() => []);
+      if (zokoServers.length === 0) {
+        backendValue = await fetchApi<MultiStreamResult>(
+          `/stream/${animeId}/${episode}`,
+          { timeoutMs: 8500, maxAttempts: 1 }
+        ).catch(() => {
+          markRenderColdAndWake();
+          return null;
+        });
+      }
     }
 
     let res: MultiStreamResult = { servers: [], default: 0 };
 
-    if (backendValue?.servers) {
-      res = {
-        ...backendValue,
-        servers: backendValue.servers.map((s) => ({
-          ...s,
-          url: rewriteStreamUrlToEdgeProxy(s.url),
-          thumbnails: s.thumbnails ? rewriteStreamUrlToEdgeProxy(s.thumbnails) : s.thumbnails,
-          subtitles: s.subtitles?.map((sub) => ({
-            ...sub,
-            url: rewriteStreamUrlToEdgeProxy(sub.url),
-          })),
-        })),
-      };
-    }
+    const backendServers = (backendValue?.servers || []).map((s) => ({
+      ...s,
+      url: rewriteStreamUrlToEdgeProxy(s.url),
+      thumbnails: s.thumbnails ? rewriteStreamUrlToEdgeProxy(s.thumbnails) : s.thumbnails,
+      subtitles: s.subtitles?.map((sub) => ({
+        ...sub,
+        url: rewriteStreamUrlToEdgeProxy(sub.url),
+      })),
+    }));
 
-    if (clientServers.length > 0) {
-      const hasKaa = res.servers?.some((s) => s.id.startsWith("kaa-"));
-      if (!hasKaa) {
-        // Prepend client-side resolved CatStream servers (fastest & highest quality)
-        res.servers = [...clientServers, ...(res.servers || [])];
-      }
-    }
+    const nonItalianBackend = backendServers.filter((s) => !isItalianHardsubServer(s.id));
+    const italianBackend = backendServers.filter((s) => isItalianHardsubServer(s.id));
+    const hasKaa = backendServers.some((s) => s.id.startsWith("kaa-"));
+    const mergedClean = [
+      ...(hasKaa ? [] : clientServers),
+      ...nonItalianBackend,
+      ...zokoServers,
+    ];
 
-    // Fallback: If neither backend nor KAA returned streams, check verified known client-side streams
-    if (!res.servers || res.servers.length === 0) {
+    res.servers = [...mergedClean, ...italianBackend];
+
+    // Fallback: If live resolvers and backend yielded no streams, check verified known client-side streams
+    if (res.servers.length === 0) {
       const known = resolveKnownStream(animeId, episode);
       if (known && known.length > 0) {
         res.servers = known;
       }
     }
 
-    if (!res.servers || res.servers.length === 0) {
+    if (res.servers.length === 0) {
       return {
         servers: [],
         default: -1,
@@ -482,19 +523,12 @@ export const streamApi = {
     const hasEnglishSubSupport = res.servers.some(
       (s) =>
         (s.category || "SUB") === "SUB" &&
-        (s.id.startsWith("animeheaven-") ||
-          s.subtitles?.some(
-            (sub) => sub.lang === "en" || /english/i.test(sub.label || "")
-          ))
+        (s.id.startsWith("animeheaven-") || hasEnglishSubtitles(s))
     );
 
     if (!hasEnglishSubSupport) {
       const fallbackSubs = await resolveExternalEnglishSubtitles(animeId, episode, {
-        buildProxyUrls: (targetUrl, referer) => {
-          const primary = buildStreamProxyUrl(targetUrl, referer ? { referer } : undefined);
-          const backup = toRenderFallbackProxyUrl(primary);
-          return backup ? [primary, backup] : [primary];
-        },
+        buildProxyUrls: buildEdgeWithRenderBackup,
       }).catch(() => []);
 
       if (fallbackSubs.length > 0) {
@@ -508,19 +542,25 @@ export const streamApi = {
       }
     }
 
-    // Pick best default server: Soft-subbed HLS with English subtitle track first, then any SUB
-    const engSubIdx = res.servers.findIndex(
+    // Pick best default server: clean non-Italian English soft-subbed SUB > any non-Italian SUB > any SUB
+    const cleanEngSubIdx = res.servers.findIndex(
       (s) =>
         (s.category || "SUB") === "SUB" &&
-        s.subtitles &&
-        s.subtitles.some((sub) => sub.lang === "en")
+        !isItalianHardsubServer(s.id) &&
+        hasEnglishSubtitles(s)
     );
-    if (engSubIdx !== -1) {
-      res.default = engSubIdx;
-    } else {
-      const subIdx = res.servers.findIndex((s) => (s.category || "SUB") === "SUB");
-      res.default = subIdx !== -1 ? subIdx : 0;
-    }
+    const cleanSubIdx = res.servers.findIndex(
+      (s) => (s.category || "SUB") === "SUB" && !isItalianHardsubServer(s.id)
+    );
+    const fallbackEngSubIdx = res.servers.findIndex(
+      (s) => (s.category || "SUB") === "SUB" && hasEnglishSubtitles(s)
+    );
+    const anySubIdx = res.servers.findIndex((s) => (s.category || "SUB") === "SUB");
+
+    if (cleanEngSubIdx !== -1) res.default = cleanEngSubIdx;
+    else if (cleanSubIdx !== -1) res.default = cleanSubIdx;
+    else if (fallbackEngSubIdx !== -1) res.default = fallbackEngSubIdx;
+    else res.default = anySubIdx !== -1 ? anySubIdx : 0;
 
     return res;
   },

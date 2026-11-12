@@ -64,7 +64,7 @@ export class ConsumetStreamProvider implements StreamProvider {
     this.animeUnity.client.defaults.headers.common["Referer"] = "https://www.animeunity.to/";
     this.animeUnity.client.defaults.timeout = 8000;
     console.log(
-      `[StreamProvider] Initialized providers: KickAssAnime (SUB & DUB) + AnimeHeaven (Hard-Sub) + AnimeUnity (SUB)`
+      `[StreamProvider] Initialized providers: KickAssAnime (SUB & DUB) + AnimeHeaven (Hard-Sub) + ZokoAnime (SUB & DUB) + AnimeUnity (SUB)`
     );
   }
 
@@ -887,6 +887,107 @@ export class ConsumetStreamProvider implements StreamProvider {
     return servers;
   }
 
+  // ─── ZokoAnime (zokoanime.video) Clean English SUB & DUB Resolver ─
+
+  private decodeZokoPayload(b64: string): any | null {
+    try {
+      const key = "otaku-embed-v1";
+      const bytes = Buffer.from(b64.trim(), "base64");
+      const out = Buffer.alloc(bytes.length);
+      for (let i = 0; i < bytes.length; i++) {
+        out[i] = bytes[i] ^ key.charCodeAt(i % key.length);
+      }
+      return JSON.parse(out.toString("utf8"));
+    } catch {
+      return null;
+    }
+  }
+
+  private async fetchZokoServers(animeId: number, episode: number): Promise<StreamServer[]> {
+    const categories: Array<"SUB" | "DUB"> = ["SUB", "DUB"];
+    const resolved = await Promise.all(
+      categories.map(async (category): Promise<StreamServer | null> => {
+        const mode = category === "DUB" ? "dub" : "sub";
+        try {
+          const res = await axios.get(
+            `https://zokoanime.video/stream/mal/${animeId}/${episode}/${mode}`,
+            {
+              headers: {
+                "User-Agent": USER_AGENT,
+                Referer: "https://hianime.at/",
+              },
+              timeout: 7000,
+            }
+          );
+          const html = String(res.data || "");
+          const blob = html.match(/window\.__P\s*=\s*"([^"]+)"/)?.[1];
+          if (!blob) return null;
+
+          const payload = this.decodeZokoPayload(blob);
+          const streamUrl = typeof payload?.src === "string" ? this.sanitizeUrl(payload.src) : "";
+          if (!streamUrl || !streamUrl.startsWith("http")) return null;
+
+          const subtitles = this.normalizeZokoSubtitles(payload?.subtitles);
+
+          return {
+            id: `zoko-${mode}-0`,
+            name: "Mirage HD",
+            category,
+            url: this.proxyUrl(streamUrl, undefined, "https://zokoanime.video/"),
+            type: "hls",
+            quality: "Auto",
+            subtitles,
+          };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    return resolved.filter((s): s is StreamServer => Boolean(s));
+  }
+
+  private normalizeZokoSubtitles(rawSubs: any): SubtitleTrack[] {
+    if (!Array.isArray(rawSubs)) return [];
+
+    const scored: Array<{ track: SubtitleTrack; priority: number }> = [];
+    for (let i = 0; i < rawSubs.length; i++) {
+      const sub = rawSubs[i];
+      const subUrl = this.sanitizeUrl(sub?.src || sub?.url || "");
+      if (!subUrl || !subUrl.startsWith("http")) continue;
+
+      const lang = String(sub.lang || "en").trim().toLowerCase();
+      const rawLabel = String(sub.label || "").trim();
+      const isEnglish = lang.startsWith("en") || /\benglish\b/i.test(rawLabel);
+      const isSigns = /signs\s*&?\s*songs/i.test(rawLabel);
+
+      const label = isEnglish
+        ? isSigns
+          ? "English (Signs & Songs)"
+          : "English"
+        : rawLabel.replace(/\s*\((?:SRT|ASS|VTT)\)\s*/gi, "").trim() || lang.toUpperCase();
+
+      let priority = 0;
+      if (isEnglish && !isSigns) priority += 100;
+      else if (isEnglish) priority += 40;
+      if (sub.default && !isSigns) priority += 20;
+
+      scored.push({
+        priority,
+        track: {
+          id: `zoko-sub-track-${i}`,
+          url: this.proxyUrl(subUrl, undefined, "https://zokoanime.video/"),
+          label,
+          lang: isEnglish ? "en" : lang || "en",
+          type: "vtt",
+        },
+      });
+    }
+
+    scored.sort((a, b) => b.priority - a.priority);
+    return scored.map((item) => item.track);
+  }
+
   // ─── AnimeHeaven (animeheaven.me) English Hard-Sub Resolver ─
 
   private async fetchAnimeHeavenServers(meta: AnimeMetadata, episode: number): Promise<StreamServer[]> {
@@ -1170,14 +1271,28 @@ export class ConsumetStreamProvider implements StreamProvider {
     }
   }
 
-  private pickDefaultServerIndex(servers: StreamServer[]): number {
-    // 1. Prefer a SUB server with soft English subtitles
-    const subWithEngTrack = servers.findIndex(
-      (s) => s.category === "SUB" && s.subtitles && s.subtitles.some((sub) => sub.lang === "en")
-    );
-    if (subWithEngTrack !== -1) return subWithEngTrack;
+  private isItalianHardsubServer(serverId: string): boolean {
+    return serverId.startsWith("animeunity-") || serverId.startsWith("stellar-");
+  }
 
-    // 2. Otherwise any SUB server (e.g. AnimeHeaven English Hard-Sub)
+  private pickDefaultServerIndex(servers: StreamServer[]): number {
+    // 1. Prefer a non-Italian SUB server with soft English subtitles
+    const cleanEngSub = servers.findIndex(
+      (s) =>
+        s.category === "SUB" &&
+        !this.isItalianHardsubServer(s.id) &&
+        s.subtitles &&
+        s.subtitles.some((sub) => sub.lang === "en")
+    );
+    if (cleanEngSub !== -1) return cleanEngSub;
+
+    // 2. Otherwise any non-Italian SUB server (e.g. AnimeHeaven English Hard-Sub)
+    const cleanSub = servers.findIndex(
+      (s) => s.category === "SUB" && !this.isItalianHardsubServer(s.id)
+    );
+    if (cleanSub !== -1) return cleanSub;
+
+    // 3. Fallback to any SUB server
     const anySub = servers.findIndex((s) => s.category === "SUB");
     if (anySub !== -1) return anySub;
 
@@ -1208,18 +1323,23 @@ export class ConsumetStreamProvider implements StreamProvider {
       `[StreamProvider] Resolved Metadata: "${meta.title}" | EN: "${meta.titleEnglish}" (${meta.year})`
     );
 
-    const [kaaServers, ahServers, auServers] = await Promise.all([
+    const [kaaServers, ahServers, zokoServers, auServers] = await Promise.all([
       this.withProviderTimeout("KAA", this.fetchKAAServers(meta, episode)),
       this.withProviderTimeout("AnimeHeaven", this.fetchAnimeHeavenServers(meta, episode)),
+      this.withProviderTimeout("ZokoAnime", this.fetchZokoServers(animeId, episode)),
       this.withProviderTimeout("AnimeUnity", this.fetchAnimeUnityServers(meta, episode)),
     ]);
 
     const subServers = [
       ...(kaaServers || []).filter((s) => s.category === "SUB"),
       ...(ahServers || []).filter((s) => s.category === "SUB"),
+      ...(zokoServers || []).filter((s) => s.category === "SUB"),
       ...(auServers || []).filter((s) => s.category === "SUB"),
     ];
-    const dubServers = [...(kaaServers || []).filter((s) => s.category === "DUB")];
+    const dubServers = [
+      ...(kaaServers || []).filter((s) => s.category === "DUB"),
+      ...(zokoServers || []).filter((s) => s.category === "DUB"),
+    ];
 
     const allServers = [...subServers, ...dubServers];
 
