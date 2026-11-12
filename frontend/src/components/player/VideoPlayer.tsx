@@ -24,8 +24,52 @@ import {
 import { parseCues, refineSkips, buildChaptersVtt } from "@/lib/skipTimes";
 import { getCleanServerName } from "@/lib/serverNames";
 
-const WORKER_HOST_BYPASS_TTL_MS = 2 * 60_000;
-const workerBlockedHostsUntil = new Map<string, number>();
+const WORKER_HOST_BYPASS_TTL_MS = 15 * 60_000;
+const WORKER_HOST_BYPASS_STORAGE_KEY = "aniverse:worker-blocked-hosts";
+
+function loadWorkerBlockedHosts(): Map<string, number> {
+  const map = new Map<string, number>();
+  const now = Date.now();
+  try {
+    const raw = window.sessionStorage?.getItem(WORKER_HOST_BYPASS_STORAGE_KEY);
+    if (!raw) return map;
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    for (const [host, until] of Object.entries(parsed || {})) {
+      if (typeof until === "number" && until > now) {
+        map.set(host, until);
+      }
+    }
+  } catch {
+    // Ignore storage unavailability
+  }
+  return map;
+}
+
+const workerBlockedHostsUntil = loadWorkerBlockedHosts();
+
+function persistWorkerBlockedHosts(): void {
+  try {
+    const now = Date.now();
+    const obj: Record<string, number> = {};
+    for (const [host, until] of workerBlockedHostsUntil.entries()) {
+      if (until > now) obj[host] = until;
+      else workerBlockedHostsUntil.delete(host);
+    }
+    window.sessionStorage?.setItem(WORKER_HOST_BYPASS_STORAGE_KEY, JSON.stringify(obj));
+  } catch {
+    // Ignore storage unavailability
+  }
+}
+
+function markWorkerHostBypassed(host: string): void {
+  workerBlockedHostsUntil.set(host, Date.now() + WORKER_HOST_BYPASS_TTL_MS);
+  persistWorkerBlockedHosts();
+}
+
+function clearWorkerHostBypass(host: string): void {
+  workerBlockedHostsUntil.delete(host);
+  persistWorkerBlockedHosts();
+}
 
 function isWorkerHostTemporarilyBypassed(proxyUrl: string): boolean {
   const host = extractProxyTargetHost(proxyUrl);
@@ -33,7 +77,7 @@ function isWorkerHostTemporarilyBypassed(proxyUrl: string): boolean {
   const until = workerBlockedHostsUntil.get(host);
   if (!until) return false;
   if (Date.now() >= until) {
-    workerBlockedHostsUntil.delete(host);
+    clearWorkerHostBypass(host);
     return false;
   }
   return true;
@@ -95,7 +139,7 @@ function createResilientHlsLoader(): any {
           onError: (error: { code: number; text: string }, ctx: any, networkDetails: any, stats: any) => {
             if (!retriedWorker && targetHost) {
               retriedWorker = true;
-              workerBlockedHostsUntil.delete(targetHost);
+              clearWorkerHostBypass(targetHost);
               this.delegate?.destroy?.();
               this.delegate = new DefaultLoader(this.hlsConfig);
               ctx.url = originalUrl;
@@ -122,7 +166,7 @@ function createResilientHlsLoader(): any {
             typeof response?.url === "string" &&
             response.url.includes("/api/stream/proxy")
           ) {
-            workerBlockedHostsUntil.set(targetHost, Date.now() + WORKER_HOST_BYPASS_TTL_MS);
+            markWorkerHostBypassed(targetHost);
           }
           callbacks.onSuccess?.(response, stats, ctx, networkDetails);
         },
@@ -148,7 +192,7 @@ function createResilientHlsLoader(): any {
               // Worker blocked this upstream CDN host from the user's edge POP while Render succeeded:
               // bypass Worker for this specific CDN hostname briefly to stop repeated 403 console errors.
               if ((error.code === 403 || error.code === 429) && targetHost) {
-                workerBlockedHostsUntil.set(targetHost, Date.now() + WORKER_HOST_BYPASS_TTL_MS);
+                markWorkerHostBypassed(targetHost);
               }
               callbacks.onSuccess?.(response, fbStats, fbCtx, fbDetails);
             },
