@@ -749,23 +749,20 @@ export function EpisodeComments({
       className="mt-4 sm:mt-6 rounded-2xl bg-card/40 border border-border/50 p-3.5 sm:p-6 space-y-5 sm:space-y-6"
       aria-label="Episode reactions and comments"
     >
-      {/* Animated Anime GIF Reactions Bar */}
-      <div className="space-y-3.5 pb-5 border-b border-border/40">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-          <h2 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
-            <span>Episode {episodeNumber} Reactions</span>
-            {totalReactions > 0 && (
-              <span className="text-[11px] sm:text-xs font-bold text-primary bg-primary/15 border border-primary/30 px-2.5 py-0.5 rounded-full">
-                {totalReactions}
-              </span>
-            )}
+      {/* Compact Discord-Style Animated Reactions Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border/35">
+        <div className="flex items-center gap-2 shrink-0">
+          <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
+            Reactions
           </h2>
-          <p className="text-[11px] sm:text-xs text-muted-foreground">
-            Tap an animated reaction to hype this episode
-          </p>
+          {totalReactions > 0 && (
+            <span className="text-xs font-semibold text-muted-foreground tabular-nums">
+              · {totalReactions}
+            </span>
+          )}
         </div>
 
-        <div className="grid grid-cols-5 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 pt-1">
+        <div className="flex flex-wrap items-center gap-2">
           {REACTION_OPTIONS.map(({ type, label, activeClass }) => {
             const count = discussion.reactions[type] || 0;
             const active = discussion.userReactions.includes(type);
@@ -776,43 +773,42 @@ export function EpisodeComments({
                 type="button"
                 onClick={() => handleToggleReaction(type)}
                 aria-pressed={active}
-                title={label}
-                className={`relative group flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-1.5 sm:gap-2.5 p-2 sm:pl-1.5 sm:pr-3.5 sm:py-1.5 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 active:scale-95 cursor-pointer ${
+                aria-label={`${label}${count > 0 ? ` (${count})` : ""}`}
+                className={`relative group inline-flex items-center gap-2 h-10 px-2 rounded-xl border transition-all duration-150 active:scale-95 cursor-pointer select-none ${
                   active
                     ? activeClass
-                    : "bg-secondary/45 border-border/50 text-muted-foreground hover:text-white hover:border-primary/45 hover:bg-secondary/80"
+                    : "bg-secondary/35 border-border/40 text-muted-foreground hover:text-white hover:border-border/80 hover:bg-secondary/65"
                 }`}
               >
+                {/* Hover tooltip label */}
+                <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-md bg-popover/95 border border-border/70 text-[10px] font-bold text-white whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity shadow-md z-20">
+                  {label}
+                </span>
+
                 {showBurst && (
                   <span
                     key={burstReaction.key}
-                    className="pointer-events-none z-20 absolute -top-5 left-1/2 -translate-x-1/2 flex items-center gap-1 text-xs font-extrabold text-white drop-shadow anime-rx-burst"
+                    className="pointer-events-none z-30 absolute -top-5 left-1/2 -translate-x-1/2 flex items-center gap-1 text-xs font-extrabold text-white drop-shadow anime-rx-burst"
                   >
-                    <AnimeReactionIcon type={type} active className="w-6 h-6" />
                     +1
                   </span>
                 )}
+
                 <AnimeReactionIcon
                   type={type}
                   active={active}
-                  className="w-10 h-10 sm:w-10 sm:h-10"
+                  className="w-7 h-7 sm:w-8 sm:h-8"
                 />
-                <div className="flex flex-col sm:flex-row items-center gap-0.5 sm:gap-2 min-w-0">
-                  <span className="text-[11px] sm:text-xs font-bold leading-none truncate">
-                    {label}
+
+                {count > 0 && (
+                  <span
+                    className={`pr-1 text-xs font-bold tabular-nums leading-none ${
+                      active ? "text-white" : "text-gray-300"
+                    }`}
+                  >
+                    {count}
                   </span>
-                  {count > 0 && (
-                    <span
-                      className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold leading-none ${
-                        active
-                          ? "bg-white/20 text-white"
-                          : "bg-black/35 text-gray-200 border border-white/10"
-                      }`}
-                    >
-                      {count}
-                    </span>
-                  )}
-                </div>
+                )}
               </button>
             );
           })}
