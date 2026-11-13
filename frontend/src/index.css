@@ -47,10 +47,12 @@ html.tv-mode {
 
 html.tv-mode button:focus-visible,
 html.tv-mode a:focus-visible,
-html.tv-mode input:focus-visible {
+html.tv-mode input:focus-visible,
+html.tv-mode select:focus-visible,
+html.tv-mode [tabindex]:not([tabindex="-1"]):focus-visible {
   outline: 3px solid #9333ea !important;
   outline-offset: 3px !important;
-  box-shadow: 0 0 20px rgba(147, 51, 234, 0.5) !important;
+  box-shadow: 0 0 22px rgba(147, 51, 234, 0.55) !important;
 }
 
 /* ============================================

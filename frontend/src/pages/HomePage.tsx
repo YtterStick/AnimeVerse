@@ -13,6 +13,7 @@ import { HeroBanner } from "@/components/anime/HeroBanner";
 import { AnimeCarousel } from "@/components/anime/AnimeCarousel";
 import { EstimatedSchedule } from "@/components/anime/EstimatedSchedule";
 import { formatEpisodeNumber } from "@/lib/utils";
+import { useLayout } from "@/contexts/LayoutContext";
 
 interface ContinueItem {
   id: string | number;
@@ -27,6 +28,7 @@ interface ContinueItem {
 }
 
 export function HomePage() {
+  const { tvMode } = useLayout();
   const { data: trending, loading: trendingLoading } = useTrending();
   const { data: topAiring, loading: topAiringLoading } = useTopAiring();
   const { data: upcoming, loading: upcomingLoading } = useUpcoming();
@@ -161,7 +163,13 @@ export function HomePage() {
       {/* Featured Anime Slideshow */}
       <HeroBanner trendingList={trending} loading={trendingLoading} />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-4 mt-6">
+      <div
+        className={`mx-auto w-full space-y-4 mt-6 ${
+          tvMode
+            ? "max-w-[1600px] px-5 sm:px-8 lg:px-10"
+            : "max-w-7xl px-4 sm:px-6 lg:px-8"
+        }`}
+      >
         {/* Continue Watching Section (Instant Local & Cloud Sync) */}
         {continueWatchingItems.length > 0 && (
           <div className="relative my-8 animate-fade-in">
@@ -177,7 +185,13 @@ export function HomePage() {
                 View All History <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5 px-4 md:px-0">
+            <div
+              className={`grid px-4 md:px-0 ${
+                tvMode
+                  ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-5"
+                  : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5"
+              }`}
+            >
               {continueWatchingItems.map((item) => {
                 const progress = item.progress_seconds / item.duration_seconds;
                 const progressPct = Math.min(100, Math.max(0, progress * 100));
@@ -198,23 +212,35 @@ export function HomePage() {
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Play className="w-8 h-8 text-white fill-white" />
                       </div>
-                      {/* Dismiss / remove button */}
+                      {/* Dismiss / remove button (hidden unless hovered/focused in TV Mode) */}
                       <button
                         type="button"
                         onClick={(e) => handleDismissContinueItem(e, item)}
                         aria-label={`Remove ${item.anime_title} from Continue Watching`}
                         title="Remove from Continue Watching"
-                        className="absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-black/75 hover:bg-red-500/90 text-white/90 hover:text-white border border-white/15 flex items-center justify-center opacity-85 sm:opacity-0 sm:group-hover:opacity-100 transition-all cursor-pointer shadow-md"
+                        className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-black/75 hover:bg-red-500/90 text-white/90 hover:text-white border border-white/15 flex items-center justify-center transition-all cursor-pointer shadow-md ${
+                          tvMode
+                            ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                            : "opacity-85 sm:opacity-0 sm:group-hover:opacity-100"
+                        }`}
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
-                    <div className="p-3">
-                      <h3 className="text-xs font-semibold leading-tight line-clamp-1 text-foreground group-hover:text-primary transition-colors">
+                    <div className={tvMode ? "p-3.5" : "p-3"}>
+                      <h3
+                        className={`${
+                          tvMode ? "text-sm" : "text-xs"
+                        } font-semibold leading-tight line-clamp-1 text-foreground group-hover:text-primary transition-colors`}
+                      >
                         {item.anime_title}
                       </h3>
-                      <p className="text-[10px] font-medium text-muted-foreground mt-1">
+                      <p
+                        className={`${
+                          tvMode ? "text-xs" : "text-[10px]"
+                        } font-medium text-muted-foreground mt-1`}
+                      >
                         {formatEpisodeNumber(item.episode_number)} — {item.episode_title}
                       </p>
                     </div>

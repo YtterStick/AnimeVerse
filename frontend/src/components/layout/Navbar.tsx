@@ -7,6 +7,7 @@ import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, Cale
 import { Logo } from "@/components/shared/Logo";
 import { TitleLanguageToggle } from "@/components/shared/TitleLanguageToggle";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
+import { useLayout } from "@/contexts/LayoutContext";
 import { UserMenu } from "../auth/UserMenu";
 import { AuthModal } from "../auth/AuthModal";
 import { DonationModal } from "@/components/shared/DonationModal";
@@ -17,6 +18,7 @@ export function Navbar() {
   const { user } = useAuth();
   const { watchlist } = useWatchlist();
   const { formatTitle } = useTitleLanguage();
+  const { tvMode } = useLayout();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
@@ -229,19 +231,40 @@ export function Navbar() {
             : "bg-gradient-to-b from-black/80 to-transparent py-5"
         }`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div
+          className={`mx-auto ${
+            tvMode
+              ? "max-w-[1600px] px-5 sm:px-8 lg:px-10"
+              : "max-w-7xl px-4 sm:px-6 lg:px-8"
+          }`}
+        >
           <div className="flex items-center justify-between gap-4">
             {/* Logo */}
-            <Link to="/" className="flex items-center group" aria-label="AniVerse home">
-              <Logo size={38} />
+            <Link to="/" className="flex items-center gap-2 group" aria-label="AniVerse home">
+              <Logo size={tvMode ? 40 : 38} />
+              {tvMode && (
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                  TV
+                </span>
+              )}
             </Link>
 
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+            <nav
+              className={`hidden md:flex items-center font-medium ${
+                tvMode ? "gap-2 text-[15px]" : "gap-6 text-sm"
+              }`}
+            >
               <Link
                 to="/"
-                className={`transition-colors duration-200 flex items-center gap-1.5 ${
-                  isActive("/") ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                className={`transition-all duration-200 flex items-center gap-1.5 ${
+                  tvMode ? "px-3 py-1.5 rounded-xl" : ""
+                } ${
+                  isActive("/")
+                    ? tvMode
+                      ? "bg-primary/20 text-primary font-semibold border border-primary/30"
+                      : "text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                 }`}
               >
                 <Home className="w-4 h-4" />
@@ -249,10 +272,14 @@ export function Navbar() {
               </Link>
               <Link
                 to="/search"
-                className={`transition-colors duration-200 flex items-center gap-1.5 ${
+                className={`transition-all duration-200 flex items-center gap-1.5 ${
+                  tvMode ? "px-3 py-1.5 rounded-xl" : ""
+                } ${
                   isActive("/search") && !location.search.includes("category=upcoming")
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? tvMode
+                      ? "bg-primary/20 text-primary font-semibold border border-primary/30"
+                      : "text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                 }`}
               >
                 <Compass className="w-4 h-4" />
@@ -260,10 +287,14 @@ export function Navbar() {
               </Link>
               <Link
                 to="/search?category=upcoming"
-                className={`transition-colors duration-200 flex items-center gap-1.5 ${
+                className={`transition-all duration-200 flex items-center gap-1.5 ${
+                  tvMode ? "px-3 py-1.5 rounded-xl" : ""
+                } ${
                   location.search.includes("category=upcoming")
-                    ? "text-primary font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? tvMode
+                      ? "bg-primary/20 text-primary font-semibold border border-primary/30"
+                      : "text-primary font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                 }`}
               >
                 <CalendarDays className="w-4 h-4" />
@@ -271,8 +302,14 @@ export function Navbar() {
               </Link>
               <Link
                 to="/history"
-                className={`transition-colors duration-200 flex items-center gap-1.5 ${
-                  isActive("/history") ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                className={`transition-all duration-200 flex items-center gap-1.5 ${
+                  tvMode ? "px-3 py-1.5 rounded-xl" : ""
+                } ${
+                  isActive("/history")
+                    ? tvMode
+                      ? "bg-primary/20 text-primary font-semibold border border-primary/30"
+                      : "text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                 }`}
               >
                 <History className="w-4 h-4" />
@@ -280,8 +317,14 @@ export function Navbar() {
               </Link>
               <Link
                 to="/watchlist"
-                className={`transition-colors duration-200 flex items-center gap-1.5 ${
-                  isActive("/watchlist") ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                className={`transition-all duration-200 flex items-center gap-1.5 ${
+                  tvMode ? "px-3 py-1.5 rounded-xl" : ""
+                } ${
+                  isActive("/watchlist")
+                    ? tvMode
+                      ? "bg-primary/20 text-primary font-semibold border border-primary/30"
+                      : "text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                 }`}
               >
                 <Heart className="w-4 h-4" />
@@ -294,8 +337,14 @@ export function Navbar() {
               </Link>
               <Link
                 to="/profile"
-                className={`transition-colors duration-200 flex items-center gap-1.5 ${
-                  isActive("/profile") ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
+                className={`transition-all duration-200 flex items-center gap-1.5 ${
+                  tvMode ? "px-3 py-1.5 rounded-xl" : ""
+                } ${
+                  isActive("/profile")
+                    ? tvMode
+                      ? "bg-primary/20 text-primary font-semibold border border-primary/30"
+                      : "text-primary font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                 }`}
               >
                 <User className="w-4 h-4" />
@@ -318,12 +367,14 @@ export function Navbar() {
                   onFocus={() => {
                     if (searchQuery.trim().length >= 2) setShowDropdown(true);
                   }}
-                  className="w-full h-9 bg-secondary/80 border border-border/80 rounded-full px-4 pl-10 pr-16 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all text-foreground"
+                  className={`w-full bg-secondary/80 border border-border/80 rounded-full px-4 pl-10 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all text-foreground ${
+                    tvMode ? "h-10 pr-10" : "h-9 pr-16"
+                  }`}
                 />
-                <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Search className={`absolute left-3.5 w-4 h-4 text-muted-foreground pointer-events-none ${tvMode ? "top-3" : "top-2.5"}`} />
                 {isSearching ? (
-                  <Loader2 className="absolute right-3 top-2.5 w-4 h-4 text-primary animate-spin pointer-events-none" />
-                ) : !searchQuery && (
+                  <Loader2 className={`absolute right-3 w-4 h-4 text-primary animate-spin pointer-events-none ${tvMode ? "top-3" : "top-2.5"}`} />
+                ) : !searchQuery && !tvMode && (
                   <kbd className="hidden lg:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground/75 bg-black/30 border border-border/50 rounded absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                     /
                   </kbd>
@@ -337,16 +388,18 @@ export function Navbar() {
             <div className="flex items-center gap-2 sm:gap-3">
               <TitleLanguageToggle />
 
-              {/* Glowing Support Pill Button */}
-              <button
-                type="button"
-                onClick={() => setIsDonationModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-pink-300 bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/35 hover:border-pink-500/60 shadow-sm shadow-pink-500/15 hover:shadow-pink-500/30 transition-all duration-200 cursor-pointer select-none hover:scale-105 active:scale-95 shrink-0"
-                title="Support AniVerse — Keep it fast & ad-free!"
-              >
-                <Heart className="w-3.5 h-3.5 text-pink-400 fill-pink-400/40 animate-pulse" />
-                <span className="hidden xs:inline">Support</span>
-              </button>
+              {/* Glowing Support Pill Button (hidden in TV Mode to keep header focused on couch navigation) */}
+              {!tvMode && (
+                <button
+                  type="button"
+                  onClick={() => setIsDonationModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-pink-300 bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/35 hover:border-pink-500/60 shadow-sm shadow-pink-500/15 hover:shadow-pink-500/30 transition-all duration-200 cursor-pointer select-none hover:scale-105 active:scale-95 shrink-0"
+                  title="Support AniVerse — Keep it fast & ad-free!"
+                >
+                  <Heart className="w-3.5 h-3.5 text-pink-400 fill-pink-400/40 animate-pulse" />
+                  <span className="hidden xs:inline">Support</span>
+                </button>
+              )}
 
               {user ? (
                 <UserMenu />

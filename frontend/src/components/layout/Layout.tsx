@@ -3,8 +3,10 @@ import { Outlet } from "react-router-dom";
 import { ArrowUp } from "lucide-react";
 import { Navbar } from "./Navbar";
 import { Footer } from "./Footer";
+import { useLayout } from "@/contexts/LayoutContext";
 
 export function Layout() {
+  const { tvMode } = useLayout();
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   useEffect(() => {
@@ -20,13 +22,13 @@ export function Layout() {
       {/* Navigation Header */}
       <Navbar />
 
-      {/* Main Page Content */}
-      <main className="flex-1 flex flex-col pt-[72px]">
+      {/* Main Page Content (extra horizontal safe padding in TV Mode for overscan) */}
+      <main className={`flex-1 flex flex-col ${tvMode ? "pt-[78px] px-2 sm:px-4" : "pt-[72px]"}`}>
         <Outlet />
       </main>
 
-      {/* Footer Section */}
-      <Footer />
+      {/* Footer Section (kept compact/hidden in TV Mode to avoid couch scroll clutter) */}
+      {!tvMode && <Footer />}
 
       {/* Floating Back-to-Top Button */}
       {showBackToTop && (
@@ -35,9 +37,11 @@ export function Layout() {
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           aria-label="Back to top"
           title="Back to top"
-          className="fixed bottom-5 left-5 sm:left-auto sm:right-6 sm:bottom-6 z-40 w-10 h-10 rounded-full bg-card/90 hover:bg-primary border border-border/70 hover:border-primary text-foreground hover:text-white shadow-xl backdrop-blur-md flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer animate-in fade-in zoom-in-90"
+          className={`fixed bottom-5 left-5 sm:left-auto sm:right-6 sm:bottom-6 z-40 rounded-full bg-card/90 hover:bg-primary border border-border/70 hover:border-primary text-foreground hover:text-white shadow-xl backdrop-blur-md flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer animate-in fade-in zoom-in-90 ${
+            tvMode ? "w-12 h-12" : "w-10 h-10"
+          }`}
         >
-          <ArrowUp className="w-4 h-4" />
+          <ArrowUp className={tvMode ? "w-5 h-5" : "w-4 h-4"} />
         </button>
       )}
     </div>

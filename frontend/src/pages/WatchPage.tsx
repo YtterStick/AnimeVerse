@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag, Heart, Coffee, Tv } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag, Heart, Coffee, Tv, MessageSquare } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
@@ -112,11 +112,13 @@ export function WatchPage() {
   // (or after a brief fallback delay if duration metadata is unavailable)
   const [videoDurationForSkips, setVideoDurationForSkips] = useState(0);
   const [synopsisExpanded, setSynopsisExpanded] = useState(false);
+  const [tvCommentsOpen, setTvCommentsOpen] = useState(false);
 
   useEffect(() => {
     setSkips([]);
     setVideoDurationForSkips(0);
     setSynopsisExpanded(false);
+    setTvCommentsOpen(false);
   }, [animeId, episodeNum]);
 
   useEffect(() => {
@@ -234,6 +236,34 @@ export function WatchPage() {
         behavior: "smooth",
       });
     }
+  }, []);
+
+  const handleTvCarouselKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+    const container = tvCarouselRef.current;
+    if (!container) return;
+
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button"));
+    if (buttons.length === 0) return;
+
+    const activeEl = document.activeElement as HTMLElement | null;
+    const currentIndex = activeEl instanceof HTMLButtonElement ? buttons.indexOf(activeEl) : -1;
+
+    let nextIndex = 0;
+    if (e.key === "Home") {
+      nextIndex = 0;
+    } else if (e.key === "End") {
+      nextIndex = buttons.length - 1;
+    } else if (e.key === "ArrowRight") {
+      nextIndex = currentIndex === -1 ? 0 : Math.min(buttons.length - 1, currentIndex + 1);
+    } else if (e.key === "ArrowLeft") {
+      nextIndex = currentIndex === -1 ? buttons.length - 1 : Math.max(0, currentIndex - 1);
+    }
+
+    e.preventDefault();
+    const target = buttons[nextIndex];
+    target.focus();
+    target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, []);
 
   // Auto-scroll to center the currently active episode in view (defer while in fullscreen)
@@ -677,10 +707,10 @@ export function WatchPage() {
           </div>
         )}
 
-        {/* Top Section: Player & Server (full-width in TV mode, 8 cols in standard mode) */}
+        {/* Top Section: Player & Server (wider cinema framing in TV mode, 8 cols in standard mode) */}
         <div
           className={`grid grid-cols-1 ${
-            tvMode ? "lg:grid-cols-1 max-w-6xl mx-auto" : "lg:grid-cols-12"
+            tvMode ? "lg:grid-cols-1 max-w-[1440px] mx-auto" : "lg:grid-cols-12"
           } gap-5 lg:gap-6 items-start`}
         >
           {/* Main Player Column */}
@@ -925,7 +955,8 @@ export function WatchPage() {
               {/* Horizontal Episode Carousel */}
               <div
                 ref={tvCarouselRef}
-                className="flex items-stretch gap-3 overflow-x-auto hide-scrollbar py-2 px-0.5 scroll-smooth select-none focus:outline-none"
+                onKeyDown={handleTvCarouselKeyDown}
+                className="flex items-stretch gap-3.5 overflow-x-auto hide-scrollbar py-2 px-1 scroll-smooth select-none focus:outline-none"
                 tabIndex={0}
                 role="region"
                 aria-label="Episodes carousel"
@@ -944,7 +975,7 @@ export function WatchPage() {
                       ref={isActive ? activeEpisodeRef : null}
                       type="button"
                       onClick={() => navigate(`/watch/${animeId}/${ep.episode_number}`)}
-                      className={`group relative flex flex-col justify-between shrink-0 w-44 sm:w-52 p-3 sm:p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
+                      className={`group relative flex flex-col justify-between shrink-0 w-48 sm:w-56 p-3.5 sm:p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer focus-visible:scale-[1.03] ${
                         isActive
                           ? "bg-purple-600/25 border-purple-400 shadow-xl shadow-purple-500/25 ring-2 ring-purple-500 scale-[1.02]"
                           : "bg-secondary/40 border-border/50 hover:bg-secondary/70 hover:border-purple-400/50 hover:scale-[1.01]"
@@ -968,13 +999,13 @@ export function WatchPage() {
                         )}
                       </div>
 
-                      <p className="text-xs font-semibold text-gray-200 line-clamp-2 mt-2 leading-snug group-hover:text-white">
+                      <p className="text-xs sm:text-sm font-semibold text-gray-200 line-clamp-2 mt-2.5 leading-snug group-hover:text-white">
                         {ep.title || `Episode ${ep.episode_number}`}
                       </p>
 
                       {/* Progress Bar for partially watched */}
                       {progressPercent > 0 && !isWatched && (
-                        <div className="w-full bg-secondary rounded-full h-1 mt-2.5 overflow-hidden">
+                        <div className="w-full bg-secondary rounded-full h-1.5 mt-2.5 overflow-hidden">
                           <div
                             className="bg-primary h-full rounded-full transition-all"
                             style={{ width: `${progressPercent * 100}%` }}
@@ -989,33 +1020,35 @@ export function WatchPage() {
           )}
         </div>
 
-        {/* Under-Player Ad-Free Support Banner */}
-        <div className="relative overflow-hidden rounded-2xl border border-pink-500/30 bg-gradient-to-r from-pink-500/10 via-purple-500/5 to-amber-500/10 p-3.5 sm:p-4 shadow-lg backdrop-blur-md">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 flex items-center justify-center shadow-md shrink-0">
-                <Heart className="w-5 h-5 text-pink-400 fill-pink-400/30 animate-pulse" />
+        {/* Under-Player Ad-Free Support Banner (kept hidden in TV Mode for distraction-free cinema view) */}
+        {!tvMode && (
+          <div className="relative overflow-hidden rounded-2xl border border-pink-500/30 bg-gradient-to-r from-pink-500/10 via-purple-500/5 to-amber-500/10 p-3.5 sm:p-4 shadow-lg backdrop-blur-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 flex items-center justify-center shadow-md shrink-0">
+                  <Heart className="w-5 h-5 text-pink-400 fill-pink-400/30 animate-pulse" />
+                </div>
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-xs sm:text-sm font-bold text-white leading-tight">
+                    Enjoying AniVerse ad-free and without pop-ups?
+                  </p>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">
+                    Help keep our servers fast and free by buying us a coffee ☕
+                  </p>
+                </div>
               </div>
-              <div className="space-y-0.5 min-w-0">
-                <p className="text-xs sm:text-sm font-bold text-white leading-tight">
-                  Enjoying AniVerse ad-free and without pop-ups?
-                </p>
-                <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">
-                  Help keep our servers fast and free by buying us a coffee ☕
-                </p>
-              </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={() => setIsDonationOpen(true)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 shadow-md shadow-pink-500/20 hover:shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer shrink-0"
-            >
-              <Coffee className="w-3.5 h-3.5" />
-              <span>Support Now</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setIsDonationOpen(true)}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 shadow-md shadow-pink-500/20 hover:shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer shrink-0"
+              >
+                <Coffee className="w-3.5 h-3.5" />
+                <span>Support Now</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Right Column: Self-contained Episode List Card (Standard layout only) */}
@@ -1206,7 +1239,7 @@ export function WatchPage() {
     </div>
 
     {/* Bottom Section: Synopsis, Comments, Related, More Like This */}
-    <div className="space-y-8 pt-2">
+    <div className={`space-y-8 pt-2 ${tvMode ? "max-w-[1440px] mx-auto w-full" : ""}`}>
         {/* Synopsis Accordion description */}
         <div className="space-y-2 pb-6">
           <h2 className="text-base font-bold text-foreground">Synopsis</h2>
@@ -1228,13 +1261,34 @@ export function WatchPage() {
           )}
         </div>
 
-        {/* Episode Reactions & Comments */}
-        <EpisodeComments
-          animeId={animeId}
-          episodeNumber={episodeNum}
-          animeTitle={anime ? formatTitle(anime) : undefined}
-          animeImage={anime?.images?.jpg?.large_image_url || anime?.images?.jpg?.image_url || null}
-        />
+        {/* Episode Reactions & Comments (collapsed behind toggle in TV Mode) */}
+        {tvMode ? (
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setTvCommentsOpen((prev) => !prev)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl border border-border/50 bg-card/50 hover:bg-card/80 text-sm font-bold text-foreground transition-all cursor-pointer shadow-md"
+            >
+              <MessageSquare className="w-4 h-4 text-primary" />
+              <span>{tvCommentsOpen ? "Hide Comments & Reactions" : "Show Comments & Reactions"}</span>
+            </button>
+            {tvCommentsOpen && (
+              <EpisodeComments
+                animeId={animeId}
+                episodeNumber={episodeNum}
+                animeTitle={anime ? formatTitle(anime) : undefined}
+                animeImage={anime?.images?.jpg?.large_image_url || anime?.images?.jpg?.image_url || null}
+              />
+            )}
+          </div>
+        ) : (
+          <EpisodeComments
+            animeId={animeId}
+            episodeNumber={episodeNum}
+            animeTitle={anime ? formatTitle(anime) : undefined}
+            animeImage={anime?.images?.jpg?.large_image_url || anime?.images?.jpg?.image_url || null}
+          />
+        )}
 
         {/* Seasons & Franchise Section (Season 1, Season 2, Sequels & Movies) */}
         <AnimeSeasons currentAnimeId={animeId} mode="watch" />
