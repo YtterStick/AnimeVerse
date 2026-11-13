@@ -668,10 +668,18 @@ export function WatchPage() {
       : null;
 
   const mergedSkips = useMemo(() => {
-    const serverSkips = activeServer?.skips || [];
-    if (serverSkips.length === 0) return skips;
-    const coveredTypes = new Set(skips.map((s) => s.type));
-    return [...skips, ...serverSkips.filter((s) => !coveredTypes.has(s.type))];
+    const serverSkips = (activeServer?.skips || []).map((s) => ({
+      ...s,
+      source: s.source || ("stream" as const),
+    }));
+    const aniskipItems = skips.map((s) => ({
+      ...s,
+      source: s.source || ("aniskip" as const),
+    }));
+    if (serverSkips.length === 0) return aniskipItems;
+    // Stream-native skip timestamps are timed to this exact video file; prefer them over AniSkip
+    const coveredTypes = new Set(serverSkips.map((s) => s.type));
+    return [...serverSkips, ...aniskipItems.filter((s) => !coveredTypes.has(s.type))];
   }, [skips, activeServer?.skips]);
 
   const firstSubIndex = multiStream?.servers.findIndex((s) => (s.category || "SUB") === "SUB") ?? -1;

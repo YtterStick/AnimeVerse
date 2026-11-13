@@ -75,7 +75,7 @@ export function isHighDensityDialogue(cues: Cue[], start: number, end: number): 
 /**
  * Find candidate OP and ED song time intervals from subtitle cues:
  * 1. Unsubbed gaps (silent stretches where theme songs play).
- * 2. Subbed song lyrics (sustained poetic lyrics followed/preceded by title-card silence).
+ * 2. Subbed song lyrics (sustained poetic lyrics followed/preceded by silence).
  */
 export function findSongCandidates(cues: Cue[], duration: number): SongCandidate[] {
   const candidates: SongCandidate[] = [];
@@ -86,7 +86,12 @@ export function findSongCandidates(cues: Cue[], duration: number): SongCandidate
     const gap = cue.start - cursor;
     if (gap >= 65 && gap <= 120) {
       if (cursor <= 260) {
-        candidates.push({ start: cursor, end: cue.start, type: "op", source: "unsubbed-gap" });
+        candidates.push({
+          start: cursor,
+          end: Math.max(cursor, cue.start - 0.8),
+          type: "op",
+          source: "unsubbed-gap",
+        });
       } else if (duration > 0 && cursor >= duration * 0.78) {
         candidates.push({ start: cursor, end: cue.start, type: "ed", source: "unsubbed-gap" });
       }
@@ -117,13 +122,15 @@ export function findSongCandidates(cues: Cue[], duration: number): SongCandidate
         const prevCue = i > 0 ? cues[i - 1] : null;
         const gapBefore = prevCue ? startCue.start - prevCue.end : startCue.start;
 
-        if (avgDur >= 2.4 && (gapAfter >= 5 || gapBefore >= 5)) {
-          const songEnd = gapAfter >= 5 && nextCue ? nextCue.start - 0.4 : endCue.end;
-          const candidateTotalLen = songEnd - startCue.start;
-          if (candidateTotalLen >= 75 && candidateTotalLen <= 98) {
+        if (avgDur >= 2.4 && (gapAfter >= 2.5 || gapBefore >= 2.5)) {
+          const safeAfterEnd = nextCue
+            ? Math.min(endCue.end + 0.4, Math.max(endCue.end - 0.2, nextCue.start - 0.8))
+            : endCue.end;
+          const candidateTotalLen = safeAfterEnd - startCue.start;
+          if (candidateTotalLen >= 72 && candidateTotalLen <= 98) {
             const cand: SongCandidate = {
               start: Math.max(0, startCue.start - 0.4),
-              end: songEnd,
+              end: safeAfterEnd,
               type: isOp ? "op" : "ed",
               source: "subbed-lyrics",
             };
@@ -142,13 +149,55 @@ export function findSongCandidates(cues: Cue[], duration: number): SongCandidate
 const overlap = (a: { start: number; end: number }, b: { start: number; end: number }) =>
   Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start));
 
+function isMusicMarkerCue(cue: Cue): boolean {
+  return /[♪♫♬♩]|\b(?:music|song|opening|ending|theme)\b/i.test(cue.text || "");
+}
+
+function isConversationalCue(cue: Cue): boolean {
+  const dur = cue.end - cue.start;
+  const text = cue.text || "";
+  return (
+    dur <= 2.5 ||
+    /[?!]/.test(text) ||
+    /\b(i|you|he|she|we|they|my|your|what|why|how|who|where|when|don't|can't|won't|please|look|wait|stop|listen|hey)\b/i.test(
+      text
+    )
+  );
+}
+
+/**
+ * Apply baseline safety guards when subtitle cues are absent or before subtitle parsing completes:
+ * 1. Discards false Episode 1 prologues marked as recaps (< 60s).
+ * 2. Applies a conservative end-cushion on OP skips so distributor bumper offsets in AniSkip
+ *    (commonly +4s to +5s) or HLS keyframe rounding never jump past the first lines of the scene.
+ */
+export function applySafeSkipBaseline(
+  skips: SkipInterval[],
+  episodeNumber?: number
+): SkipInterval[] {
+  return skips
+    .filter((s) => !(s.type === "recap" && episodeNumber === 1 && s.start < 60))
+    .map((s) => {
+      if (s.type !== "op" || s.source === "subtitles") return s;
+      const span = s.end - s.start;
+      if (s.source === "stream") {
+        if (span <= 25) return s;
+        return { ...s, end: Math.max(s.start + 15, s.end - 1.5) };
+      }
+      // Community AniSkip timestamps frequently include a +4-5s Crunchyroll/broadcast bumper offset
+      if (span <= 30) return s;
+      return { ...s, end: Math.max(s.start + 15, s.end - 4.5) };
+    });
+}
+
 /**
  * Make skip intervals match *this* video file.
  *
  * 1. Filters out bogus recaps on Episode 1 (cold opens / series prologues).
- * 2. Validates AniSkip intervals against subtitle dialogue density to discard shifted/corrupted AniSkip data.
- * 3. Snaps valid intervals to frame-accurate song boundaries (unsubbed gaps or subbed lyrics).
- * 4. Automatically detects and synthesizes OP and ED when AniSkip is absent or invalid.
+ * 2. Validates OP/ED intervals against subtitle dialogue density to discard false intervals.
+ * 3. Snaps valid intervals to frame-accurate song boundaries and trims tails that overlap scene dialogue.
+ * 4. Applies baseline safety cushions when no subtitle cues confirm the boundary.
+ * 5. Automatically detects and synthesizes OP and ED when absent or invalid.
  */
 export function refineSkips(
   skips: SkipInterval[],
@@ -164,7 +213,7 @@ export function refineSkips(
     return true;
   });
 
-  if (!cues.length) return cleanSkips;
+  if (!cues.length) return applySafeSkipBaseline(cleanSkips, episodeNumber);
 
   const candidates = findSongCandidates(cues, duration);
   const used = new Set<SongCandidate>();
@@ -176,10 +225,10 @@ export function refineSkips(
       continue;
     }
 
-    // Check if AniSkip's interval is actually character dialogue (e.g. shifted by pre-roll or wrong broadcast)
-    const isBad = isHighDensityDialogue(cues, s.start, s.end);
-    if (isBad) {
-      // Discard invalid AniSkip interval
+    // Check core body of OP/ED so a +5s shifted AniSkip tail over scene dialogue trims rather than discards the whole OP
+    const coreStart = s.start + 8;
+    const coreEnd = Math.max(coreStart + 10, s.end - 14);
+    if (isHighDensityDialogue(cues, coreStart, coreEnd)) {
       continue;
     }
 
@@ -195,11 +244,41 @@ export function refineSkips(
       refined.push({
         ...s,
         start: matching.c.start,
-        end: Math.max(matching.c.start, matching.c.end - 0.2),
+        end: Math.max(matching.c.start + 15, matching.c.end),
+        source: "subtitles",
       });
-    } else {
-      refined.push(s);
+      continue;
     }
+
+    // Tail-dialogue guard for OP when no full song candidate matched cleanly
+    if (s.type === "op") {
+      const midStart = s.start + 12;
+      const midEnd = Math.max(midStart, s.end - 18);
+      const midCues = cues.filter((c) => c.start >= midStart && c.end <= midEnd && !isMusicMarkerCue(c));
+      const tailStart = Math.max(s.start + 45, s.end - 18);
+      const tailCues = cues.filter((c) => c.start >= tailStart && c.start < s.end && !isMusicMarkerCue(c));
+
+      if (midCues.length <= 2 && tailCues.length >= 1) {
+        // Unsubbed OP where actual scene cues began before s.end
+        const firstSceneCue = tailCues[0];
+        const trimmedEnd = Math.max(s.start + 45, firstSceneCue.start - 0.8);
+        if (trimmedEnd < s.end) {
+          refined.push({ ...s, end: trimmedEnd, source: "subtitles" });
+          continue;
+        }
+      } else if (tailCues.filter(isConversationalCue).length >= 2) {
+        const firstDialogue = tailCues.find(isConversationalCue);
+        if (firstDialogue) {
+          const trimmedEnd = Math.max(s.start + 55, firstDialogue.start - 0.8);
+          if (trimmedEnd < s.end) {
+            refined.push({ ...s, end: trimmedEnd, source: "subtitles" });
+            continue;
+          }
+        }
+      }
+    }
+
+    refined.push(...applySafeSkipBaseline([s], episodeNumber));
   }
 
   // If OP was missing or discarded because it was dialogue, pick the best OP candidate
@@ -213,8 +292,9 @@ export function refineSkips(
       refined.push({
         type: "op",
         start: bestOp.start,
-        end: Math.max(bestOp.start, bestOp.end - 0.2),
+        end: Math.max(bestOp.start + 15, bestOp.end),
         episodeLength: duration,
+        source: "subtitles",
       });
     }
   }
@@ -232,6 +312,7 @@ export function refineSkips(
         start: bestEd.start,
         end: Math.max(bestEd.start, bestEd.end - 0.2),
         episodeLength: duration,
+        source: "subtitles",
       });
     }
   }

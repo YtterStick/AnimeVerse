@@ -139,7 +139,7 @@ function normalizeZokoSkips(rawSkip: ZokoEmbedPayload["skip"]): SkipInterval[] {
     const start = Number(seg?.start);
     const end = Number(seg?.end);
     if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start + 15) {
-      skips.push({ type, start, end, episodeLength: 0 });
+      skips.push({ type, start, end, episodeLength: 0, source: "stream" });
     }
   }
   return skips;

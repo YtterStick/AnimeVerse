@@ -21,7 +21,7 @@ import {
   toRenderFallbackProxyUrl,
   type SkipInterval,
 } from "@/lib/api";
-import { parseCues, refineSkips, buildChaptersVtt } from "@/lib/skipTimes";
+import { parseCues, refineSkips, applySafeSkipBaseline, buildChaptersVtt } from "@/lib/skipTimes";
 import { getCleanServerName } from "@/lib/serverNames";
 
 const WORKER_HOST_BYPASS_TTL_MS = 15 * 60_000;
@@ -376,9 +376,7 @@ export function VideoPlayer({
   const [duration, setDuration] = useState<number>(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [refinedSkips, setRefinedSkips] = useState<SkipInterval[]>(() =>
-    episodeNumber === 1
-      ? skips.filter((s) => !(s.type === "recap" && s.start < 60))
-      : skips
+    applySafeSkipBaseline(skips, episodeNumber)
   );
   const [sliderEl, setSliderEl] = useState<HTMLElement | null>(null);
 
@@ -547,25 +545,25 @@ export function VideoPlayer({
     }
   };
 
-  // Keep refinedSkips in sync with props as baseline (filtering out false episode 1 recaps)
+  // Keep refinedSkips in sync with props as baseline (applying episode-1 recap & safety bounds)
   useEffect(() => {
-    if (episodeNumber === 1) {
-      setRefinedSkips(skips.filter((s) => !(s.type === "recap" && s.start < 60)));
-    } else {
-      setRefinedSkips(skips);
-    }
+    setRefinedSkips(applySafeSkipBaseline(skips, episodeNumber));
   }, [skips, episodeNumber]);
 
   // Attempt to refine skip times to frame-accurate timestamps using dialogue subtitle cues
   useEffect(() => {
     let cancelled = false;
     const engSub =
-      subtitles.find((s) => s.lang === "en" || /english/i.test(s.label)) || subtitles[0];
+      subtitles.find(
+        (s) =>
+          (s.lang === "en" || /english/i.test(s.label)) &&
+          !/signs\s*&?\s*songs/i.test(s.label || "")
+      ) ||
+      subtitles.find((s) => s.lang === "en" || /english/i.test(s.label)) ||
+      subtitles[0];
 
     if (!engSub?.url) {
-      if (episodeNumber === 1) {
-        setRefinedSkips(skips.filter((s) => !(s.type === "recap" && s.start < 60)));
-      }
+      setRefinedSkips(applySafeSkipBaseline(skips, episodeNumber));
       return;
     }
 

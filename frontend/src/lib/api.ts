@@ -466,6 +466,7 @@ async function fetchAniSkipDirect(
       start: Number(r.interval?.startTime) || 0,
       end: Number(r.interval?.endTime) || 0,
       episodeLength: Number(r.episodeLength) || 0,
+      source: "aniskip",
     }));
 
     return { found: skips.length > 0, skips };

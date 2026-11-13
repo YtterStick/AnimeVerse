@@ -20,6 +20,7 @@ export interface SkipInterval {
   start: number;
   end: number;
   episodeLength: number;
+  source?: "stream" | "aniskip" | "subtitles";
 }
 
 export interface StreamServer {

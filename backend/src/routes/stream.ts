@@ -651,6 +651,7 @@ router.get("/skip-times/:animeId/:episode", async (req: Request, res: Response) 
       start: Number(r.interval?.startTime) || 0,
       end: Number(r.interval?.endTime) || 0,
       episodeLength: Number(r.episodeLength) || 0,
+      source: "aniskip",
     }));
 
     const data = {
