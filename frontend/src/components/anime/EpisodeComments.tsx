@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   MessageSquare,
   Send,
@@ -152,12 +152,14 @@ export function EpisodeComments({
   const [submittingReply, setSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
 
-  // UI toggles & optimistic locks
+  // UI toggles & non-blocking optimistic queues
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(() => new Set());
-  const [pendingReact, setPendingReact] = useState<ReactionType | null>(null);
   const [burstReaction, setBurstReaction] = useState<{ type: ReactionType; key: number } | null>(null);
-  const [pendingLikeId, setPendingLikeId] = useState<string | null>(null);
+  const reactionQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const reactionSeqRef = useRef(0);
+  const likeQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const likeSeqRef = useRef<Map<string, number>>(new Map());
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     id: string;
@@ -267,44 +269,54 @@ export function EpisodeComments({
 
     return () => {
       active = false;
+      reactionSeqRef.current += 1;
+      likeSeqRef.current.clear();
     };
   }, [animeId, episodeNumber, token]);
 
-  const handleToggleReaction = async (type: ReactionType) => {
-    if (pendingReact) return;
-    const prev = discussion;
-    const alreadyActive = prev.userReactions.includes(type);
+  const handleToggleReaction = (type: ReactionType) => {
+    const seq = ++reactionSeqRef.current;
 
-    if (!alreadyActive) {
-      setBurstReaction({ type, key: Date.now() });
-    }
-
-    setDiscussion({
-      ...prev,
-      reactions: {
-        ...prev.reactions,
-        [type]: Math.max(0, (prev.reactions[type] || 0) + (alreadyActive ? -1 : 1)),
-      },
-      userReactions: alreadyActive
-        ? prev.userReactions.filter((r) => r !== type)
-        : [...prev.userReactions, type],
+    setDiscussion((prev) => {
+      const alreadyActive = prev.userReactions.includes(type);
+      if (!alreadyActive) {
+        setBurstReaction({ type, key: Date.now() });
+      }
+      return {
+        ...prev,
+        reactions: {
+          ...prev.reactions,
+          [type]: Math.max(0, (prev.reactions[type] || 0) + (alreadyActive ? -1 : 1)),
+        },
+        userReactions: alreadyActive
+          ? prev.userReactions.filter((r) => r !== type)
+          : [...prev.userReactions, type],
+      };
     });
 
-    setPendingReact(type);
-    try {
-      const updated = await commentsApi.toggleVideoReaction(
-        animeId,
-        episodeNumber,
-        type,
-        token
-      );
-      setDiscussion(updated);
-    } catch {
-      setDiscussion(prev);
-      toast.error("Failed to update reaction. Please try again.");
-    } finally {
-      setPendingReact(null);
-    }
+    reactionQueueRef.current = reactionQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          const updated = await commentsApi.toggleVideoReaction(
+            animeId,
+            episodeNumber,
+            type,
+            token
+          );
+          if (reactionSeqRef.current === seq) {
+            setDiscussion((curr) => ({
+              ...curr,
+              reactions: updated.reactions,
+              userReactions: updated.userReactions,
+            }));
+          }
+        } catch {
+          if (reactionSeqRef.current === seq) {
+            toast.error("Failed to update reaction. Please try again.");
+          }
+        }
+      });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -416,11 +428,11 @@ export function EpisodeComments({
     }
   };
 
-  const handleToggleCommentLike = async (commentId: string) => {
-    if (pendingLikeId === commentId) return;
-    const prev = discussion;
+  const handleToggleCommentLike = (commentId: string) => {
+    const nextSeq = (likeSeqRef.current.get(commentId) || 0) + 1;
+    likeSeqRef.current.set(commentId, nextSeq);
 
-    setDiscussion({
+    setDiscussion((prev) => ({
       ...prev,
       comments: prev.comments.map((c) =>
         c.id === commentId
@@ -431,23 +443,30 @@ export function EpisodeComments({
             }
           : c
       ),
-    });
+    }));
 
-    setPendingLikeId(commentId);
-    try {
-      const updated = await commentsApi.toggleCommentLike(
-        animeId,
-        episodeNumber,
-        commentId,
-        token
-      );
-      setDiscussion(updated);
-    } catch {
-      setDiscussion(prev);
-      toast.error("Failed to update comment like");
-    } finally {
-      setPendingLikeId(null);
-    }
+    likeQueueRef.current = likeQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          const updated = await commentsApi.toggleCommentLike(
+            animeId,
+            episodeNumber,
+            commentId,
+            token
+          );
+          if (likeSeqRef.current.get(commentId) === nextSeq) {
+            setDiscussion((curr) => ({
+              ...curr,
+              comments: updated.comments,
+            }));
+          }
+        } catch {
+          if (likeSeqRef.current.get(commentId) === nextSeq) {
+            toast.error("Failed to update comment like");
+          }
+        }
+      });
   };
 
   const handleDeleteComment = async (commentId: string) => {
@@ -651,7 +670,6 @@ export function EpisodeComments({
             <button
               type="button"
               onClick={() => handleToggleCommentLike(comment.id)}
-              disabled={pendingLikeId === comment.id}
               aria-pressed={comment.liked_by_me}
               className={`inline-flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md whitespace-nowrap transition-colors ${
                 comment.liked_by_me
@@ -757,7 +775,6 @@ export function EpisodeComments({
                 key={type}
                 type="button"
                 onClick={() => handleToggleReaction(type)}
-                disabled={pendingReact !== null}
                 aria-pressed={active}
                 title={label}
                 className={`relative group flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-1.5 sm:gap-2.5 p-2 sm:pl-1.5 sm:pr-3.5 sm:py-1.5 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 active:scale-95 cursor-pointer ${
