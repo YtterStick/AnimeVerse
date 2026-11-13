@@ -126,6 +126,14 @@ export function useUpcoming() {
   return useAnimeQuery<Anime[]>(() => animeApi.upcoming(), [], "upcoming");
 }
 
+export function useNewlyReleased() {
+  return useAnimeQuery<Anime[]>(() => animeApi.newlyReleased(), [], "newly-released");
+}
+
+export function useMovies() {
+  return useAnimeQuery<Anime[]>(() => animeApi.movies(), [], "movies");
+}
+
 export function usePopular() {
   return useAnimeQuery<Anime[]>(() => animeApi.popular(), [], "popular");
 }
@@ -158,6 +166,12 @@ export function useAnimeSearch(
       if (category === "upcoming" && !query && !genres && !statusFilter && !typeFilter) {
         return animeApi.upcoming(page);
       }
+      if (category === "newly-released" && !query && !genres && !statusFilter && !typeFilter) {
+        return animeApi.newlyReleased(page);
+      }
+      if (category === "movies" && !query && !genres && !statusFilter && (!typeFilter || typeFilter === "movie")) {
+        return animeApi.movies(page);
+      }
       if (category === "popular" && !query && !genres && !statusFilter && !typeFilter) {
         return animeApi.popular(page);
       }
@@ -168,13 +182,16 @@ export function useAnimeSearch(
       // If category has genres or custom filters
       let orderBy = "";
       let status = statusFilter;
+      let resolvedType = typeFilter;
       if (category === "top-rated") orderBy = "score";
       if (category === "trending") orderBy = "trending";
+      if (category === "newly-released") orderBy = "newly-released";
       if (category === "popular") orderBy = "popularity";
       if (!status && category === "top-airing") status = "airing";
       if (!status && category === "upcoming") status = "upcoming";
+      if (!resolvedType && category === "movies") resolvedType = "movie";
 
-      return animeApi.search(query, page, genres, orderBy, status, typeFilter);
+      return animeApi.search(query, page, genres, orderBy, status, resolvedType);
     },
     [query, genres, page, category, statusFilter, typeFilter]
   );

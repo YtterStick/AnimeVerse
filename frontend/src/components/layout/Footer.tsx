@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Home, Compass, CalendarDays, History, Bookmark, FileText, Shield, Heart } from "lucide-react";
+import { Home, Compass, Film, History, Bookmark, FileText, Shield, Heart } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { Button } from "@/components/ui/button";
 import { DonationModal } from "@/components/shared/DonationModal";
@@ -49,11 +49,11 @@ export function Footer() {
                 </li>
                 <li>
                   <Link
-                    to="/search?category=upcoming"
+                    to="/search?category=movies"
                     className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-2"
                   >
-                    <CalendarDays className="w-3.5 h-3.5 text-primary" />
-                    <span>Upcoming Releases</span>
+                    <Film className="w-3.5 h-3.5 text-primary" />
+                    <span>Anime Movies</span>
                   </Link>
                 </li>
                 <li>

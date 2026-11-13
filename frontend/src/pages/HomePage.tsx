@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Play, History, ChevronRight, X } from "lucide-react";
-import { useTrending, useTopAiring, useUpcoming, usePopular } from "@/hooks/useAnime";
+import { useTrending, useTopAiring, useNewlyReleased, usePopular } from "@/hooks/useAnime";
 import { useWatchHistory } from "@/hooks/useWatchHistory";
 import {
   getRecentLocalHistory,
@@ -30,8 +30,8 @@ interface ContinueItem {
 export function HomePage() {
   const { tvMode } = useLayout();
   const { data: trending, loading: trendingLoading } = useTrending();
+  const { data: newlyReleased, loading: newlyReleasedLoading } = useNewlyReleased();
   const { data: topAiring, loading: topAiringLoading } = useTopAiring();
-  const { data: upcoming, loading: upcomingLoading } = useUpcoming();
   const { data: popular, loading: popularLoading } = usePopular();
   const { history, deleteEntry } = useWatchHistory();
   const toast = useToast();
@@ -267,16 +267,16 @@ export function HomePage() {
           viewMoreLink="/search?category=trending"
         />
         <AnimeCarousel
+          title="Newly Released"
+          animeList={newlyReleased}
+          loading={newlyReleasedLoading}
+          viewMoreLink="/search?category=newly-released"
+        />
+        <AnimeCarousel
           title="Top Airing"
           animeList={topAiring}
           loading={topAiringLoading}
           viewMoreLink="/search?category=top-airing"
-        />
-        <AnimeCarousel
-          title="Upcoming Releases"
-          animeList={upcoming}
-          loading={upcomingLoading}
-          viewMoreLink="/search?category=upcoming"
         />
         <AnimeCarousel
           title="Most Popular"

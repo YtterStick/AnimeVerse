@@ -507,6 +507,22 @@ export const ANILIST_BASE_GENRES = new Set([
   "Thriller",
 ]);
 
+function getNewlyReleasedDateBounds(): {
+  startDate_greater: number;
+  startDate_lesser: number;
+} {
+  const now = new Date();
+  const minYear = now.getUTCFullYear() - 1;
+  const maxDate =
+    now.getUTCFullYear() * 10000 +
+    (now.getUTCMonth() + 1) * 100 +
+    Math.min(31, now.getUTCDate() + 1);
+  return {
+    startDate_greater: minYear * 10000,
+    startDate_lesser: maxDate,
+  };
+}
+
 async function fetchAniListMediaList(
   sort: string[],
   page: number,
@@ -514,7 +530,7 @@ async function fetchAniListMediaList(
   extraVars: Record<string, any> = {}
 ) {
   const query = `
-    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $format: MediaFormat, $search: String, $genre_in: [String], $tag_in: [String]) {
+    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $status_in: [MediaStatus], $format: MediaFormat, $format_in: [MediaFormat], $search: String, $genre_in: [String], $tag_in: [String], $startDate_greater: FuzzyDateInt, $startDate_lesser: FuzzyDateInt, $popularity_greater: Int) {
       Page(page: $page, perPage: $perPage) {
         pageInfo {
           total
@@ -523,7 +539,7 @@ async function fetchAniListMediaList(
           lastPage
           hasNextPage
         }
-        media(type: ANIME, isAdult: false, sort: $sort, status: $status, format: $format, search: $search, genre_in: $genre_in, tag_in: $tag_in) {
+        media(type: ANIME, isAdult: false, sort: $sort, status: $status, status_in: $status_in, format: $format, format_in: $format_in, search: $search, genre_in: $genre_in, tag_in: $tag_in, startDate_greater: $startDate_greater, startDate_lesser: $startDate_lesser, popularity_greater: $popularity_greater) {
           ${ANILIST_MEDIA_FIELDS}
         }
       }
@@ -813,10 +829,14 @@ export const jikanService = {
     }
 
     const jikanParams: Record<string, any> = { page, limit: 25 };
+    const isNewlyReleased = orderBy === "newly-released" || orderBy === "start_date";
     if (trimmed) {
       jikanParams.q = trimmed;
     } else if (orderBy === "score") {
       jikanParams.order_by = "score";
+      jikanParams.sort = "desc";
+    } else if (isNewlyReleased) {
+      jikanParams.order_by = "start_date";
       jikanParams.sort = "desc";
     } else {
       jikanParams.order_by = "popularity";
@@ -856,6 +876,23 @@ export const jikanService = {
     else if (normType === "ova") extraVars.format = "OVA";
     else if (normType === "special") extraVars.format = "SPECIAL";
 
+    if (normType === "movie" && !extraVars.status && !trimmed) {
+      extraVars.status_in = ["RELEASING", "FINISHED"];
+    }
+
+    if (isNewlyReleased) {
+      if (!extraVars.status) {
+        extraVars.status_in = ["RELEASING", "FINISHED"];
+      }
+      if (!extraVars.format) {
+        extraVars.format_in = ["TV", "MOVIE", "ONA", "OVA"];
+      }
+      Object.assign(extraVars, getNewlyReleasedDateBounds());
+      if (!trimmed && genreNames.length === 0) {
+        extraVars.popularity_greater = 500;
+      }
+    }
+
     const anilistGenreIn: string[] = [];
     const anilistTagIn: string[] = [];
 
@@ -878,6 +915,8 @@ export const jikanService = {
         ? ["SCORE_DESC", "POPULARITY_DESC"]
         : orderBy === "trending"
         ? ["TRENDING_DESC", "POPULARITY_DESC"]
+        : isNewlyReleased
+        ? ["START_DATE_DESC", "POPULARITY_DESC"]
         : ["POPULARITY_DESC", "SCORE_DESC"];
 
     return executeJikanRequest<any>(
@@ -931,6 +970,44 @@ export const jikanService = {
           page,
           25,
           { status: "NOT_YET_RELEASED" }
+        )
+    );
+  },
+
+  // Get newly released anime (recently premiered / released, excluding unreleased)
+  getNewlyReleased: async (page = 1) => {
+    return executeJikanRequest<any>(
+      "/anime",
+      { status: "airing", order_by: "start_date", sort: "desc", page, limit: 25 },
+      () =>
+        fetchAniListMediaList(
+          ["START_DATE_DESC", "POPULARITY_DESC"],
+          page,
+          25,
+          {
+            status_in: ["RELEASING", "FINISHED"],
+            format_in: ["TV", "MOVIE", "ONA", "OVA"],
+            ...getNewlyReleasedDateBounds(),
+            popularity_greater: 800,
+          }
+        )
+    );
+  },
+
+  // Get all released anime movies sorted by popularity & score
+  getMovies: async (page = 1) => {
+    return executeJikanRequest<any>(
+      "/anime",
+      { type: "movie", order_by: "popularity", sort: "desc", page, limit: 25 },
+      () =>
+        fetchAniListMediaList(
+          ["POPULARITY_DESC", "SCORE_DESC"],
+          page,
+          25,
+          {
+            format: "MOVIE",
+            status_in: ["RELEASING", "FINISHED"],
+          }
         )
     );
   },

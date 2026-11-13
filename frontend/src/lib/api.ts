@@ -321,6 +321,18 @@ export const animeApi = {
       () => anilistBrowserFallback.upcoming(page)
     ),
 
+  newlyReleased: (page = 1) =>
+    withBrowserFallback<ApiResponse<Anime[]>>(
+      `/anime/newly-released?page=${page}`,
+      () => anilistBrowserFallback.newlyReleased(page)
+    ),
+
+  movies: (page = 1) =>
+    withBrowserFallback<ApiResponse<Anime[]>>(
+      `/anime/movies?page=${page}`,
+      () => anilistBrowserFallback.movies(page)
+    ),
+
   popular: (page = 1) =>
     withBrowserFallback<ApiResponse<Anime[]>>(
       `/anime/popular?page=${page}`,

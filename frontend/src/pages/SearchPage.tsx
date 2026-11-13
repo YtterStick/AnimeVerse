@@ -5,7 +5,8 @@ import {
   usePopular,
   useTopRated,
   useTopAiring,
-  useUpcoming,
+  useNewlyReleased,
+  useMovies,
 } from "@/hooks/useAnime";
 import { AnimeGrid } from "@/components/anime/AnimeGrid";
 import { Pagination } from "@/components/shared/Pagination";
@@ -16,6 +17,7 @@ import {
   Flame,
   Star,
   Radio,
+  Sparkles,
   Wand2,
   Check,
   RotateCcw,
@@ -66,6 +68,18 @@ export const CATEGORY_CONFIG: Record<
     icon: React.ComponentType<{ className?: string }>;
   }
 > = {
+  "newly-released": {
+    title: "Newly Released Anime",
+    subtitle: "Fresh anime series and movies that recently started streaming",
+    badge: "Newly Released",
+    icon: Sparkles,
+  },
+  movies: {
+    title: "All Anime Movies",
+    subtitle: "Browse every released anime feature film from classics to new hits",
+    badge: "Anime Movies",
+    icon: Film,
+  },
   trending: {
     title: "Trending Anime Now",
     subtitle: "What fans are buzzing about and streaming right now worldwide",
@@ -97,6 +111,16 @@ export const CATEGORY_CONFIG: Record<
     icon: CalendarDays,
   },
 };
+
+const CATEGORY_TABS = [
+  { value: "", label: "All" },
+  { value: "newly-released", label: "Newly Released", icon: Sparkles },
+  { value: "movies", label: "Anime Movies", icon: Film },
+  { value: "trending", label: "Trending", icon: Flame },
+  { value: "top-airing", label: "Top Airing", icon: Radio },
+  { value: "popular", label: "Most Popular", icon: Flame },
+  { value: "top-rated", label: "Top Rated", icon: Star },
+];
 
 export function SearchPage() {
   const location = useLocation();
@@ -153,10 +177,11 @@ export function SearchPage() {
   } = useAnimeSearch(urlQuery, selectedGenres.join(","), urlPage, urlCategory, urlStatus, urlType);
 
   // Discover showcase hooks (active when in default overview mode)
+  const { data: newlyReleasedList, loading: newlyReleasedLoading } = useNewlyReleased();
+  const { data: moviesList, loading: moviesLoading } = useMovies();
   const { data: popularList, loading: popularLoading } = usePopular();
   const { data: topRatedList, loading: topRatedLoading } = useTopRated();
   const { data: topAiringList, loading: topAiringLoading } = useTopAiring();
-  const { data: upcomingList, loading: upcomingLoading } = useUpcoming();
 
   const updateSearch = (
     newQuery: string,
@@ -202,9 +227,20 @@ export function SearchPage() {
     updateSearch(searchTerm, nextGenres, 1, urlCategory);
   };
 
+  const toggleCategory = (catValue: string) => {
+    const nextCategory = !catValue || urlCategory === catValue ? "" : catValue;
+    const nextType = nextCategory === "movies" ? "" : urlType;
+    updateSearch(searchTerm, selectedGenres, 1, nextCategory, urlStatus, nextType);
+  };
+
   const toggleTypeFilter = (typeValue: string) => {
+    if (urlCategory === "movies" && typeValue === "movie") {
+      updateSearch(searchTerm, selectedGenres, 1, "", urlStatus, "");
+      return;
+    }
+    const nextCategory = urlCategory === "movies" && typeValue === "tv" ? "" : urlCategory;
     const nextType = urlType === typeValue ? "" : typeValue;
-    updateSearch(searchTerm, selectedGenres, 1, urlCategory, urlStatus, nextType);
+    updateSearch(searchTerm, selectedGenres, 1, nextCategory, urlStatus, nextType);
   };
 
   const toggleStatusFilter = (statusValue: string) => {
@@ -292,8 +328,41 @@ export function SearchPage() {
           </Button>
         </form>
 
-        {/* Quick Format & Status Filters + Collapsible Genres */}
+        {/* Categories + Quick Format & Status Filters + Collapsible Genres */}
         <div className="w-full bg-card/30 border border-border/40 rounded-2xl p-4 sm:p-5 backdrop-blur-sm space-y-3.5 text-left">
+          {/* Categories Row */}
+          <div className="flex flex-wrap items-center gap-1.5 pb-2.5 border-b border-border/30">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mr-1">
+              Categories
+            </span>
+            {CATEGORY_TABS.map((cat) => {
+              const active =
+                cat.value === ""
+                  ? !urlCategory && !urlType
+                  : urlCategory === cat.value || (cat.value === "movies" && urlType === "movie" && !urlCategory);
+              const Icon = cat.icon;
+              return (
+                <button
+                  key={cat.value || "all"}
+                  type="button"
+                  onClick={() =>
+                    cat.value === ""
+                      ? updateSearch(searchTerm, selectedGenres, 1, "", urlStatus, "")
+                      : toggleCategory(cat.value)
+                  }
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer select-none ${
+                    active
+                      ? "bg-primary text-white border-primary shadow-sm shadow-primary/30"
+                      : "bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground border-border/40"
+                  }`}
+                >
+                  {Icon && <Icon className="w-3 h-3 shrink-0" />}
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Format & Status Quick Filters Row */}
           <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-border/30">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -304,7 +373,7 @@ export function SearchPage() {
                 { kind: "type" as const, value: "tv", label: "TV" },
                 { kind: "type" as const, value: "movie", label: "Movie" },
               ].map((opt) => {
-                const active = urlType === opt.value;
+                const active = urlType === opt.value || (opt.value === "movie" && urlCategory === "movies");
                 return (
                   <button
                     key={opt.value}
@@ -557,7 +626,71 @@ export function SearchPage() {
       ) : (
         /* Default Discover Showcase Sections with View More Links */
         <div className="space-y-12 flex-1 flex flex-col justify-start">
-          {/* Section 1: Most Watched / Popular Anime */}
+          {/* Section 1: Newly Released Anime */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between border-b border-border/30 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-bold text-white leading-tight">
+                    Newly Released Anime
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Fresh series and films that recently premiered and are ready to watch.
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                to="/search?category=newly-released"
+                className="text-xs sm:text-sm text-primary hover:text-primary/80 flex items-center gap-1 font-semibold transition-colors group cursor-pointer"
+              >
+                <span>View More</span>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+            </div>
+
+            <AnimeGrid
+              animeList={newlyReleasedList ? newlyReleasedList.slice(0, 12) : null}
+              loading={newlyReleasedLoading}
+            />
+          </section>
+
+          {/* Section 2: Anime Movies */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between border-b border-border/30 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                  <Film className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-bold text-white leading-tight">
+                    Anime Movies
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    All-time blockbuster theatrical anime films and recent movie releases.
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                to="/search?category=movies"
+                className="text-xs sm:text-sm text-primary hover:text-primary/80 flex items-center gap-1 font-semibold transition-colors group cursor-pointer"
+              >
+                <span>View All Movies</span>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+            </div>
+
+            <AnimeGrid
+              animeList={moviesList ? moviesList.slice(0, 12) : null}
+              loading={moviesLoading}
+            />
+          </section>
+
+          {/* Section 3: Most Watched / Popular Anime */}
           <section className="space-y-4">
             <div className="flex items-center justify-between border-b border-border/30 pb-3">
               <div className="flex items-center gap-2.5">
@@ -589,7 +722,7 @@ export function SearchPage() {
             />
           </section>
 
-          {/* Section 2: Top Rated Masterpieces */}
+          {/* Section 4: Top Rated Masterpieces */}
           <section className="space-y-4">
             <div className="flex items-center justify-between border-b border-border/30 pb-3">
               <div className="flex items-center gap-2.5">
@@ -621,7 +754,7 @@ export function SearchPage() {
             />
           </section>
 
-          {/* Section 3: Trending Airing Series */}
+          {/* Section 5: Trending Airing Series */}
           <section className="space-y-4">
             <div className="flex items-center justify-between border-b border-border/30 pb-3">
               <div className="flex items-center gap-2.5">
@@ -650,38 +783,6 @@ export function SearchPage() {
             <AnimeGrid
               animeList={topAiringList ? topAiringList.slice(0, 12) : null}
               loading={topAiringLoading}
-            />
-          </section>
-
-          {/* Section 4: Upcoming Anticipated Releases */}
-          <section className="space-y-4">
-            <div className="flex items-center justify-between border-b border-border/30 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center">
-                  <CalendarDays className="w-5 h-5 text-pink-400" />
-                </div>
-                <div>
-                  <h2 className="text-lg sm:text-xl font-bold text-white leading-tight">
-                    Upcoming Releases &amp; Anticipated Premieres
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    Future seasons and upcoming broadcast premieres.
-                  </p>
-                </div>
-              </div>
-
-              <Link
-                to="/search?category=upcoming"
-                className="text-xs sm:text-sm text-primary hover:text-primary/80 flex items-center gap-1 font-semibold transition-colors group cursor-pointer"
-              >
-                <span>View More</span>
-                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
-            </div>
-
-            <AnimeGrid
-              animeList={upcomingList ? upcomingList.slice(0, 12) : null}
-              loading={upcomingLoading}
             />
           </section>
         </div>

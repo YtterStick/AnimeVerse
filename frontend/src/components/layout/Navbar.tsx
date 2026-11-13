@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWatchlist } from "@/hooks/useWatchHistory";
 import { Button } from "@/components/ui/button";
-import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, CalendarDays, Home, Compass, User } from "lucide-react";
+import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, Film, Home, Compass, User } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { TitleLanguageToggle } from "@/components/shared/TitleLanguageToggle";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
@@ -275,7 +275,9 @@ export function Navbar() {
                 className={`transition-all duration-200 flex items-center gap-1.5 ${
                   tvMode ? "px-3 py-1.5 rounded-xl" : ""
                 } ${
-                  isActive("/search") && !location.search.includes("category=upcoming")
+                  isActive("/search") &&
+                  !location.search.includes("category=movies") &&
+                  !location.search.includes("type=movie")
                     ? tvMode
                       ? "bg-primary/20 text-primary font-semibold border border-primary/30"
                       : "text-primary"
@@ -286,19 +288,19 @@ export function Navbar() {
                 <span>Discover</span>
               </Link>
               <Link
-                to="/search?category=upcoming"
+                to="/search?category=movies"
                 className={`transition-all duration-200 flex items-center gap-1.5 ${
                   tvMode ? "px-3 py-1.5 rounded-xl" : ""
                 } ${
-                  location.search.includes("category=upcoming")
+                  location.search.includes("category=movies") || location.search.includes("type=movie")
                     ? tvMode
                       ? "bg-primary/20 text-primary font-semibold border border-primary/30"
                       : "text-primary font-semibold"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                 }`}
               >
-                <CalendarDays className="w-4 h-4" />
-                <span>Upcoming</span>
+                <Film className="w-4 h-4" />
+                <span>Movies</span>
               </Link>
               <Link
                 to="/history"
@@ -476,21 +478,27 @@ export function Navbar() {
                 to="/search"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2.5 ${
-                  isActive("/search") && !location.search.includes("category=upcoming") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                  isActive("/search") &&
+                  !location.search.includes("category=movies") &&
+                  !location.search.includes("type=movie")
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
                 }`}
               >
                 <Compass className="w-4 h-4" />
                 <span>Discover</span>
               </Link>
               <Link
-                to="/search?category=upcoming"
+                to="/search?category=movies"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2.5 ${
-                  location.search.includes("category=upcoming") ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                  location.search.includes("category=movies") || location.search.includes("type=movie")
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
                 }`}
               >
-                <CalendarDays className="w-4 h-4" />
-                <span>Upcoming Releases</span>
+                <Film className="w-4 h-4" />
+                <span>Anime Movies</span>
               </Link>
               <Link
                 to="/history"

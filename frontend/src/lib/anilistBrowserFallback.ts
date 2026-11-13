@@ -173,6 +173,22 @@ async function queryAniListBrowser(query: string, variables: Record<string, unkn
   return json?.data;
 }
 
+function getNewlyReleasedDateBounds(): {
+  startDate_greater: number;
+  startDate_lesser: number;
+} {
+  const now = new Date();
+  const minYear = now.getUTCFullYear() - 1;
+  const maxDate =
+    now.getUTCFullYear() * 10000 +
+    (now.getUTCMonth() + 1) * 100 +
+    Math.min(31, now.getUTCDate() + 1);
+  return {
+    startDate_greater: minYear * 10000,
+    startDate_lesser: maxDate,
+  };
+}
+
 export async function fetchMediaListFallback(
   sort: string[],
   page = 1,
@@ -180,10 +196,10 @@ export async function fetchMediaListFallback(
   extraVars: Record<string, unknown> = {}
 ): Promise<ApiResponse<Anime[]>> {
   const query = `
-    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $format: MediaFormat, $search: String, $genre_in: [String], $tag_in: [String]) {
+    query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $status_in: [MediaStatus], $format: MediaFormat, $format_in: [MediaFormat], $search: String, $genre_in: [String], $tag_in: [String], $startDate_greater: FuzzyDateInt, $startDate_lesser: FuzzyDateInt, $popularity_greater: Int) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { total perPage currentPage lastPage hasNextPage }
-        media(type: ANIME, isAdult: false, sort: $sort, status: $status, format: $format, search: $search, genre_in: $genre_in, tag_in: $tag_in) {
+        media(type: ANIME, isAdult: false, sort: $sort, status: $status, status_in: $status_in, format: $format, format_in: $format_in, search: $search, genre_in: $genre_in, tag_in: $tag_in, startDate_greater: $startDate_greater, startDate_lesser: $startDate_lesser, popularity_greater: $popularity_greater) {
           ${MEDIA_FIELDS}
         }
       }
@@ -233,6 +249,20 @@ export const anilistBrowserFallback = {
       status: "NOT_YET_RELEASED",
     }),
 
+  newlyReleased: (page = 1) =>
+    fetchMediaListFallback(["START_DATE_DESC", "POPULARITY_DESC"], page, 25, {
+      status_in: ["RELEASING", "FINISHED"],
+      format_in: ["TV", "MOVIE", "ONA", "OVA"],
+      ...getNewlyReleasedDateBounds(),
+      popularity_greater: 800,
+    }),
+
+  movies: (page = 1) =>
+    fetchMediaListFallback(["POPULARITY_DESC", "SCORE_DESC"], page, 25, {
+      format: "MOVIE",
+      status_in: ["RELEASING", "FINISHED"],
+    }),
+
   popular: (page = 1) => fetchMediaListFallback(["POPULARITY_DESC"], page, 25),
 
   topRated: (page = 1) =>
@@ -251,6 +281,18 @@ export const anilistBrowserFallback = {
     else if (normType === "movie") extraVars.format = "MOVIE";
     else if (normType === "ova") extraVars.format = "OVA";
     else if (normType === "special") extraVars.format = "SPECIAL";
+
+    if (normType === "movie" && !extraVars.status && !query.trim()) {
+      extraVars.status_in = ["RELEASING", "FINISHED"];
+    }
+
+    const isNewlyReleased = orderBy === "newly-released" || orderBy === "start_date";
+    if (isNewlyReleased) {
+      if (!extraVars.status) extraVars.status_in = ["RELEASING", "FINISHED"];
+      if (!extraVars.format) extraVars.format_in = ["TV", "MOVIE", "ONA", "OVA"];
+      Object.assign(extraVars, getNewlyReleasedDateBounds());
+      if (!query.trim() && !genres) extraVars.popularity_greater = 500;
+    }
 
     if (genres) {
       const genreIn: string[] = [];
@@ -271,6 +313,8 @@ export const anilistBrowserFallback = {
         ? ["SCORE_DESC", "POPULARITY_DESC"]
         : orderBy === "trending"
         ? ["TRENDING_DESC", "POPULARITY_DESC"]
+        : isNewlyReleased
+        ? ["START_DATE_DESC", "POPULARITY_DESC"]
         : ["POPULARITY_DESC", "SCORE_DESC"];
 
     return fetchMediaListFallback(sort, page, 25, extraVars);
