@@ -337,21 +337,6 @@ export function Navbar() {
                   </span>
                 )}
               </Link>
-              <Link
-                to="/profile"
-                className={`transition-all duration-200 flex items-center gap-1.5 ${
-                  tvMode ? "px-3 py-1.5 rounded-xl" : ""
-                } ${
-                  isActive("/profile")
-                    ? tvMode
-                      ? "bg-primary/20 text-primary font-semibold border border-primary/30"
-                      : "text-primary font-semibold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/40"
-                }`}
-              >
-                <User className="w-4 h-4" />
-                <span>Profile</span>
-              </Link>
             </nav>
 
             {/* Search Input Box (Desktop) */}
