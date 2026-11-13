@@ -83,27 +83,27 @@ const REACTION_OPTIONS: Array<{
   {
     type: "like",
     label: "Sugoi!",
-    activeClass: "bg-amber-500/20 border-amber-400/60 text-amber-200 shadow-sm shadow-amber-500/20",
+    activeClass: "bg-amber-500/20 border-amber-400/70 text-amber-200 shadow-lg shadow-amber-500/20",
   },
   {
     type: "love",
     label: "Kawaii",
-    activeClass: "bg-pink-500/20 border-pink-400/60 text-pink-200 shadow-sm shadow-pink-500/20",
+    activeClass: "bg-pink-500/20 border-pink-400/70 text-pink-200 shadow-lg shadow-pink-500/20",
   },
   {
     type: "fire",
     label: "Hype!",
-    activeClass: "bg-orange-500/20 border-orange-400/60 text-orange-200 shadow-sm shadow-orange-500/20",
+    activeClass: "bg-orange-500/20 border-orange-400/70 text-orange-200 shadow-lg shadow-orange-500/20",
   },
   {
     type: "funny",
     label: "Kusa!",
-    activeClass: "bg-yellow-500/20 border-yellow-400/60 text-yellow-200 shadow-sm shadow-yellow-500/20",
+    activeClass: "bg-teal-500/20 border-teal-400/70 text-teal-200 shadow-lg shadow-teal-500/20",
   },
   {
     type: "sad",
     label: "Feels",
-    activeClass: "bg-sky-500/20 border-sky-400/60 text-sky-200 shadow-sm shadow-sky-500/20",
+    activeClass: "bg-sky-500/20 border-sky-400/70 text-sky-200 shadow-lg shadow-sky-500/20",
   },
 ];
 
@@ -731,23 +731,23 @@ export function EpisodeComments({
       className="mt-4 sm:mt-6 rounded-2xl bg-card/40 border border-border/50 p-3.5 sm:p-6 space-y-5 sm:space-y-6"
       aria-label="Episode reactions and comments"
     >
-      {/* Custom Animated Anime Reactions Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-5 border-b border-border/40">
-        <div>
-          <h2 className="text-sm sm:text-lg font-bold text-white flex items-center gap-2">
-            Episode {episodeNumber} Reactions
+      {/* Custom Chibi Anime Character Reactions Bar */}
+      <div className="space-y-3.5 pb-5 border-b border-border/40">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+          <h2 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
+            <span>Episode {episodeNumber} Reactions</span>
             {totalReactions > 0 && (
-              <span className="text-[11px] sm:text-xs font-medium text-muted-foreground bg-secondary/70 px-2 py-0.5 rounded-full">
+              <span className="text-[11px] sm:text-xs font-bold text-primary bg-primary/15 border border-primary/30 px-2.5 py-0.5 rounded-full">
                 {totalReactions}
               </span>
             )}
           </h2>
-          <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
-            Tap an anime reaction to hype this episode
+          <p className="text-[11px] sm:text-xs text-muted-foreground">
+            Tap a chibi character reaction to hype this episode
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2.5 overflow-x-auto hide-scrollbar sm:flex-wrap pb-0.5 sm:pb-0 -mx-0.5 px-0.5">
+        <div className="grid grid-cols-5 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 pt-1">
           {REACTION_OPTIONS.map(({ type, label, activeClass }) => {
             const count = discussion.reactions[type] || 0;
             const active = discussion.userReactions.includes(type);
@@ -760,36 +760,42 @@ export function EpisodeComments({
                 disabled={pendingReact !== null}
                 aria-pressed={active}
                 title={label}
-                className={`relative group inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-bold border shrink-0 transition-all duration-200 hover:scale-105 active:scale-95 ${
+                className={`relative group flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-1.5 sm:gap-2.5 p-2 sm:pl-1.5 sm:pr-3.5 sm:py-1.5 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 active:scale-95 cursor-pointer ${
                   active
                     ? activeClass
-                    : "bg-secondary/50 border-border/50 text-muted-foreground hover:text-white hover:border-primary/40 hover:bg-secondary/80"
+                    : "bg-secondary/45 border-border/50 text-muted-foreground hover:text-white hover:border-primary/45 hover:bg-secondary/80"
                 }`}
               >
                 {showBurst && (
                   <span
                     key={burstReaction.key}
-                    className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 text-[11px] font-extrabold text-white anime-rx-burst"
+                    className="pointer-events-none z-20 absolute -top-5 left-1/2 -translate-x-1/2 flex items-center gap-1 text-xs font-extrabold text-white drop-shadow anime-rx-burst"
                   >
-                    <AnimeReactionIcon type={type} active className="w-5 h-5" />
+                    <AnimeReactionIcon type={type} active className="w-6 h-6" />
                     +1
                   </span>
                 )}
                 <AnimeReactionIcon
                   type={type}
                   active={active}
-                  className="w-5 h-5 sm:w-6 sm:h-6 shrink-0"
+                  className="w-10 h-10 sm:w-10 sm:h-10"
                 />
-                <span>{label}</span>
-                {count > 0 && (
-                  <span
-                    className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-[11px] leading-none ${
-                      active ? "bg-black/30 text-white" : "bg-black/30 text-gray-300"
-                    }`}
-                  >
-                    {count}
+                <div className="flex flex-col sm:flex-row items-center gap-0.5 sm:gap-2 min-w-0">
+                  <span className="text-[11px] sm:text-xs font-bold leading-none truncate">
+                    {label}
                   </span>
-                )}
+                  {count > 0 && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold leading-none ${
+                        active
+                          ? "bg-white/20 text-white"
+                          : "bg-black/35 text-gray-200 border border-white/10"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </div>
               </button>
             );
           })}
