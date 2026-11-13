@@ -731,7 +731,7 @@ export function EpisodeComments({
       className="mt-4 sm:mt-6 rounded-2xl bg-card/40 border border-border/50 p-3.5 sm:p-6 space-y-5 sm:space-y-6"
       aria-label="Episode reactions and comments"
     >
-      {/* Custom Chibi Anime Character Reactions Bar */}
+      {/* Animated Anime GIF Reactions Bar */}
       <div className="space-y-3.5 pb-5 border-b border-border/40">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <h2 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
@@ -743,7 +743,7 @@ export function EpisodeComments({
             )}
           </h2>
           <p className="text-[11px] sm:text-xs text-muted-foreground">
-            Tap a chibi character reaction to hype this episode
+            Tap an animated reaction to hype this episode
           </p>
         </div>
 

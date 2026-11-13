@@ -6,69 +6,63 @@ interface AnimeReactionIconProps {
   className?: string;
 }
 
-const REACTION_CHIBI_MAP: Record<
+const REACTION_GIF_MAP: Record<
   ReactionType,
   {
     src: string;
     alt: string;
     ringClass: string;
-    motionClass: string;
   }
 > = {
   like: {
-    src: "/reactions/sugoi.jpg",
-    alt: "Sugoi anime chibi reaction",
-    ringClass: "ring-2 ring-amber-400/80 shadow-[0_0_14px_rgba(251,191,36,0.45)]",
-    motionClass: "anime-rx-bob",
+    src: "/reactions/sugoi.gif",
+    alt: "Sugoi anime reaction GIF",
+    ringClass: "ring-2 ring-amber-400/85 shadow-[0_0_14px_rgba(251,191,36,0.45)]",
   },
   love: {
-    src: "/reactions/kawaii.jpg",
-    alt: "Kawaii neko anime chibi reaction",
-    ringClass: "ring-2 ring-pink-400/80 shadow-[0_0_14px_rgba(244,114,182,0.45)]",
-    motionClass: "anime-rx-heart",
+    src: "/reactions/kawaii.gif",
+    alt: "Kawaii blushing anime reaction GIF",
+    ringClass: "ring-2 ring-pink-400/85 shadow-[0_0_14px_rgba(244,114,182,0.45)]",
   },
   fire: {
-    src: "/reactions/hype.jpg",
-    alt: "Hype shonen anime chibi reaction",
-    ringClass: "ring-2 ring-orange-400/80 shadow-[0_0_14px_rgba(251,146,60,0.5)]",
-    motionClass: "anime-rx-flame",
+    src: "/reactions/hype.gif",
+    alt: "Hype cheering anime reaction GIF",
+    ringClass: "ring-2 ring-orange-400/85 shadow-[0_0_14px_rgba(251,146,60,0.5)]",
   },
   funny: {
-    src: "/reactions/kusa.jpg",
-    alt: "Kusa laughing anime chibi reaction",
-    ringClass: "ring-2 ring-teal-400/80 shadow-[0_0_14px_rgba(45,212,191,0.45)]",
-    motionClass: "anime-rx-laugh",
+    src: "/reactions/kusa.gif",
+    alt: "Kusa laughing anime reaction GIF",
+    ringClass: "ring-2 ring-teal-400/85 shadow-[0_0_14px_rgba(45,212,191,0.45)]",
   },
   sad: {
-    src: "/reactions/feels.jpg",
-    alt: "Feels crying anime chibi reaction",
-    ringClass: "ring-2 ring-sky-400/80 shadow-[0_0_14px_rgba(56,189,248,0.45)]",
-    motionClass: "anime-rx-bob",
+    src: "/reactions/feels.gif",
+    alt: "Feels crying anime reaction GIF",
+    ringClass: "ring-2 ring-sky-400/85 shadow-[0_0_14px_rgba(56,189,248,0.45)]",
   },
 };
 
 /**
- * Custom anime chibi character reaction stickers with subtle idle/active motion.
+ * Animated Discord-style anime character GIF reaction emotes.
  */
 export function AnimeReactionIcon({
   type,
   active = false,
-  className = "w-9 h-9",
+  className = "w-10 h-10",
 }: AnimeReactionIconProps) {
-  const chibi = REACTION_CHIBI_MAP[type];
+  const reaction = REACTION_GIF_MAP[type];
 
   return (
     <span
-      className={`relative inline-flex shrink-0 items-center justify-center rounded-full overflow-hidden bg-[#14111d] border border-white/10 transition-transform duration-200 ${
-        active ? `${chibi.ringClass} ${chibi.motionClass}` : "group-hover:scale-110"
+      className={`relative inline-flex shrink-0 items-center justify-center rounded-xl overflow-hidden bg-black/50 border border-white/15 transition-transform duration-200 ${
+        active ? `${reaction.ringClass} scale-105` : "group-hover:scale-110"
       } ${className}`}
     >
       <img
-        src={chibi.src}
-        alt={chibi.alt}
-        loading="lazy"
+        src={reaction.src}
+        alt={reaction.alt}
+        loading="eager"
         draggable={false}
-        className="w-full h-full object-cover scale-[1.06] select-none pointer-events-none"
+        className="w-full h-full object-cover select-none pointer-events-none"
       />
     </span>
   );
