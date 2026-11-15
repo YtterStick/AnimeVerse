@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useLocation } from "react-router-dom";
 import {
   Dialog,
@@ -154,10 +154,22 @@ function detectPlatform(): InstallPlatform {
 export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
   const { canPromptNative, isInstalled, triggerNativeInstall } = usePwaInstall();
   const [tab, setTab] = useState<InstallPlatform>(detectPlatform);
+  const [showFallbackHint, setShowFallbackHint] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShowFallbackHint(false);
+    }
+  }, [isOpen]);
 
   const handleInstallClick = async () => {
-    onClose();
-    await triggerNativeInstall();
+    if (canPromptNative) {
+      setShowFallbackHint(false);
+      onClose();
+      await triggerNativeInstall();
+      return;
+    }
+    setShowFallbackHint(true);
   };
 
   const activeTab = PLATFORM_TABS.find((item) => item.id === tab) ?? PLATFORM_TABS[0];
@@ -187,7 +199,7 @@ export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
             <span>Already installed on this device.</span>
           </div>
         ) : (
-          canPromptNative && (
+          <div className="space-y-2">
             <Button
               type="button"
               onClick={handleInstallClick}
@@ -196,7 +208,26 @@ export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
               <Download className="w-3.5 h-3.5 mr-1.5" />
               Install App
             </Button>
-          )
+
+            {showFallbackHint && !canPromptNative && (
+              <div className="p-2.5 rounded-lg bg-secondary/70 border border-border text-xs text-muted-foreground flex items-center justify-between gap-2">
+                <span>
+                  {tab === "ios"
+                    ? "Safari requires using Share \u2192 Add to Home Screen below."
+                    : "Popup was closed on this tab. Use the address bar install icon or reload to try again."}
+                </span>
+                {tab !== "ios" && (
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="px-2.5 py-1 rounded-md bg-primary text-white font-medium shrink-0 hover:bg-primary/90 cursor-pointer"
+                  >
+                    Reload
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         <div className="space-y-3">
