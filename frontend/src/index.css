@@ -552,6 +552,8 @@ html.tv-mode [tabindex]:not([tabindex="-1"]):focus-visible {
 /* Netflix-style Widen (zoom-to-fill) & Screen Lock */
 .vds-video-widen video {
   object-fit: cover !important;
+  transform: scale(1.12);
+  transform-origin: center center;
 }
 
 .vds-player-locked {
@@ -560,7 +562,9 @@ html.tv-mode [tabindex]:not([tabindex="-1"]):focus-visible {
   overscroll-behavior: none;
 }
 
-.vds-player-locked .vds-video-layout {
+.vds-player-locked .vds-controls,
+.vds-player-locked .vds-gestures,
+.vds-player-locked .vds-kb-action {
   opacity: 0 !important;
   pointer-events: none !important;
   visibility: hidden !important;

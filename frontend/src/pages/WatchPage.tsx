@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag, Heart, Coffee, Tv, MessageSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag, Heart, Coffee, Tv, MessageSquare, Maximize2 } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
@@ -698,11 +698,19 @@ export function WatchPage() {
 
   return (
     <div className="min-h-screen bg-background w-full max-w-full page-enter overflow-x-hidden pb-12">
-      <div className="w-full max-w-[1800px] mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
+      <div
+        className={`w-full mx-auto space-y-6 ${
+          isCinemaLayout
+            ? "max-w-[1760px] px-0 sm:px-4 lg:px-6"
+            : "max-w-[1800px] px-3 sm:px-6 lg:px-8"
+        }`}
+      >
         {/* Back Link */}
         <Link
           to={`/anime/${animeId}`}
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-white transition-colors"
+          className={`inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-white transition-colors ${
+            isCinemaLayout ? "px-3 sm:px-0" : ""
+          }`}
         >
           <ArrowLeft className="w-4 h-4" />
           Back to {title}
@@ -729,7 +737,7 @@ export function WatchPage() {
         {/* Top Section: Player & Server (wider cinema framing in TV / downloaded app mode, 8 cols in standard mode) */}
         <div
           className={`grid grid-cols-1 ${
-            isCinemaLayout ? "lg:grid-cols-1 max-w-[1600px] mx-auto" : "lg:grid-cols-12"
+            isCinemaLayout ? "lg:grid-cols-1 max-w-[1760px] mx-auto" : "lg:grid-cols-12"
           } gap-5 lg:gap-6 items-start`}
         >
           {/* Main Player Column */}
@@ -878,6 +886,22 @@ export function WatchPage() {
               >
                 <Flag className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400" />
                 Report
+              </button>
+
+              {/* Wide Layout Toggle */}
+              <button
+                type="button"
+                onClick={() => setWideMode((prev) => !prev)}
+                className={`flex items-center gap-1 sm:gap-1.5 h-7 sm:h-8 px-2.5 sm:px-3 rounded-full border text-[11px] sm:text-xs font-semibold cursor-pointer select-none transition-all ${
+                  isCinemaLayout
+                    ? "bg-primary/20 hover:bg-primary/30 border-primary/50 text-primary-foreground shadow-sm shadow-primary/20"
+                    : "bg-secondary/50 hover:bg-secondary/80 border-border/40 text-muted-foreground hover:text-white"
+                }`}
+                title={isCinemaLayout ? "Switch back to Standard width" : "Switch to Wide Theater Mode"}
+                aria-pressed={isCinemaLayout}
+              >
+                <Maximize2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
+                <span>{isCinemaLayout ? "Wide (ON)" : "Wide"}</span>
               </button>
 
               {/* TV Mode Layout Toggle */}
@@ -1260,7 +1284,7 @@ export function WatchPage() {
     </div>
 
     {/* Bottom Section: Synopsis, Comments, Related, More Like This */}
-    <div className={`space-y-8 pt-2 ${isCinemaLayout ? "max-w-[1600px] mx-auto w-full" : ""}`}>
+    <div className={`space-y-8 pt-2 ${isCinemaLayout ? "max-w-[1760px] mx-auto w-full px-3 sm:px-0" : ""}`}>
         {/* Synopsis Accordion description */}
         <div className="space-y-2 pb-6">
           <h2 className="text-base font-bold text-foreground">Synopsis</h2>

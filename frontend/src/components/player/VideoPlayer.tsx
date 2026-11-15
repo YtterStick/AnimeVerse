@@ -438,6 +438,9 @@ export function VideoPlayer({
   useEffect(() => {
     if (!isLocked) return;
 
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     try {
       window.history.pushState({ aniverseLocked: true }, "");
     } catch {
@@ -469,6 +472,7 @@ export function VideoPlayer({
     window.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
+      document.body.style.overflow = previousBodyOverflow;
       window.removeEventListener("popstate", handlePopState);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("keydown", handleKeyDown, true);
@@ -909,7 +913,15 @@ export function VideoPlayer({
   const activeErrorMessage = !isLoadingStream ? streamError || playbackError : null;
 
   return (
-    <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative">
+    <div
+      className={
+        isLocked
+          ? "fixed inset-0 z-[100] w-screen h-screen bg-black"
+          : isWideLayout || isVideoWiden
+          ? "w-full h-[56vw] max-h-[82vh] min-h-[240px] rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative transition-all duration-200"
+          : "w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative transition-all duration-200"
+      }
+    >
       {/* Keep <MediaPlayer> persistently mounted across episode & server transitions so Fullscreen NEVER exits */}
       <MediaPlayer
         ref={playerRef}
@@ -924,6 +936,7 @@ export function VideoPlayer({
         className={`w-full h-full relative ${isVideoWiden ? "vds-video-widen" : ""} ${
           isLocked ? "vds-player-locked" : ""
         }`}
+        keyDisabled={isLocked}
         autoPlay
         preload="auto"
         load="eager"
@@ -955,6 +968,7 @@ export function VideoPlayer({
           icons={defaultLayoutIcons}
           thumbnails={activeSrc ? thumbnails : undefined}
           seekStep={10}
+          noGestures={isLocked}
           slots={{
             beforePlayButton: (
               <>
@@ -1014,10 +1028,11 @@ export function VideoPlayer({
                 >
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       const next = !isVideoWiden;
                       setIsVideoWiden(next);
-                      if (next && !isWideLayout) {
+                      if (next !== isWideLayout) {
                         onToggleWideLayout?.();
                       }
                     }}
@@ -1038,7 +1053,10 @@ export function VideoPlayer({
                 >
                   <button
                     type="button"
-                    onClick={handleLockScreen}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLockScreen();
+                    }}
                     className="vds-button"
                     aria-label="Lock Screen"
                   >
@@ -1097,6 +1115,18 @@ export function VideoPlayer({
         {/* Netflix-style Screen Lock Shield */}
         {isLocked && (
           <div
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => {
+              e.stopPropagation();
+              revealUnlockPill();
+            }}
+            onPointerMove={() => {
+              if (!showUnlockPill) revealUnlockPill();
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               revealUnlockPill();
@@ -1113,6 +1143,9 @@ export function VideoPlayer({
           >
             {showUnlockPill && (
               <div
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
                 className="flex items-center gap-3 px-4 py-2.5 rounded-full bg-black/85 backdrop-blur-md border border-white/20 shadow-2xl animate-in fade-in zoom-in-95 duration-150"
               >
@@ -1123,6 +1156,9 @@ export function VideoPlayer({
                 </div>
                 <button
                   type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onPointerUp={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleUnlockScreen();
