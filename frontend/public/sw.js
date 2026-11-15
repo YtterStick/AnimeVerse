@@ -1,8 +1,7 @@
-const SHELL_CACHE = "aniverse-shell-v1";
+const SHELL_CACHE = "aniverse-shell-v2";
 const PRECACHE_URLS = [
   "/favicon.svg",
   "/pwa-192x192.png",
-  "/manifest.webmanifest",
 ];
 
 self.addEventListener("install", (event) => {
@@ -40,6 +39,7 @@ function shouldSkipCache(request, url) {
   if (url.origin !== self.location.origin) return true;
   if (request.headers.has("range")) return true;
   if (url.pathname.startsWith("/api/")) return true;
+  if (url.pathname.endsWith(".webmanifest")) return true;
   if (/\.(m3u8|ts|m4s|mp4|webm|vtt|srt|ass)$/i.test(url.pathname)) return true;
   return false;
 }

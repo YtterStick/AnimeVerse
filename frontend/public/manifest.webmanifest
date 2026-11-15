@@ -1,9 +1,9 @@
 {
-  "id": "/",
-  "name": "AniVerse — Watch Anime Free in HD",
+  "id": "/?app=aniverse-v2",
+  "name": "AniVerse",
   "short_name": "AniVerse",
   "description": "Stream anime in HD with SUB & DUB, smart Skip Intro, synchronized watch history, and TV Mode.",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
