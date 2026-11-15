@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { ArrowUp } from "lucide-react";
 import { Navbar } from "./Navbar";
 import { Footer } from "./Footer";
+import { InstallAppBanner } from "@/components/shared/InstallAppModal";
 import { useLayout } from "@/contexts/LayoutContext";
 
 export function Layout() {
@@ -44,6 +45,9 @@ export function Layout() {
           <ArrowUp className={tvMode ? "w-5 h-5" : "w-4 h-4"} />
         </button>
       )}
+
+      {/* Floating Install App Banner (hidden while watching or after dismiss/install) */}
+      <InstallAppBanner />
     </div>
   );
 }
