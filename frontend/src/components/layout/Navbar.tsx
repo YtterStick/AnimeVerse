@@ -387,11 +387,11 @@ export function Navbar() {
                 <button
                   type="button"
                   onClick={handleInstallAppClick}
-                  className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-bold text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 hover:border-emerald-500/60 shadow-sm shadow-emerald-500/10 transition-all duration-200 cursor-pointer select-none shrink-0"
-                  title="Install AniVerse App (Mobile & Desktop)"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary/60 hover:bg-secondary border border-border/60 transition-colors cursor-pointer select-none shrink-0"
+                  title="Install AniVerse"
                 >
-                  <Download className="w-3.5 h-3.5 text-emerald-300" />
-                  <span className="hidden xs:inline">Install App</span>
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline">Install</span>
                 </button>
               )}
 
