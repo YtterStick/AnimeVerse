@@ -88,7 +88,7 @@ export function HeroBanner({ trendingList, loading }: HeroBannerProps) {
       } else {
         await addToWatchlist({
           anime_id: currentAnime.mal_id,
-          anime_title: currentAnime.title,
+          anime_title: formatTitle(currentAnime),
           anime_image: currentAnime.images?.webp?.image_url || currentAnime.images?.jpg?.image_url,
           anime_type: currentAnime.type,
         });

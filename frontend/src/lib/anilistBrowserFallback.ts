@@ -1,4 +1,9 @@
 import type { Anime, AnimeSeason, ApiResponse, Episode } from "@/types";
+import {
+  deriveEnglishFromRelations,
+  extractEnglishTitleFromSynonyms,
+  resolveDirectEnglishTitle,
+} from "@/contexts/TitleLanguageContext";
 
 const ANILIST_URL = "https://graphql.anilist.co";
 
@@ -108,6 +113,13 @@ export function mapAniListToAnime(m: any): Anime {
       ? m.nextAiringEpisode.episode - 1
       : null);
 
+  const romajiTitle = m.title?.romaji || m.title?.english || "Unknown Title";
+  const englishTitle =
+    (m.title?.english || "").trim() ||
+    extractEnglishTitleFromSynonyms(m.synonyms, romajiTitle) ||
+    deriveEnglishFromRelations(romajiTitle, m.relations?.edges) ||
+    null;
+
   return {
     mal_id: m.idMal || m.id,
     images: {
@@ -121,9 +133,10 @@ export function mapAniListToAnime(m: any): Anime {
             url: `https://www.youtube.com/watch?v=${m.trailer.id}`,
           }
         : { youtube_id: null, url: null },
-    title: m.title?.romaji || m.title?.english || "Unknown Title",
-    title_english: m.title?.english || null,
+    title: romajiTitle,
+    title_english: englishTitle,
     title_japanese: m.title?.native || null,
+    title_synonyms: Array.isArray(m.synonyms) ? m.synonyms : [],
     type: m.format || "TV",
     source: m.source ? String(m.source).replace(/_/g, " ") : null,
     episodes: eps,
@@ -390,13 +403,33 @@ export const anilistBrowserFallback = {
       });
       if (jikanRes.ok) {
         const json = await jikanRes.json();
-        if (json?.data) return { data: json.data as Anime };
+        if (json?.data) {
+          const animeData = json.data as Anime;
+          if (!animeData.title_english) {
+            animeData.title_english = resolveDirectEnglishTitle(animeData);
+          }
+          return { data: animeData };
+        }
       }
     } catch {
       // Fall through to AniList
     }
     const data = await queryAniListBrowser(
-      `query ($idMal: Int) { Media(idMal: $idMal, type: ANIME) { ${MEDIA_FIELDS} } }`,
+      `query ($idMal: Int) {
+        Media(idMal: $idMal, type: ANIME) {
+          ${MEDIA_FIELDS}
+          relations {
+            edges {
+              relationType(version: 2)
+              node {
+                idMal
+                title { romaji english }
+                synonyms
+              }
+            }
+          }
+        }
+      }`,
       { idMal: id }
     );
     if (!data?.Media) throw new Error("Anime not found");
@@ -460,7 +493,8 @@ export const anilistBrowserFallback = {
               rating
               mediaRecommendation {
                 idMal
-                title { romaji english }
+                title { romaji english native }
+                synonyms
                 coverImage { extraLarge large medium }
               }
             }
@@ -474,12 +508,20 @@ export const anilistBrowserFallback = {
       .filter((n: any) => n?.mediaRecommendation?.idMal)
       .map((n: any) => {
         const rec = n.mediaRecommendation;
+        const recRomaji = rec.title?.romaji || rec.title?.english || "Anime";
+        const recEnglish =
+          (rec.title?.english || "").trim() ||
+          extractEnglishTitleFromSynonyms(rec.synonyms, recRomaji) ||
+          null;
         const img =
           rec.coverImage?.extraLarge || rec.coverImage?.large || rec.coverImage?.medium || "";
         return {
           entry: {
             mal_id: rec.idMal,
-            title: rec.title?.english || rec.title?.romaji || "Anime",
+            title: recRomaji,
+            title_english: recEnglish,
+            title_japanese: rec.title?.native || null,
+            title_synonyms: Array.isArray(rec.synonyms) ? rec.synonyms : [],
             images: {
               jpg: { image_url: img, small_image_url: img, large_image_url: img },
               webp: { image_url: img, small_image_url: img, large_image_url: img },
@@ -499,6 +541,7 @@ export const anilistBrowserFallback = {
           startDate { year }
           coverImage { large medium }
           title { english romaji native }
+          synonyms
           relations {
             edges {
               relationType(version: 2)
@@ -507,6 +550,7 @@ export const anilistBrowserFallback = {
                 startDate { year }
                 coverImage { large medium }
                 title { english romaji native }
+                synonyms
               }
             }
           }
@@ -517,11 +561,24 @@ export const anilistBrowserFallback = {
     const root = data?.Media;
     if (!root) return { data: [] };
 
+    const edges = root.relations?.edges || [];
+    const rootRomaji = root.title?.romaji || root.title?.english || "Main Series";
+    const rootEnglish =
+      (root.title?.english || "").trim() ||
+      extractEnglishTitleFromSynonyms(root.synonyms, rootRomaji) ||
+      deriveEnglishFromRelations(rootRomaji, edges) ||
+      null;
+
+    const syntheticEdges = [
+      { relationType: "PARENT", node: { title: root.title, synonyms: root.synonyms } },
+      ...edges,
+    ];
+
     const items: AnimeSeason[] = [
       {
         mal_id: root.idMal || id,
-        title: root.title?.romaji || root.title?.english || "Main Series",
-        title_english: root.title?.english || null,
+        title: rootRomaji,
+        title_english: rootEnglish,
         title_japanese: root.title?.native || null,
         image: root.coverImage?.large || root.coverImage?.medium || null,
         year: root.seasonYear || root.startDate?.year || null,
@@ -534,14 +591,20 @@ export const anilistBrowserFallback = {
       },
     ];
 
-    for (const edge of root.relations?.edges || []) {
+    for (const edge of edges) {
       const n = edge?.node;
       if (!n?.idMal || n.type !== "ANIME" || edge.relationType === "CHARACTER") continue;
       if (!items.some((x) => x.mal_id === n.idMal)) {
+        const nodeRomaji = n.title?.romaji || n.title?.english || "Related";
+        const nodeEnglish =
+          (n.title?.english || "").trim() ||
+          extractEnglishTitleFromSynonyms(n.synonyms, nodeRomaji) ||
+          deriveEnglishFromRelations(nodeRomaji, syntheticEdges) ||
+          null;
         items.push({
           mal_id: n.idMal,
-          title: n.title?.romaji || n.title?.english || "Related",
-          title_english: n.title?.english || null,
+          title: nodeRomaji,
+          title_english: nodeEnglish,
           title_japanese: n.title?.native || null,
           image: n.coverImage?.large || n.coverImage?.medium || null,
           year: n.seasonYear || n.startDate?.year || null,

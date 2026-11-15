@@ -14,6 +14,7 @@ import { AnimeCarousel } from "@/components/anime/AnimeCarousel";
 import { EstimatedSchedule } from "@/components/anime/EstimatedSchedule";
 import { formatEpisodeNumber } from "@/lib/utils";
 import { useLayout } from "@/contexts/LayoutContext";
+import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 
 interface ContinueItem {
   id: string | number;
@@ -29,6 +30,7 @@ interface ContinueItem {
 
 export function HomePage() {
   const { tvMode } = useLayout();
+  const { formatTitle } = useTitleLanguage();
   const { data: trending, loading: trendingLoading } = useTrending();
   const { data: newlyReleased, loading: newlyReleasedLoading } = useNewlyReleased();
   const { data: topAiring, loading: topAiringLoading } = useTopAiring();
@@ -195,6 +197,10 @@ export function HomePage() {
               {continueWatchingItems.map((item) => {
                 const progress = item.progress_seconds / item.duration_seconds;
                 const progressPct = Math.min(100, Math.max(0, progress * 100));
+                const displayTitle = formatTitle({
+                  mal_id: item.anime_id,
+                  title: item.anime_title,
+                });
 
                 return (
                   <Link
@@ -205,7 +211,7 @@ export function HomePage() {
                     <div className="aspect-[16/9] w-full relative overflow-hidden bg-muted">
                       <img
                         src={item.anime_image || "/placeholder-anime.jpg"}
-                        alt={item.anime_title}
+                        alt={displayTitle}
                         className="w-full h-full object-cover object-[center_20%] transition-transform duration-500 group-hover:scale-105"
                       />
                       {/* Play overlay on hover */}
@@ -216,7 +222,7 @@ export function HomePage() {
                       <button
                         type="button"
                         onClick={(e) => handleDismissContinueItem(e, item)}
-                        aria-label={`Remove ${item.anime_title} from Continue Watching`}
+                        aria-label={`Remove ${displayTitle} from Continue Watching`}
                         title="Remove from Continue Watching"
                         className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-black/75 hover:bg-red-500/90 text-white/90 hover:text-white border border-white/15 flex items-center justify-center transition-all cursor-pointer shadow-md ${
                           tvMode
@@ -234,7 +240,7 @@ export function HomePage() {
                           tvMode ? "text-sm" : "text-xs"
                         } font-semibold leading-tight line-clamp-1 text-foreground group-hover:text-primary transition-colors`}
                       >
-                        {item.anime_title}
+                        {displayTitle}
                       </h3>
                       <p
                         className={`${

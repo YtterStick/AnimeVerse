@@ -412,7 +412,7 @@ export function WatchPage() {
           episodeNumber: episodeNum,
           progressSeconds: curTime,
           durationSeconds: curDur,
-          animeTitle: anime?.title,
+          animeTitle: anime ? formatTitle(anime) : undefined,
           animeImage: anime?.images?.webp?.image_url || anime?.images?.jpg?.image_url,
         });
       }
@@ -423,7 +423,7 @@ export function WatchPage() {
       window.removeEventListener("beforeunload", flushProgress);
       flushProgress();
     };
-  }, [animeId, episodeNum, anime]);
+  }, [animeId, episodeNum, anime, formatTitle]);
 
   const handleProgress = (currentTime: number, duration: number) => {
     const numId = Number(animeId);
@@ -453,7 +453,7 @@ export function WatchPage() {
         episodeNumber: numEp,
         progressSeconds: currentRounded,
         durationSeconds: durationRounded,
-        animeTitle: anime?.title,
+        animeTitle: anime ? formatTitle(anime) : undefined,
         animeImage: anime?.images?.webp?.image_url || anime?.images?.jpg?.image_url,
       });
     }
@@ -462,7 +462,11 @@ export function WatchPage() {
     if (isAuthenticated) {
       if (now - lastRemoteSaveRef.current >= 12000) {
         lastRemoteSaveRef.current = now;
-        const safeTitle = anime?.title || anime?.title_english || `Episode ${numEp}`;
+        const safeTitle =
+          (anime ? formatTitle(anime) : null) ||
+          anime?.title_english ||
+          anime?.title ||
+          `Episode ${numEp}`;
         saveProgress({
           anime_id: numId,
           anime_title: safeTitle,
@@ -1387,6 +1391,7 @@ export function WatchPage() {
               >
                 {recommendations.slice(0, 15).map((rec: any) => {
                   const recAnime = rec.entry;
+                  const recTitle = formatTitle(recAnime);
                   const recImage = recAnime.images?.webp?.large_image_url || recAnime.images?.jpg?.large_image_url || "/placeholder-anime.jpg";
                   return (
                     <Link
@@ -1397,7 +1402,7 @@ export function WatchPage() {
                       <div className="aspect-2/3 w-full relative overflow-hidden bg-muted">
                         <img
                           src={recImage}
-                          alt={recAnime.title}
+                          alt={recTitle}
                           loading="lazy"
                           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
@@ -1409,7 +1414,7 @@ export function WatchPage() {
                       </div>
                       <div className="p-2.5 flex-1 flex flex-col justify-between">
                         <h4 className="text-xs font-bold leading-tight line-clamp-2 text-foreground group-hover:text-primary transition-colors duration-200">
-                          {recAnime.title}
+                          {recTitle}
                         </h4>
                       </div>
                     </Link>

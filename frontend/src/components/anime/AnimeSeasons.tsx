@@ -2,7 +2,10 @@ import { useRef, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Layers, ChevronLeft, ChevronRight, Play, Check } from "lucide-react";
 import { useAnimeSeasons } from "@/hooks/useAnime";
-import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
+import {
+  deriveEnglishFromRelations,
+  useTitleLanguage,
+} from "@/contexts/TitleLanguageContext";
 import type { AnimeSeason } from "@/types";
 
 interface AnimeSeasonsProps {
@@ -17,7 +20,7 @@ export function AnimeSeasons({
   className = "",
 }: AnimeSeasonsProps) {
   const { data: seasons, loading } = useAnimeSeasons(currentAnimeId);
-  const { language } = useTitleLanguage();
+  const { formatTitle } = useTitleLanguage();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -120,6 +123,12 @@ export function AnimeSeasons({
               </div>
             ))
           : seasons?.map((season: AnimeSeason) => {
+              const siblingEdges = (seasons || [])
+                .filter((s) => s.title_english)
+                .map((s) => ({
+                  relationType: s.is_current ? "PARENT" : "PREQUEL",
+                  node: { title: { romaji: s.title, english: s.title_english } },
+                }));
               const isCurrent = season.is_current || season.mal_id === currentAnimeId;
               const isUnreleased =
                 season.status === "NOT_YET_RELEASED" ||
@@ -132,10 +141,14 @@ export function AnimeSeasons({
                   ? "Season 2"
                   : rawLabel;
 
-              const title =
-                language === "en"
-                  ? season.title_english || season.title
-                  : season.title_japanese || season.title;
+              const title = formatTitle({
+                mal_id: season.mal_id,
+                title: season.title,
+                title_english:
+                  season.title_english ||
+                  deriveEnglishFromRelations(season.title, siblingEdges),
+                title_japanese: season.title_japanese,
+              });
               const linkTo =
                 mode === "watch"
                   ? isCurrent

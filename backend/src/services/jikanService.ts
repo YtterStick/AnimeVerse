@@ -154,6 +154,162 @@ function formatAniListDate(dateObj: { year?: number; month?: number; day?: numbe
   return `${m}${d} ${dateObj.year}`.trim();
 }
 
+const ENGLISH_INDICATOR_WORDS = new Set([
+  "the", "of", "in", "to", "and", "for", "with", "on", "at", "from", "by", "as",
+  "my", "your", "our", "their", "her", "his", "you", "we", "they", "is", "are",
+  "was", "be", "not", "this", "that", "who", "what", "how", "why", "when", "where",
+  "all", "only", "just", "even", "into", "out", "up", "down", "over", "under",
+  "after", "before", "about", "world", "life", "love", "girl", "boy", "high",
+  "school", "story", "chronicles", "legend", "reincarnated", "another", "level",
+  "leveling", "solo", "skill", "magic", "demon", "king", "hero", "princess",
+  "prince", "villainess", "dragon", "sword", "adventure", "season", "part",
+  "movie", "new", "dark", "light", "black", "white", "red", "blue", "gold",
+  "silver", "star", "sky", "time", "day", "night", "war", "battle", "god",
+  "angel", "devil", "witch", "knight", "guild", "dungeon", "monster", "slime",
+  "strongest", "secret", "class", "academy", "detective", "ghost", "spirit",
+  "vampire", "hunter", "slayer", "alchemist", "bride", "sister", "brother",
+  "family", "friend", "friends", "club", "way", "saga", "tale", "diary",
+  "diaries", "flower", "fragrant", "blooms", "dignity", "box", "wind", "breaker",
+  "apothecary", "beyond", "journey", "end", "delicious", "shield", "rising",
+  "eminence", "shadow", "jobless", "reincarnation", "rascal", "dream", "bunny",
+  "quintessential", "rent", "girlfriend", "boyfriend", "spy", "chainsaw", "man",
+  "paradise", "heavenly", "delusion", "undead", "unluck", "muscles", "lock",
+  "voice", "name", "weathering", "castle", "totoro", "fire", "force", "soul",
+  "eater", "clover", "fairy", "tail", "seven", "deadly", "sins", "online",
+  "starting", "wrong", "pick", "rock", "recoil", "ranking", "kings", "eternity",
+  "promised", "neverland", "made", "abyss", "land", "golden", "grand", "prison",
+  "food", "ordinary", "daily", "lives", "plastic", "memories", "beats", "summer",
+  "rendering", "garden", "sinners", "house", "maid", "butler", "mage", "saint",
+  "duke", "empire", "kingdom", "heaven", "hell", "death", "kill", "blood",
+  "curse", "blade", "heart", "hope", "future", "past", "memory", "shadows",
+  "nightmare", "wolf", "cat", "dog", "fox", "bear", "tiger", "crown", "throne",
+  "ring", "gate", "tower", "island", "city", "town", "village", "room", "cafe",
+  "shop", "game", "games", "player", "quest", "revenge", "awakening", "return",
+  "rebirth", "origin", "final", "first", "last", "true", "false", "great",
+  "little", "small", "big", "young", "old", "sweet", "bitter", "cold", "hot",
+  "rain", "snow", "moon", "sun", "sea", "ocean", "forest", "winter", "spring",
+  "autumn", "fall", "book", "song", "music", "dance", "doctor", "teacher",
+  "student", "students", "master", "servant", "daughter", "son", "mother",
+  "father", "wife", "husband", "lover", "lovers", "wants", "need", "needs",
+  "can", "cannot", "cant", "will", "would", "should", "could", "must", "never",
+  "always", "sometimes", "hides",
+]);
+
+const NON_ENGLISH_WORDS_RE =
+  /\b(der|das|und|ein|eine|mein|dein|mit|von|les|des|une|est|pour|dans|sur|avec|los|las|del|con|por|para|una|uno|sobre|entre)\b/i;
+
+const ROMAJI_PARTICLE_CHAIN_RE = /(?:^|\s)[A-Za-z][a-z']*\s+(?:no|wa|ga|wo|ni|kara|made)\s+[A-Z]/;
+
+const ROMAJI_LOWERCASE_MARKER_RE =
+  /\b(wa|ga|wo|kara|made|tachi|monogatari|densetsu|bouken|mahou|maou|yuusha|tensei|zoku|gekijouban|shoujo|shounen|boku|watashi|ore|kimi|kanojo|sekai|jinsei|gakuen|koukou|saikyou|saijaku|meikyuu|akuyaku|reijou|shinigami|shokugeki|kimetsu|shingeki)\b|\b[a-z]+-(?:hen|ki|shou)\b/;
+
+function looksLikeJapaneseRomaji(title?: string | null): boolean {
+  if (!title) return false;
+  return ROMAJI_PARTICLE_CHAIN_RE.test(title) || ROMAJI_LOWERCASE_MARKER_RE.test(title);
+}
+
+function extractEnglishTitleFromSynonyms(
+  synonyms?: (string | null | undefined)[] | null,
+  romajiTitle?: string | null
+): string | null {
+  if (!Array.isArray(synonyms) || synonyms.length === 0) return null;
+  const romajiLower = (romajiTitle || "").trim().toLowerCase();
+
+  for (const raw of synonyms) {
+    const candidate = (raw || "").trim();
+    if (candidate.length < 4) continue;
+    if (romajiLower && candidate.toLowerCase() === romajiLower) continue;
+    if (/^[A-Z0-9!?.:\-\s]{1,6}$/.test(candidate)) continue;
+    if (/[^\u0020-\u024F\u2010-\u2027]/.test(candidate)) continue;
+    if (/[àâäçêëîïôöùûüÿñáíóú¿¡ãõäöüß]/i.test(candidate)) continue;
+    if (NON_ENGLISH_WORDS_RE.test(candidate)) continue;
+    if (looksLikeJapaneseRomaji(candidate)) continue;
+
+    const words = candidate.toLowerCase().match(/[a-z']+/g) || [];
+    if (words.some((w) => ENGLISH_INDICATOR_WORDS.has(w))) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function stripSeasonSuffix(title: string): string {
+  return title
+    .replace(/\s*(?::|-|—)?\s*(?:Season|Dai)\s*\d+.*$/i, "")
+    .replace(/\s+\d+(?:st|nd|rd|th)\s*Season.*$/i, "")
+    .replace(/\s*(?::|-|—)?\s*(?:Part|Cour)\s*\d+.*$/i, "")
+    .replace(/\s*(?::|-|—)?\s*(?:The\s+)?Final\s*Season.*$/i, "")
+    .replace(/\s*(?::|-|—)?\s*(?:Ichi|Ni|San|Yon|Go)\s+no\s+Shou.*$/i, "")
+    .replace(/\s+(?:II|III|IV|V|VI)\b.*$/, "")
+    .trim();
+}
+
+function translateJapaneseSeasonSuffix(suffix: string): string {
+  return suffix
+    .replace(/\bIchi\s+no\s+Shou\b/gi, "Season 1")
+    .replace(/\bNi\s+no\s+Shou\b/gi, "Season 2")
+    .replace(/\bSan\s+no\s+Shou\b/gi, "Season 3")
+    .replace(/\bYon\s+no\s+Shou\b/gi, "Season 4")
+    .replace(/\bGo\s+no\s+Shou\b/gi, "Season 5")
+    .replace(/\bDai\s*(\d+)-?ki\b/gi, "Season $1")
+    .replace(/\bKanketsu-?hen\b/gi, "Final Chapter")
+    .replace(/\bGekijouban\b/gi, "The Movie")
+    .replace(/\bZoku-?hen\b/gi, "Sequel")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function deriveEnglishFromRelations(
+  romajiTitle: string | null | undefined,
+  edges?: any[] | null
+): string | null {
+  if (!romajiTitle || !Array.isArray(edges) || edges.length === 0) return null;
+  const trimmedRomaji = romajiTitle.trim();
+  const romajiLower = trimmedRomaji.toLowerCase();
+
+  const priorityOrder: Record<string, number> = {
+    PARENT: 0,
+    MAIN_STORY: 1,
+    PREQUEL: 2,
+    ALTERNATIVE: 3,
+    SEQUEL: 4,
+    SIDE_STORY: 5,
+  };
+  const sortedEdges = [...edges].sort(
+    (a, b) =>
+      (priorityOrder[String(a?.relationType || "").toUpperCase()] ?? 9) -
+      (priorityOrder[String(b?.relationType || "").toUpperCase()] ?? 9)
+  );
+
+  for (const edge of sortedEdges) {
+    const node = edge?.node;
+    if (!node) continue;
+    const nodeRomaji = (node.title?.romaji || "").trim();
+    const nodeEnglish =
+      (node.title?.english || "").trim() ||
+      extractEnglishTitleFromSynonyms(node.synonyms, nodeRomaji) ||
+      "";
+    if (!nodeRomaji || !nodeEnglish) continue;
+
+    const baseRomaji = stripSeasonSuffix(nodeRomaji);
+    const baseEnglish = stripSeasonSuffix(nodeEnglish) || nodeEnglish;
+    if (baseRomaji.length < 4) continue;
+
+    const baseRomajiLower = baseRomaji.toLowerCase();
+    if (romajiLower.startsWith(baseRomajiLower)) {
+      const nextChar = trimmedRomaji.charAt(baseRomaji.length);
+      if (!nextChar || /[\s:\-/!]/.test(nextChar)) {
+        const rawRemainder = trimmedRomaji.slice(baseRomaji.length).trim();
+        const cleanedRemainder = rawRemainder.replace(/^[:\-/]+\s*/, "").trim();
+        if (!cleanedRemainder) return baseEnglish;
+        return `${baseEnglish}: ${translateJapaneseSeasonSuffix(cleanedRemainder)}`;
+      }
+    }
+  }
+
+  return null;
+}
+
 function mapAniListMediaToJikan(media: any): any {
   const largeImg = media.coverImage?.extraLarge || media.coverImage?.large || "";
   const medImg = media.coverImage?.large || media.coverImage?.medium || largeImg;
@@ -170,11 +326,15 @@ function mapAniListMediaToJikan(media: any): any {
       if (!edge?.node?.idMal) continue;
       const relType = (edge.relationType || "RELATED").replace(/_/g, " ");
       if (!grouped[relType]) grouped[relType] = [];
+      const relEnglish =
+        (edge.node.title?.english || "").trim() ||
+        extractEnglishTitleFromSynonyms(edge.node.synonyms, edge.node.title?.romaji) ||
+        null;
       grouped[relType].push({
         mal_id: edge.node.idMal,
         type: (edge.node.type || "anime").toLowerCase(),
-        name: edge.node.title?.english || edge.node.title?.romaji || "Related Anime",
-        title_english: edge.node.title?.english || null,
+        name: relEnglish || edge.node.title?.romaji || "Related Anime",
+        title_english: relEnglish,
         title_japanese: edge.node.title?.native || null,
         url: "",
         image: edge.node.coverImage?.large || edge.node.coverImage?.medium || null,
@@ -189,11 +349,18 @@ function mapAniListMediaToJikan(media: any): any {
     }
   }
 
+  const romajiTitle = media.title?.romaji || media.title?.english || "Unknown Title";
+  const resolvedEnglish =
+    (media.title?.english || "").trim() ||
+    extractEnglishTitleFromSynonyms(media.synonyms, romajiTitle) ||
+    deriveEnglishFromRelations(romajiTitle, media.relations?.edges) ||
+    null;
+
   return {
     mal_id: media.idMal || media.id,
     anilist_id: media.id,
-    title: media.title?.romaji || media.title?.english || "Unknown Title",
-    title_english: media.title?.english || null,
+    title: romajiTitle,
+    title_english: resolvedEnglish,
     title_japanese: media.title?.native || null,
     title_synonyms: Array.isArray(media.synonyms) ? media.synonyms : [],
     synopsis: stripHtml(media.description),
@@ -286,6 +453,17 @@ function mapAniListMediaToJikan(media: any): any {
 
 function normalizeJikanAnime(item: any): any {
   if (!item || typeof item !== "object") return item;
+  if (!item.title_english) {
+    const englishFromTitles = Array.isArray(item.titles)
+      ? item.titles.find(
+          (t: any) => String(t?.type || "").toLowerCase() === "english" && t?.title?.trim()
+        )?.title?.trim()
+      : null;
+    item.title_english =
+      englishFromTitles ||
+      extractEnglishTitleFromSynonyms(item.title_synonyms, item.title) ||
+      null;
+  }
   if (Array.isArray(item.themes) || Array.isArray(item.demographics)) {
     const existing = new Set((item.genres || []).map((g: any) => (g.name || "").toLowerCase()));
     const extras = [...(item.themes || []), ...(item.demographics || [])];
@@ -709,6 +887,25 @@ function formatAndSortSeasons(rawItems: any[], currentId: number): any[] {
   const mainlineItems = filtered.filter(isMainlineTV);
   const hasMultipleSeasons = mainlineItems.length > 1;
 
+  // Build synthetic relation edges across all franchise items so sequels lacking
+  // `title_english` can inherit the English title prefix from sibling/root entries.
+  const franchiseEdges = filtered
+    .filter((m) => m.title_english)
+    .map((m) => ({
+      relationType: Number(m.mal_id) === Number(currentId) ? "PARENT" : m.relationType || "PREQUEL",
+      node: {
+        title: { romaji: m.title, english: m.title_english },
+        synonyms: m.synonyms,
+      },
+    }));
+  const rootItem = filtered.find((m) => Number(m.mal_id) === Number(currentId)) || filtered[0];
+  const rootEnglish = rootItem?.title_english
+    ? stripSeasonSuffix(rootItem.title_english) || rootItem.title_english
+    : franchiseEdges[0]?.node?.title?.english
+      ? stripSeasonSuffix(franchiseEdges[0].node.title.english) ||
+        franchiseEdges[0].node.title.english
+      : null;
+
   let tvCount = 0;
   const formatted = filtered.map((item) => {
     const isCurrent = Number(item.mal_id) === Number(currentId);
@@ -760,10 +957,18 @@ function formatAndSortSeasons(rawItems: any[], currentId: number): any[] {
       priority = 3;
     }
 
+    const derivedEnglish =
+      item.title_english ||
+      extractEnglishTitleFromSynonyms(item.synonyms, item.title) ||
+      deriveEnglishFromRelations(item.title, franchiseEdges) ||
+      (rootEnglish && priority === 1 && looksLikeJapaneseRomaji(item.title) && label !== "Main Series"
+        ? `${rootEnglish} (${label})`
+        : null);
+
     return {
       mal_id: item.mal_id,
       title: item.title,
-      title_english: item.title_english || null,
+      title_english: derivedEnglish || null,
       title_japanese: item.title_japanese || null,
       image: item.image,
       year: item.year || null,
@@ -1062,6 +1267,7 @@ export const jikanService = {
                       english
                       native
                     }
+                    synonyms
                   }
                 }
               }
@@ -1080,7 +1286,7 @@ export const jikanService = {
   
   // Get all seasons and franchise entries for an anime, ordered chronologically
   getAnimeSeasons: async (id: number) => {
-    const cacheKey = `seasons:v6:${id}`;
+    const cacheKey = `seasons:v7:${id}`;
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
@@ -1108,6 +1314,7 @@ export const jikanService = {
               startDate { year }
               coverImage { large medium }
               title { english romaji native }
+              synonyms
               relations {
                 edges {
                   relationType(version: 2)
@@ -1122,6 +1329,7 @@ export const jikanService = {
                     startDate { year }
                     coverImage { large medium }
                     title { english romaji native }
+                    synonyms
                   }
                 }
               }
@@ -1207,7 +1415,7 @@ export const jikanService = {
                     rawFallbackItems.push({
                       mal_id: e.mal_id,
                       title: e.name || "Related Anime",
-                      title_english: e.title_english || e.name,
+                      title_english: e.title_english || null,
                       title_japanese: e.title_japanese || null,
                       image: e.image || cur.images?.webp?.large_image_url || cur.images?.jpg?.large_image_url,
                       year: e.year || null,
@@ -1230,18 +1438,25 @@ export const jikanService = {
 
       const rawList = Array.from(mediaMap.values())
         .filter((m) => m && m.format !== "MUSIC")
-        .map((m) => ({
-          mal_id: m.idMal,
-          title: m.title?.romaji || m.title?.english || "Unknown Title",
-          title_english: m.title?.english || null,
-          title_japanese: m.title?.native || null,
-          image: m.coverImage?.large || m.coverImage?.medium || null,
-          year: m.seasonYear || m.startDate?.year || null,
-          format: m.format || "TV",
-          episodes: m.episodes || null,
-          status: m.status || null,
-          relationType: m.relationType || (Number(m.idMal) === Number(id) ? "ROOT" : "RELATED"),
-        }));
+        .map((m) => {
+          const romaji = m.title?.romaji || m.title?.english || "Unknown Title";
+          return {
+            mal_id: m.idMal,
+            title: romaji,
+            title_english:
+              (m.title?.english || "").trim() ||
+              extractEnglishTitleFromSynonyms(m.synonyms, romaji) ||
+              null,
+            title_japanese: m.title?.native || null,
+            synonyms: Array.isArray(m.synonyms) ? m.synonyms : [],
+            image: m.coverImage?.large || m.coverImage?.medium || null,
+            year: m.seasonYear || m.startDate?.year || null,
+            format: m.format || "TV",
+            episodes: m.episodes || null,
+            status: m.status || null,
+            relationType: m.relationType || (Number(m.idMal) === Number(id) ? "ROOT" : "RELATED"),
+          };
+        });
 
       const formatted = formatAndSortSeasons(rawList, id);
       const result = { data: formatted };
@@ -1354,7 +1569,9 @@ export const jikanService = {
                     title {
                       romaji
                       english
+                      native
                     }
+                    synonyms
                     coverImage {
                       extraLarge
                       large
@@ -1372,11 +1589,19 @@ export const jikanService = {
           .filter((n: any) => n?.mediaRecommendation?.idMal)
           .map((n: any) => {
             const rec = n.mediaRecommendation;
+            const recRomaji = rec.title?.romaji || rec.title?.english || "Anime";
+            const recEnglish =
+              (rec.title?.english || "").trim() ||
+              extractEnglishTitleFromSynonyms(rec.synonyms, recRomaji) ||
+              null;
             const img = rec.coverImage?.extraLarge || rec.coverImage?.large || rec.coverImage?.medium || "";
             return {
               entry: {
                 mal_id: rec.idMal,
-                title: rec.title?.english || rec.title?.romaji || "Anime",
+                title: recRomaji,
+                title_english: recEnglish,
+                title_japanese: rec.title?.native || null,
+                title_synonyms: Array.isArray(rec.synonyms) ? rec.synonyms : [],
                 images: {
                   jpg: { image_url: img, small_image_url: img, large_image_url: img },
                   webp: { image_url: img, small_image_url: img, large_image_url: img },

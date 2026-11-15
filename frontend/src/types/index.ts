@@ -7,6 +7,8 @@ export interface Anime {
   title: string;
   title_english: string | null;
   title_japanese: string | null;
+  titles?: { type: string; title: string }[];
+  title_synonyms?: string[];
   synopsis: string | null;
   type: string | null;
   episodes: number | null;
