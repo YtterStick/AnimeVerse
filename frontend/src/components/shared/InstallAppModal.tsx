@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useLocation } from "react-router-dom";
 import {
   Dialog,
@@ -19,6 +19,12 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
 
+declare global {
+  interface Window {
+    __deferredPwaPrompt?: BeforeInstallPromptEvent | null;
+  }
+}
+
 interface PwaStoreState {
   deferredPrompt: BeforeInstallPromptEvent | null;
   isInstalled: boolean;
@@ -37,7 +43,7 @@ function detectStandalone(): boolean {
 }
 
 let pwaState: PwaStoreState = {
-  deferredPrompt: null,
+  deferredPrompt: typeof window !== "undefined" ? (window.__deferredPwaPrompt ?? null) : null,
   isInstalled: detectStandalone(),
 };
 
@@ -46,16 +52,26 @@ function notifyPwaListeners() {
 }
 
 if (typeof window !== "undefined") {
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
+  const syncDeferredPrompt = (promptEvent: BeforeInstallPromptEvent | null) => {
+    window.__deferredPwaPrompt = promptEvent;
     pwaState = {
       ...pwaState,
-      deferredPrompt: e as BeforeInstallPromptEvent,
+      deferredPrompt: promptEvent,
     };
     notifyPwaListeners();
+  };
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    syncDeferredPrompt(e as BeforeInstallPromptEvent);
+  });
+
+  window.addEventListener("aniverse:pwa-prompt", () => {
+    syncDeferredPrompt(window.__deferredPwaPrompt ?? null);
   });
 
   window.addEventListener("appinstalled", () => {
+    window.__deferredPwaPrompt = null;
     pwaState = {
       deferredPrompt: null,
       isInstalled: true,
@@ -86,11 +102,12 @@ export function usePwaInstall() {
   const snapshot = useSyncExternalStore(subscribePwa, getPwaSnapshot, getPwaSnapshot);
 
   const triggerNativeInstall = async (): Promise<"accepted" | "dismissed" | "unavailable"> => {
-    const promptEvent = snapshot.deferredPrompt;
+    const promptEvent = snapshot.deferredPrompt ?? window.__deferredPwaPrompt ?? null;
     if (!promptEvent) return "unavailable";
     try {
       await promptEvent.prompt();
       const choice = await promptEvent.userChoice;
+      window.__deferredPwaPrompt = null;
       pwaState = {
         deferredPrompt: null,
         isInstalled: choice.outcome === "accepted" ? true : detectStandalone(),
@@ -98,6 +115,12 @@ export function usePwaInstall() {
       notifyPwaListeners();
       return choice.outcome;
     } catch {
+      window.__deferredPwaPrompt = null;
+      pwaState = {
+        ...pwaState,
+        deferredPrompt: null,
+      };
+      notifyPwaListeners();
       return "unavailable";
     }
   };
@@ -116,32 +139,42 @@ interface InstallAppModalProps {
 
 type InstallPlatform = "desktop" | "android" | "ios";
 
-const PLATFORM_TABS: { id: InstallPlatform; label: string; steps: string[] }[] = [
-  {
-    id: "desktop",
-    label: "Desktop",
-    steps: [
-      'Click "Install App" above, or click the install icon in your browser\'s address bar.',
-      'Confirm "Install" to add AniVerse to your desktop.',
-    ],
-  },
-  {
-    id: "android",
-    label: "Android",
-    steps: [
-      'Tap "Install App" above, or open the browser menu (⋮).',
-      'Tap "Install app" or "Add to Home screen".',
-    ],
-  },
-  {
-    id: "ios",
-    label: "iPhone",
-    steps: [
+const PLATFORM_TABS: { id: InstallPlatform; label: string }[] = [
+  { id: "desktop", label: "Desktop" },
+  { id: "android", label: "Android" },
+  { id: "ios", label: "iPhone" },
+];
+
+const FALLBACK_CALLOUT: Record<InstallPlatform, string> = {
+  desktop:
+    "After cancelling or uninstalling, your browser pauses website install buttons for a while. You can still install anytime using the install icon (monitor with down arrow) on the right side of the address bar, or ⋮ \u2192 Save and share \u2192 Install page as app\u2026",
+  android:
+    "After cancelling or uninstalling, your browser pauses website install buttons for a while. Tap ⋮ \u2192 Install app in your browser bar instead.",
+  ios: "Safari only installs web apps from the Share menu below.",
+};
+
+function getPlatformSteps(platform: InstallPlatform, canPromptNative: boolean): string[] {
+  if (platform === "ios") {
+    return [
       "Open in Safari and tap Share at the bottom.",
       'Tap "Add to Home Screen", then tap "Add".',
-    ],
-  },
-];
+    ];
+  }
+  if (platform === "android") {
+    return [
+      canPromptNative
+        ? 'Tap "Install App" above, or open the browser menu (⋮).'
+        : "Open the browser menu (⋮) in the top-right corner.",
+      'Tap "Install app" or "Add to Home screen".',
+    ];
+  }
+  return [
+    canPromptNative
+      ? 'Click "Install App" above, or click the install icon in your browser\'s address bar.'
+      : "Click the install icon (monitor with down arrow) on the right side of the address bar, or open ⋮ \u2192 Save and share \u2192 Install page as app\u2026",
+    'Confirm "Install" to add AniVerse to your desktop.',
+  ];
+}
 
 function detectPlatform(): InstallPlatform {
   if (typeof navigator === "undefined") return "desktop";
@@ -154,25 +187,13 @@ function detectPlatform(): InstallPlatform {
 export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
   const { canPromptNative, isInstalled, triggerNativeInstall } = usePwaInstall();
   const [tab, setTab] = useState<InstallPlatform>(detectPlatform);
-  const [showFallbackHint, setShowFallbackHint] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      setShowFallbackHint(false);
-    }
-  }, [isOpen]);
 
   const handleInstallClick = async () => {
-    if (canPromptNative) {
-      setShowFallbackHint(false);
-      onClose();
-      await triggerNativeInstall();
-      return;
-    }
-    setShowFallbackHint(true);
+    onClose();
+    await triggerNativeInstall();
   };
 
-  const activeTab = PLATFORM_TABS.find((item) => item.id === tab) ?? PLATFORM_TABS[0];
+  const steps = getPlatformSteps(tab, canPromptNative);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -198,35 +219,18 @@ export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             <span>Already installed on this device.</span>
           </div>
+        ) : canPromptNative ? (
+          <Button
+            type="button"
+            onClick={handleInstallClick}
+            className="w-full h-9 rounded-lg bg-primary hover:bg-primary/90 text-white text-xs font-medium cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 mr-1.5" />
+            Install App
+          </Button>
         ) : (
-          <div className="space-y-2">
-            <Button
-              type="button"
-              onClick={handleInstallClick}
-              className="w-full h-9 rounded-lg bg-primary hover:bg-primary/90 text-white text-xs font-medium cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5 mr-1.5" />
-              Install App
-            </Button>
-
-            {showFallbackHint && !canPromptNative && (
-              <div className="p-2.5 rounded-lg bg-secondary/70 border border-border text-xs text-muted-foreground flex items-center justify-between gap-2">
-                <span>
-                  {tab === "ios"
-                    ? "Safari requires using Share \u2192 Add to Home Screen below."
-                    : "Popup was closed on this tab. Use the address bar install icon or reload to try again."}
-                </span>
-                {tab !== "ios" && (
-                  <button
-                    type="button"
-                    onClick={() => window.location.reload()}
-                    className="px-2.5 py-1 rounded-md bg-primary text-white font-medium shrink-0 hover:bg-primary/90 cursor-pointer"
-                  >
-                    Reload
-                  </button>
-                )}
-              </div>
-            )}
+          <div className="p-2.5 rounded-lg bg-secondary/70 border border-border text-xs text-muted-foreground leading-relaxed">
+            {FALLBACK_CALLOUT[tab]}
           </div>
         )}
 
@@ -249,7 +253,7 @@ export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
           </div>
 
           <ol className="list-decimal list-inside space-y-1.5 text-xs text-muted-foreground pt-1">
-            {activeTab.steps.map((step) => (
+            {steps.map((step) => (
               <li key={step}>{step}</li>
             ))}
           </ol>

@@ -17,6 +17,16 @@
     <noscript><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700;900&display=swap" rel="stylesheet" /></noscript>
     <title>AniVerse — Anime Streaming</title>
     <script>
+      // Capture beforeinstallprompt early in case it fires before the JS bundle loads
+      window.__deferredPwaPrompt = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__deferredPwaPrompt = e;
+        window.dispatchEvent(new Event('aniverse:pwa-prompt'));
+      });
+      window.addEventListener('appinstalled', function () {
+        window.__deferredPwaPrompt = null;
+      });
       // Automatically refresh when a new deployment invalidates cached chunk hashes
       window.addEventListener('vite:preloadError', function () {
         window.location.reload();
