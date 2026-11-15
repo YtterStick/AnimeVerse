@@ -549,25 +549,5 @@ html.tv-mode [tabindex]:not([tabindex="-1"]):focus-visible {
   animation: qrPopIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-/* Netflix-style Widen (zoom-to-fill) & Screen Lock */
-.vds-video-widen video {
-  object-fit: cover !important;
-  transform: scale(1.12);
-  transform-origin: center center;
-}
-
-.vds-player-locked {
-  touch-action: none;
-  user-select: none;
-  overscroll-behavior: none;
-}
-
-.vds-player-locked .vds-controls,
-.vds-player-locked .vds-gestures,
-.vds-player-locked .vds-kb-action {
-  opacity: 0 !important;
-  pointer-events: none !important;
-  visibility: hidden !important;
-}
 
 

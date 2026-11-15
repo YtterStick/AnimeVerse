@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, Flag, Play, RefreshCw, Lock, Unlock, Maximize2, Minimize2 } from "lucide-react";
+import { AlertCircle, Flag, Play, RefreshCw } from "lucide-react";
 import Hls from "hls.js";
 import {
   MediaPlayer,
@@ -243,8 +243,6 @@ interface VideoPlayerProps {
   availableServers?: Array<{ id: string; name: string; category?: string }>;
   onSelectServer?: (index: number) => void;
   onReport?: () => void;
-  isWideLayout?: boolean;
-  onToggleWideLayout?: () => void;
 }
 
 const SKIP_LABELS: Record<string, string> = {
@@ -360,8 +358,6 @@ export function VideoPlayer({
   availableServers,
   onSelectServer,
   onReport,
-  isWideLayout = false,
-  onToggleWideLayout,
 }: VideoPlayerProps) {
   const playerRef = useRef<any>(null);
   const hlsInstanceRef = useRef<Hls | null>(null);
@@ -375,109 +371,14 @@ export function VideoPlayer({
   const lastRecoveryAtTimeRef = useRef<number>(0);
   const resumeOverrideRef = useRef<number | null>(null);
   const recoveryTimerRef = useRef<number | null>(null);
-  const unlockPillTimerRef = useRef<number | null>(null);
   const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
   const [autoSkipToast, setAutoSkipToast] = useState<string | null>(null);
   const [duration, setDuration] = useState<number>(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
-  const [isVideoWiden, setIsVideoWiden] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
-  const [showUnlockPill, setShowUnlockPill] = useState(false);
   const [refinedSkips, setRefinedSkips] = useState<SkipInterval[]>(() =>
     applySafeSkipBaseline(skips, episodeNumber)
   );
   const [sliderEl, setSliderEl] = useState<HTMLElement | null>(null);
-
-  const revealUnlockPill = useCallback(() => {
-    setShowUnlockPill(true);
-    if (unlockPillTimerRef.current) {
-      window.clearTimeout(unlockPillTimerRef.current);
-    }
-    unlockPillTimerRef.current = window.setTimeout(() => {
-      setShowUnlockPill(false);
-      unlockPillTimerRef.current = null;
-    }, 3000);
-  }, []);
-
-  const handleLockScreen = useCallback(() => {
-    setIsLocked(true);
-    revealUnlockPill();
-    const isMobile =
-      typeof navigator !== "undefined" &&
-      /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
-    if (isMobile && typeof document !== "undefined" && !document.fullscreenElement) {
-      Promise.resolve(playerRef.current?.enterFullscreen?.()).catch(() => {});
-    }
-    try {
-      const orientation = window.screen?.orientation as
-        | (ScreenOrientation & { lock?: (orientation: string) => Promise<void> })
-        | undefined;
-      Promise.resolve(orientation?.lock?.("landscape")).catch(() => {});
-    } catch {
-      // Orientation lock requires fullscreen on some browsers or may be unsupported
-    }
-  }, [revealUnlockPill]);
-
-  const handleUnlockScreen = useCallback(() => {
-    setIsLocked(false);
-    setShowUnlockPill(false);
-    if (unlockPillTimerRef.current) {
-      window.clearTimeout(unlockPillTimerRef.current);
-      unlockPillTimerRef.current = null;
-    }
-    try {
-      const orientation = window.screen?.orientation as
-        | (ScreenOrientation & { unlock?: () => void })
-        | undefined;
-      orientation?.unlock?.();
-    } catch {
-      // Ignore orientation unlock errors
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isLocked) return;
-
-    const previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    try {
-      window.history.pushState({ aniverseLocked: true }, "");
-    } catch {
-      // Ignore history errors
-    }
-
-    const handlePopState = () => {
-      try {
-        window.history.pushState({ aniverseLocked: true }, "");
-      } catch {
-        // Ignore history errors
-      }
-      revealUnlockPill();
-    };
-
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      e.stopPropagation();
-      e.preventDefault();
-      revealUnlockPill();
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("keydown", handleKeyDown, true);
-
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      window.removeEventListener("popstate", handlePopState);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [isLocked, revealUnlockPill]);
 
   const effectiveStartTime =
     resumeOverrideRef.current !== null ? resumeOverrideRef.current : initialTime;
@@ -509,9 +410,6 @@ export function VideoPlayer({
     return () => {
       if (recoveryTimerRef.current) {
         window.clearTimeout(recoveryTimerRef.current);
-      }
-      if (unlockPillTimerRef.current) {
-        window.clearTimeout(unlockPillTimerRef.current);
       }
     };
   }, []);
@@ -913,15 +811,7 @@ export function VideoPlayer({
   const activeErrorMessage = !isLoadingStream ? streamError || playbackError : null;
 
   return (
-    <div
-      className={
-        isLocked
-          ? "fixed inset-0 z-[100] w-screen h-screen bg-black"
-          : isWideLayout || isVideoWiden
-          ? "w-full h-[56vw] max-h-[82vh] min-h-[240px] rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative transition-all duration-200"
-          : "w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative transition-all duration-200"
-      }
-    >
+    <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black border border-border/40 relative">
       {/* Keep <MediaPlayer> persistently mounted across episode & server transitions so Fullscreen NEVER exits */}
       <MediaPlayer
         ref={playerRef}
@@ -933,10 +823,7 @@ export function VideoPlayer({
         onTimeUpdate={handleTimeUpdate}
         onError={handleMediaError}
         onEnd={handleEnded}
-        className={`w-full h-full relative ${isVideoWiden ? "vds-video-widen" : ""} ${
-          isLocked ? "vds-player-locked" : ""
-        }`}
-        keyDisabled={isLocked}
+        className="w-full h-full relative"
         autoPlay
         preload="auto"
         load="eager"
@@ -968,7 +855,6 @@ export function VideoPlayer({
           icons={defaultLayoutIcons}
           thumbnails={activeSrc ? thumbnails : undefined}
           seekStep={10}
-          noGestures={isLocked}
           slots={{
             beforePlayButton: (
               <>
@@ -1020,51 +906,6 @@ export function VideoPlayer({
                 )}
               </>
             ),
-            beforeFullscreenButton: (
-              <>
-                <DefaultTooltip
-                  content={isVideoWiden ? "Fit to Screen" : "Widen Video"}
-                  placement="top"
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const next = !isVideoWiden;
-                      setIsVideoWiden(next);
-                      if (next !== isWideLayout) {
-                        onToggleWideLayout?.();
-                      }
-                    }}
-                    className="vds-button"
-                    aria-label={isVideoWiden ? "Fit to Screen" : "Widen Video"}
-                    aria-pressed={isVideoWiden}
-                  >
-                    {isVideoWiden ? (
-                      <Minimize2 className="vds-icon" />
-                    ) : (
-                      <Maximize2 className="vds-icon" />
-                    )}
-                  </button>
-                </DefaultTooltip>
-                <DefaultTooltip
-                  content="Lock Screen (Prevent Rotate & Exit)"
-                  placement="top"
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleLockScreen();
-                    }}
-                    className="vds-button"
-                    aria-label="Lock Screen"
-                  >
-                    <Lock className="vds-icon" />
-                  </button>
-                </DefaultTooltip>
-              </>
-            ),
           }}
         />
 
@@ -1091,7 +932,7 @@ export function VideoPlayer({
         )}
 
         {/* Skip Intro / Outro button (rendered inside <MediaPlayer> so it shows in fullscreen) */}
-        {activeSrc && !isLoadingStream && activeSkip && !isLocked && (
+        {activeSrc && !isLoadingStream && activeSkip && (
           <div className="absolute bottom-20 right-4 z-40 flex items-center gap-2">
             <button
               type="button"
@@ -1108,67 +949,6 @@ export function VideoPlayer({
               >
                 Next Ep ⏭
               </button>
-            )}
-          </div>
-        )}
-
-        {/* Netflix-style Screen Lock Shield */}
-        {isLocked && (
-          <div
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerUp={(e) => {
-              e.stopPropagation();
-              revealUnlockPill();
-            }}
-            onPointerMove={() => {
-              if (!showUnlockPill) revealUnlockPill();
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onMouseUp={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              revealUnlockPill();
-            }}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              revealUnlockPill();
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-            }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-end pb-10 select-none"
-          >
-            {showUnlockPill && (
-              <div
-                onPointerDown={(e) => e.stopPropagation()}
-                onPointerUp={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-full bg-black/85 backdrop-blur-md border border-white/20 shadow-2xl animate-in fade-in zoom-in-95 duration-150"
-              >
-                <Lock className="w-4 h-4 text-white shrink-0" />
-                <div className="text-left leading-tight pr-1">
-                  <div className="text-xs font-semibold text-white">Screen Locked</div>
-                  <div className="text-[10px] text-white/65">Rotation &amp; exit disabled</div>
-                </div>
-                <button
-                  type="button"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onPointerUp={(e) => e.stopPropagation()}
-                  onTouchStart={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleUnlockScreen();
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black hover:bg-white/90 text-xs font-bold cursor-pointer transition-colors"
-                >
-                  <Unlock className="w-3.5 h-3.5" />
-                  <span>Unlock</span>
-                </button>
-              </div>
             )}
           </div>
         )}

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag, Heart, Coffee, Tv, MessageSquare, Maximize2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ArrowLeft, Play, List, Compass, FastForward, Check, X, Search, LayoutGrid, Flag, Heart, Coffee, Tv, MessageSquare } from "lucide-react";
 import { useAnimeDetail, useAnimeEpisodes, useAnimeRecommendations } from "@/hooks/useAnime";
 import { useSaveProgress, useWatchHistory } from "@/hooks/useWatchHistory";
 import { streamApi, type SkipInterval } from "@/lib/api";
@@ -16,7 +16,6 @@ import { EpisodeComments } from "@/components/anime/EpisodeComments";
 import type { MultiStreamResult } from "@/types";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 import { useLayout } from "@/contexts/LayoutContext";
-import { usePwaInstall } from "@/components/shared/InstallAppModal";
 import { getCleanServerName } from "@/lib/serverNames";
 
 export function WatchPage() {
@@ -26,16 +25,6 @@ export function WatchPage() {
 
   const navigate = useNavigate();
   const { tvMode, toggleTvMode } = useLayout();
-  const { isInstalled } = usePwaInstall();
-  const [wideMode, setWideMode] = useState<boolean>(() => isInstalled);
-
-  useEffect(() => {
-    if (isInstalled) {
-      setWideMode(true);
-    }
-  }, [isInstalled]);
-
-  const isCinemaLayout = tvMode || wideMode;
   const tvCarouselRef = useRef<HTMLDivElement | null>(null);
   const { anime, loading: animeLoading } = useAnimeDetail(animeId);
   const { episodes, loading: episodesLoading } = useAnimeEpisodes(animeId);
@@ -294,7 +283,7 @@ export function WatchPage() {
       clearTimeout(timer);
       document.removeEventListener("fullscreenchange", scrollActiveEpisode);
     };
-  }, [episodeNum, activeRangeIndex, displayedEpisodes, viewMode, isCinemaLayout]);
+  }, [episodeNum, activeRangeIndex, displayedEpisodes, viewMode, tvMode]);
 
   useEffect(() => {
     const el = recommendationsScrollRef.current;
@@ -698,19 +687,11 @@ export function WatchPage() {
 
   return (
     <div className="min-h-screen bg-background w-full max-w-full page-enter overflow-x-hidden pb-12">
-      <div
-        className={`w-full mx-auto space-y-6 ${
-          isCinemaLayout
-            ? "max-w-[1760px] px-0 sm:px-4 lg:px-6"
-            : "max-w-[1800px] px-3 sm:px-6 lg:px-8"
-        }`}
-      >
+      <div className="w-full max-w-[1800px] mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
         {/* Back Link */}
         <Link
           to={`/anime/${animeId}`}
-          className={`inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-white transition-colors ${
-            isCinemaLayout ? "px-3 sm:px-0" : ""
-          }`}
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to {title}
@@ -734,16 +715,16 @@ export function WatchPage() {
           </div>
         )}
 
-        {/* Top Section: Player & Server (wider cinema framing in TV / downloaded app mode, 8 cols in standard mode) */}
+        {/* Top Section: Player & Server (wider cinema framing in TV mode, 8 cols in standard mode) */}
         <div
           className={`grid grid-cols-1 ${
-            isCinemaLayout ? "lg:grid-cols-1 max-w-[1760px] mx-auto" : "lg:grid-cols-12"
+            tvMode ? "lg:grid-cols-1 max-w-[1440px] mx-auto" : "lg:grid-cols-12"
           } gap-5 lg:gap-6 items-start`}
         >
           {/* Main Player Column */}
           <div
             className={`${
-              isCinemaLayout ? "w-full" : "lg:col-span-8 xl:col-span-8 2xl:col-span-9"
+              tvMode ? "w-full" : "lg:col-span-8 xl:col-span-8 2xl:col-span-9"
             } space-y-4 min-w-0`}
           >
             {/* Video Player Interface — kept persistently mounted so Fullscreen never exits across episodes */}
@@ -776,8 +757,6 @@ export function WatchPage() {
               availableServers={multiStream?.servers || []}
               onSelectServer={handleServerChange}
               onReport={() => setIsReportOpen(true)}
-              isWideLayout={isCinemaLayout}
-              onToggleWideLayout={() => setWideMode((prev) => !prev)}
             />
 
         {/* Episode & Anime Title Bar + Playback Controls */}
@@ -888,22 +867,6 @@ export function WatchPage() {
                 Report
               </button>
 
-              {/* Wide Layout Toggle */}
-              <button
-                type="button"
-                onClick={() => setWideMode((prev) => !prev)}
-                className={`flex items-center gap-1 sm:gap-1.5 h-7 sm:h-8 px-2.5 sm:px-3 rounded-full border text-[11px] sm:text-xs font-semibold cursor-pointer select-none transition-all ${
-                  isCinemaLayout
-                    ? "bg-primary/20 hover:bg-primary/30 border-primary/50 text-primary-foreground shadow-sm shadow-primary/20"
-                    : "bg-secondary/50 hover:bg-secondary/80 border-border/40 text-muted-foreground hover:text-white"
-                }`}
-                title={isCinemaLayout ? "Switch back to Standard width" : "Switch to Wide Theater Mode"}
-                aria-pressed={isCinemaLayout}
-              >
-                <Maximize2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
-                <span>{isCinemaLayout ? "Wide (ON)" : "Wide"}</span>
-              </button>
-
               {/* TV Mode Layout Toggle */}
               <button
                 type="button"
@@ -929,8 +892,8 @@ export function WatchPage() {
             />
           )}
 
-          {/* Cinema Episode Shelf (horizontal carousel below wide player) */}
-          {isCinemaLayout && (
+          {/* TV Mode Episode Shelf (Cinema Carousel) */}
+          {tvMode && (
             <div className="rounded-2xl border border-purple-500/30 bg-card/60 backdrop-blur-md shadow-2xl p-4 sm:p-5 space-y-3.5 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-border/30">
                 <div className="flex items-center gap-2.5">
@@ -941,7 +904,7 @@ export function WatchPage() {
                     <h3 className="font-extrabold text-white text-sm sm:text-base flex items-center gap-2">
                       Episode Shelf
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 uppercase tracking-wider">
-                        {tvMode ? `TV Mode (${episodes.length})` : `Wide Mode (${episodes.length})`}
+                        TV Mode ({episodes.length})
                       </span>
                     </h3>
                     <p className="text-[11px] text-muted-foreground">
@@ -1097,7 +1060,7 @@ export function WatchPage() {
       </div>
 
       {/* Right Column: Self-contained Episode List Card (Standard layout only) */}
-      {!isCinemaLayout && (
+      {!tvMode && (
         <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 min-w-0">
         <div className="rounded-2xl border border-border/40 bg-card/40 backdrop-blur-md shadow-xl flex flex-col overflow-hidden h-[280px] sm:h-[340px] lg:h-[620px] 2xl:h-[680px]">
           {/* Card Header */}
@@ -1284,7 +1247,7 @@ export function WatchPage() {
     </div>
 
     {/* Bottom Section: Synopsis, Comments, Related, More Like This */}
-    <div className={`space-y-8 pt-2 ${isCinemaLayout ? "max-w-[1760px] mx-auto w-full px-3 sm:px-0" : ""}`}>
+    <div className={`space-y-8 pt-2 ${tvMode ? "max-w-[1440px] mx-auto w-full" : ""}`}>
         {/* Synopsis Accordion description */}
         <div className="space-y-2 pb-6">
           <h2 className="text-base font-bold text-foreground">Synopsis</h2>
