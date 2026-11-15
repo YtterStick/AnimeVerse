@@ -154,15 +154,10 @@ function detectPlatform(): InstallPlatform {
 export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
   const { canPromptNative, isInstalled, triggerNativeInstall } = usePwaInstall();
   const [tab, setTab] = useState<InstallPlatform>(detectPlatform);
-  const [installing, setInstalling] = useState(false);
 
   const handleInstallClick = async () => {
-    setInstalling(true);
-    const outcome = await triggerNativeInstall();
-    setInstalling(false);
-    if (outcome === "accepted") {
-      onClose();
-    }
+    onClose();
+    await triggerNativeInstall();
   };
 
   const activeTab = PLATFORM_TABS.find((item) => item.id === tab) ?? PLATFORM_TABS[0];
@@ -195,12 +190,11 @@ export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
           canPromptNative && (
             <Button
               type="button"
-              disabled={installing}
               onClick={handleInstallClick}
               className="w-full h-9 rounded-lg bg-primary hover:bg-primary/90 text-white text-xs font-medium cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 mr-1.5" />
-              {installing ? "Installing..." : "Install App"}
+              Install App
             </Button>
           )
         )}
@@ -262,8 +256,8 @@ export function InstallAppBanner() {
 
   const handleInstall = async () => {
     if (canPromptNative) {
-      const outcome = await triggerNativeInstall();
-      if (outcome === "accepted") return;
+      await triggerNativeInstall();
+      return;
     }
     setShowGuide(true);
   };

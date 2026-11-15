@@ -20,7 +20,7 @@ export function Navbar() {
   const { watchlist } = useWatchlist();
   const { formatTitle } = useTitleLanguage();
   const { tvMode } = useLayout();
-  const { isInstalled } = usePwaInstall();
+  const { canPromptNative, isInstalled, triggerNativeInstall } = usePwaInstall();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,8 +31,12 @@ export function Navbar() {
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [authDefaultTab, setAuthDefaultTab] = useState<"signin" | "signup">("signin");
 
-  const handleInstallAppClick = () => {
+  const handleInstallAppClick = async () => {
     setIsMobileMenuOpen(false);
+    if (canPromptNative) {
+      await triggerNativeInstall();
+      return;
+    }
     setIsInstallModalOpen(true);
   };
 
