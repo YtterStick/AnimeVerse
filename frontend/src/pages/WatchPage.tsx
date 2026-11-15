@@ -16,6 +16,7 @@ import { EpisodeComments } from "@/components/anime/EpisodeComments";
 import type { MultiStreamResult } from "@/types";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
 import { useLayout } from "@/contexts/LayoutContext";
+import { usePwaInstall } from "@/components/shared/InstallAppModal";
 import { getCleanServerName } from "@/lib/serverNames";
 
 export function WatchPage() {
@@ -25,6 +26,16 @@ export function WatchPage() {
 
   const navigate = useNavigate();
   const { tvMode, toggleTvMode } = useLayout();
+  const { isInstalled } = usePwaInstall();
+  const [wideMode, setWideMode] = useState<boolean>(() => isInstalled);
+
+  useEffect(() => {
+    if (isInstalled) {
+      setWideMode(true);
+    }
+  }, [isInstalled]);
+
+  const isCinemaLayout = tvMode || wideMode;
   const tvCarouselRef = useRef<HTMLDivElement | null>(null);
   const { anime, loading: animeLoading } = useAnimeDetail(animeId);
   const { episodes, loading: episodesLoading } = useAnimeEpisodes(animeId);
@@ -283,7 +294,7 @@ export function WatchPage() {
       clearTimeout(timer);
       document.removeEventListener("fullscreenchange", scrollActiveEpisode);
     };
-  }, [episodeNum, activeRangeIndex, displayedEpisodes, viewMode, tvMode]);
+  }, [episodeNum, activeRangeIndex, displayedEpisodes, viewMode, isCinemaLayout]);
 
   useEffect(() => {
     const el = recommendationsScrollRef.current;
@@ -715,16 +726,16 @@ export function WatchPage() {
           </div>
         )}
 
-        {/* Top Section: Player & Server (wider cinema framing in TV mode, 8 cols in standard mode) */}
+        {/* Top Section: Player & Server (wider cinema framing in TV / downloaded app mode, 8 cols in standard mode) */}
         <div
           className={`grid grid-cols-1 ${
-            tvMode ? "lg:grid-cols-1 max-w-[1440px] mx-auto" : "lg:grid-cols-12"
+            isCinemaLayout ? "lg:grid-cols-1 max-w-[1600px] mx-auto" : "lg:grid-cols-12"
           } gap-5 lg:gap-6 items-start`}
         >
           {/* Main Player Column */}
           <div
             className={`${
-              tvMode ? "w-full" : "lg:col-span-8 xl:col-span-8 2xl:col-span-9"
+              isCinemaLayout ? "w-full" : "lg:col-span-8 xl:col-span-8 2xl:col-span-9"
             } space-y-4 min-w-0`}
           >
             {/* Video Player Interface — kept persistently mounted so Fullscreen never exits across episodes */}
@@ -757,6 +768,8 @@ export function WatchPage() {
               availableServers={multiStream?.servers || []}
               onSelectServer={handleServerChange}
               onReport={() => setIsReportOpen(true)}
+              isWideLayout={isCinemaLayout}
+              onToggleWideLayout={() => setWideMode((prev) => !prev)}
             />
 
         {/* Episode & Anime Title Bar + Playback Controls */}
@@ -892,8 +905,8 @@ export function WatchPage() {
             />
           )}
 
-          {/* TV Mode Episode Shelf (Cinema Carousel) */}
-          {tvMode && (
+          {/* Cinema Episode Shelf (horizontal carousel below wide player) */}
+          {isCinemaLayout && (
             <div className="rounded-2xl border border-purple-500/30 bg-card/60 backdrop-blur-md shadow-2xl p-4 sm:p-5 space-y-3.5 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-border/30">
                 <div className="flex items-center gap-2.5">
@@ -904,7 +917,7 @@ export function WatchPage() {
                     <h3 className="font-extrabold text-white text-sm sm:text-base flex items-center gap-2">
                       Episode Shelf
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 uppercase tracking-wider">
-                        TV Mode ({episodes.length})
+                        {tvMode ? `TV Mode (${episodes.length})` : `Wide Mode (${episodes.length})`}
                       </span>
                     </h3>
                     <p className="text-[11px] text-muted-foreground">
@@ -1060,7 +1073,7 @@ export function WatchPage() {
       </div>
 
       {/* Right Column: Self-contained Episode List Card (Standard layout only) */}
-      {!tvMode && (
+      {!isCinemaLayout && (
         <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 min-w-0">
         <div className="rounded-2xl border border-border/40 bg-card/40 backdrop-blur-md shadow-xl flex flex-col overflow-hidden h-[280px] sm:h-[340px] lg:h-[620px] 2xl:h-[680px]">
           {/* Card Header */}
@@ -1247,7 +1260,7 @@ export function WatchPage() {
     </div>
 
     {/* Bottom Section: Synopsis, Comments, Related, More Like This */}
-    <div className={`space-y-8 pt-2 ${tvMode ? "max-w-[1440px] mx-auto w-full" : ""}`}>
+    <div className={`space-y-8 pt-2 ${isCinemaLayout ? "max-w-[1600px] mx-auto w-full" : ""}`}>
         {/* Synopsis Accordion description */}
         <div className="space-y-2 pb-6">
           <h2 className="text-base font-bold text-foreground">Synopsis</h2>
