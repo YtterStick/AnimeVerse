@@ -387,11 +387,11 @@ export function Navbar() {
             <div className="flex items-center gap-2 sm:gap-3">
               <TitleLanguageToggle />
 
-              {!isInstalled && (
+              {!isInstalled && !tvMode && (
                 <button
                   type="button"
                   onClick={handleInstallAppClick}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary/60 hover:bg-secondary border border-border/60 transition-colors cursor-pointer select-none shrink-0"
+                  className="sm:hidden inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary/60 hover:bg-secondary border border-border/60 transition-colors cursor-pointer select-none shrink-0"
                   title="Install AniVerse"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -548,11 +548,11 @@ export function Navbar() {
                 <span>Support AniVerse (Keep Ad-Free)</span>
               </button>
 
-              {!isInstalled && (
+              {!isInstalled && !tvMode && (
                 <button
                   type="button"
                   onClick={handleInstallAppClick}
-                  className="w-full px-3 py-2.5 rounded-xl text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/30 flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-all active:scale-95"
+                  className="sm:hidden w-full px-3 py-2.5 rounded-xl text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/30 flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-all active:scale-95"
                 >
                   <Download className="w-4 h-4 text-primary" />
                   <span>Install AniVerse App</span>

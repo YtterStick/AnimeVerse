@@ -24,6 +24,11 @@ function detectSmartTvBrowser(): boolean {
   return /smart-tv|smarttv|tizen|web0s|webos|netcast|viera|bravia|\btv\b/i.test(navigator.userAgent);
 }
 
+function isMobileBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) && !detectSmartTvBrowser();
+}
+
 function getVisibleFocusables(): HTMLElement[] {
   const root: ParentNode = document.querySelector('[role="dialog"]') ?? document;
   const nodes = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
@@ -95,6 +100,34 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore in non-browser env
     }
+  }, [tvMode]);
+
+  // Auto-fullscreen on Desktop or when TV Mode is active (stops re-triggering after first interaction so Esc works)
+  useEffect(() => {
+    if (isMobileBrowser() && !tvMode) return;
+
+    let triggered = false;
+    const tryFullscreen = () => {
+      if (document.fullscreenElement) return;
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    };
+
+    tryFullscreen();
+
+    const onFirstInteract = () => {
+      if (triggered) return;
+      triggered = true;
+      tryFullscreen();
+      window.removeEventListener("click", onFirstInteract, true);
+      window.removeEventListener("keydown", onFirstInteract, true);
+    };
+
+    window.addEventListener("click", onFirstInteract, true);
+    window.addEventListener("keydown", onFirstInteract, true);
+    return () => {
+      window.removeEventListener("click", onFirstInteract, true);
+      window.removeEventListener("keydown", onFirstInteract, true);
+    };
   }, [tvMode]);
 
   // 2D Spatial D-Pad navigation + Samsung Tizen Back key handling in TV Mode

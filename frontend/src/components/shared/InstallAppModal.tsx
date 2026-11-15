@@ -138,56 +138,44 @@ interface InstallAppModalProps {
   onClose: () => void;
 }
 
-type InstallPlatform = "desktop" | "android" | "ios" | "tv";
+type InstallPlatform = "android" | "ios";
 
 const PLATFORM_TABS: { id: InstallPlatform; label: string }[] = [
-  { id: "desktop", label: "Desktop" },
   { id: "android", label: "Android" },
   { id: "ios", label: "iPhone" },
-  { id: "tv", label: "Smart TV" },
 ];
 
+function isMobileDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  const isTv = /smart-tv|smarttv|tizen|web0s|webos|netcast|viera|bravia|\btv\b/i.test(ua);
+  return !isTv && /android|iphone|ipad|ipod|mobile/i.test(ua);
+}
+
 function getPlatformSteps(platform: InstallPlatform, canPromptNative: boolean): string[] {
-  if (platform === "tv") {
-    return [
-      'Click "Install App" above to launch AniVerse in Fullscreen TV Mode.',
-      "In Samsung TV Browser, press the Star (Bookmark) icon at the top to pin AniVerse to your TV Browser Start Page.",
-    ];
-  }
   if (platform === "ios") {
     return [
       "Open in Safari and tap Share at the bottom.",
       'Tap "Add to Home Screen", then tap "Add".',
     ];
   }
-  if (platform === "android") {
-    return [
-      canPromptNative
-        ? 'Tap "Install App" above, or open the browser menu (⋮).'
-        : "Open the browser menu (⋮) in the top-right corner.",
-      'Tap "Install app" or "Add to Home screen".',
-    ];
-  }
   return [
     canPromptNative
-      ? 'Click "Install App" above, or click the install icon in your browser\'s address bar.'
-      : "Click the install icon (monitor with down arrow) on the right side of the address bar, or open ⋮ \u2192 Save and share \u2192 Install page as app\u2026",
-    'Confirm "Install" to add AniVerse to your desktop.',
+      ? 'Tap "Install App" above, or open the browser menu (⋮).'
+      : "Open the browser menu (⋮) in the top-right corner.",
+    'Tap "Install app" or "Add to Home screen".',
   ];
 }
 
 function detectPlatform(): InstallPlatform {
-  if (typeof navigator === "undefined") return "desktop";
-  const ua = navigator.userAgent;
-  if (/smart-tv|smarttv|tizen|web0s|webos|netcast|viera|bravia|tv/i.test(ua)) return "tv";
-  if (/iphone|ipad|ipod/i.test(ua)) return "ios";
-  if (/android/i.test(ua)) return "android";
-  return "desktop";
+  if (typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent)) {
+    return "ios";
+  }
+  return "android";
 }
 
 export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
   const { canPromptNative, isInstalled, triggerNativeInstall } = usePwaInstall();
-  const { setTvMode } = useLayout();
   const [tab, setTab] = useState<InstallPlatform>(detectPlatform);
   const [highlightSteps, setHighlightSteps] = useState(false);
 
@@ -203,17 +191,6 @@ export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
       setHighlightSteps(false);
       onClose();
       await triggerNativeInstall();
-      return;
-    }
-    if (tab === "tv") {
-      setTvMode(true);
-      document.documentElement.requestFullscreen?.().catch(() => {});
-      try {
-        localStorage.setItem(BANNER_DISMISSED_KEY, "1");
-      } catch {
-        // Ignore storage quota errors
-      }
-      onClose();
       return;
     }
     setHighlightSteps(true);
@@ -235,7 +212,7 @@ export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
               Install AniVerse
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Use AniVerse in its own window on desktop or mobile.
+              Install AniVerse on your phone.
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -257,7 +234,7 @@ export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
         )}
 
         <div className="space-y-3">
-          <div className="grid grid-cols-4 gap-1 p-1 rounded-lg bg-secondary/50 text-xs">
+          <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-secondary/50 text-xs">
             {PLATFORM_TABS.map((item) => (
               <button
                 key={item.id}
@@ -296,6 +273,7 @@ export function InstallAppModal({ isOpen, onClose }: InstallAppModalProps) {
 
 export function InstallAppBanner() {
   const location = useLocation();
+  const { tvMode } = useLayout();
   const { canPromptNative, isInstalled, triggerNativeInstall } = usePwaInstall();
   const [dismissed, setDismissed] = useState<boolean>(() => {
     try {
@@ -307,7 +285,7 @@ export function InstallAppBanner() {
   const [showGuide, setShowGuide] = useState(false);
 
   const isWatching = location.pathname.startsWith("/watch/");
-  if (isInstalled || dismissed || isWatching) {
+  if (isInstalled || dismissed || isWatching || tvMode || !isMobileDevice()) {
     return <InstallAppModal isOpen={showGuide} onClose={() => setShowGuide(false)} />;
   }
 
@@ -330,7 +308,7 @@ export function InstallAppBanner() {
 
   return (
     <>
-      <div className="fixed bottom-14 left-4 right-4 sm:right-auto sm:left-8 sm:bottom-10 sm:max-w-xs z-50">
+      <div className="sm:hidden fixed bottom-14 left-4 right-4 z-50">
         <div
           role="button"
           tabIndex={0}
@@ -352,7 +330,7 @@ export function InstallAppBanner() {
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-foreground truncate">Install AniVerse</p>
             <p className="text-[11px] text-muted-foreground truncate">
-              Desktop &amp; mobile app
+              Mobile app
             </p>
           </div>
 
