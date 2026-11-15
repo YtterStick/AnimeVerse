@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Home, Compass, Film, History, Bookmark, FileText, Shield, Heart } from "lucide-react";
+import { Home, Compass, Film, History, Bookmark, FileText, Shield, Heart, Download } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { Button } from "@/components/ui/button";
 import { DonationModal } from "@/components/shared/DonationModal";
+import { InstallAppModal } from "@/components/shared/InstallAppModal";
 
 export function Footer() {
   const [isDonationOpen, setIsDonationOpen] = useState(false);
+  const [isInstallOpen, setIsInstallOpen] = useState(false);
 
   return (
     <>
@@ -73,6 +75,16 @@ export function Footer() {
                     <Bookmark className="w-3.5 h-3.5 text-primary" />
                     <span>Watchlist</span>
                   </Link>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setIsInstallOpen(true)}
+                    className="hover:text-foreground transition-colors hover:translate-x-0.5 inline-flex items-center gap-2 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-primary" />
+                    <span>Install App (Mobile &amp; PC)</span>
+                  </button>
                 </li>
               </ul>
             </div>
@@ -145,6 +157,9 @@ export function Footer() {
 
       {/* Donation Modal Triggered from Footer */}
       <DonationModal isOpen={isDonationOpen} onClose={() => setIsDonationOpen(false)} />
+
+      {/* Install App Guide Modal Triggered from Footer */}
+      <InstallAppModal isOpen={isInstallOpen} onClose={() => setIsInstallOpen(false)} />
     </>
   );
 }

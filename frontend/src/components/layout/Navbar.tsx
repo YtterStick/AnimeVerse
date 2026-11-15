@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWatchlist } from "@/hooks/useWatchHistory";
 import { Button } from "@/components/ui/button";
-import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, Film, Home, Compass, User } from "lucide-react";
+import { Search, Heart, LogIn, Menu, X, History, Star, ArrowRight, Loader2, Film, Home, Compass, User, Download } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { TitleLanguageToggle } from "@/components/shared/TitleLanguageToggle";
 import { useTitleLanguage } from "@/contexts/TitleLanguageContext";
@@ -11,6 +11,7 @@ import { useLayout } from "@/contexts/LayoutContext";
 import { UserMenu } from "../auth/UserMenu";
 import { AuthModal } from "../auth/AuthModal";
 import { DonationModal } from "@/components/shared/DonationModal";
+import { InstallAppModal, usePwaInstall } from "@/components/shared/InstallAppModal";
 import { animeApi } from "@/lib/api";
 import type { Anime } from "@/types";
 
@@ -19,6 +20,7 @@ export function Navbar() {
   const { watchlist } = useWatchlist();
   const { formatTitle } = useTitleLanguage();
   const { tvMode } = useLayout();
+  const { canPromptNative, isInstalled, triggerNativeInstall } = usePwaInstall();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
@@ -26,7 +28,17 @@ export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [authDefaultTab, setAuthDefaultTab] = useState<"signin" | "signup">("signin");
+
+  const handleInstallAppClick = async () => {
+    setIsMobileMenuOpen(false);
+    if (canPromptNative) {
+      const outcome = await triggerNativeInstall();
+      if (outcome !== "unavailable") return;
+    }
+    setIsInstallModalOpen(true);
+  };
 
   // Search autocomplete / suggestions state
   const [suggestions, setSuggestions] = useState<Anime[]>([]);
@@ -375,6 +387,18 @@ export function Navbar() {
             <div className="flex items-center gap-2 sm:gap-3">
               <TitleLanguageToggle />
 
+              {!isInstalled && (
+                <button
+                  type="button"
+                  onClick={handleInstallAppClick}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold text-foreground/90 bg-secondary/70 hover:bg-primary/20 hover:text-primary border border-border/60 hover:border-primary/40 transition-all duration-200 cursor-pointer select-none shrink-0"
+                  title="Install AniVerse App (Mobile & Desktop)"
+                >
+                  <Download className="w-3.5 h-3.5 text-primary" />
+                  <span className="hidden lg:inline">Install App</span>
+                </button>
+              )}
+
               {/* Glowing Support Pill Button (hidden in TV Mode to keep header focused on couch navigation) */}
               {!tvMode && (
                 <button
@@ -524,6 +548,17 @@ export function Navbar() {
                 <span>Support AniVerse (Keep Ad-Free)</span>
               </button>
 
+              {!isInstalled && (
+                <button
+                  type="button"
+                  onClick={handleInstallAppClick}
+                  className="w-full px-3 py-2.5 rounded-xl text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/30 flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-all active:scale-95"
+                >
+                  <Download className="w-4 h-4 text-primary" />
+                  <span>Install AniVerse App</span>
+                </button>
+              )}
+
               <Link
                 to="/watchlist"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -575,6 +610,9 @@ export function Navbar() {
 
       {/* Support / Donation Modal overlay */}
       <DonationModal isOpen={isDonationModalOpen} onClose={() => setIsDonationModalOpen(false)} />
+
+      {/* Install App Guide Modal */}
+      <InstallAppModal isOpen={isInstallModalOpen} onClose={() => setIsInstallModalOpen(false)} />
     </>
   );
 }
